@@ -1,16 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, ScrollView, Animated, Dimensions, TouchableOpacity } from 'react-native';
-import { Text, IconButton } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, Alert, ScrollView, TouchableOpacity, TextInput as RNTextInput } from 'react-native';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
-import { Button } from '@/views/components/common/Button';
-import { Input } from '@/views/components/common/Input';
 import { Loading } from '@/views/components/common/Loading';
-import { colors, spacing, shadows } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { height } = Dimensions.get('window');
 
 export const RegisterScreen = () => {
   const [email, setEmail] = useState('');
@@ -19,25 +14,6 @@ export const RegisterScreen = () => {
   const [phone, setPhone] = useState('');
   const { register, loading } = useAuth();
   const navigation = useNavigation<any>();
-
-  // Animations
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
 
   const handleRegister = async () => {
     try {
@@ -49,126 +25,173 @@ export const RegisterScreen = () => {
     }
   };
 
-  if (loading) return <Loading message="Preparing your account..." />;
+  if (loading) return <Loading message="Creating your account..." />;
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        style={styles.scroll} 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <LinearGradient 
-          colors={[colors.primaryDark, colors.primary]} 
-          style={styles.header}
-        >
-          <IconButton 
-            icon="arrow-left" 
-            iconColor="#fff" 
-            style={styles.backBtn} 
-            onPress={() => navigation.goBack()} 
+      <LinearGradient colors={['#059669', '#10B981']} style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>Join Us</Text>
+          <Text style={styles.subtitle}>Create an account to start booking</Text>
+        </View>
+      </LinearGradient>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.formCard}>
+          <RNTextInput
+            placeholder="Full Name"
+            value={name}
+            onChangeText={setName}
+            style={styles.input}
+            placeholderTextColor="#9CA3AF"
           />
-          <Animated.View style={[styles.headerText, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <Text style={styles.title}>Join Us</Text>
-            <Text style={styles.subtitle}>Create an account to start booking</Text>
-          </Animated.View>
-        </LinearGradient>
+          <RNTextInput
+            placeholder="Email Address"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+            placeholderTextColor="#9CA3AF"
+          />
+          <RNTextInput
+            placeholder="Phone Number"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            style={styles.input}
+            placeholderTextColor="#9CA3AF"
+          />
+          <RNTextInput
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            style={styles.input}
+            placeholderTextColor="#9CA3AF"
+          />
 
-        <Animated.View style={[styles.formContainer, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.card}>
-            <Input 
-              label="Full Name" 
-              value={name} 
-              onChangeText={setName} 
-              placeholder="Enter your name"
-              left={<Text style={styles.inputIcon}><MaterialCommunityIcons name="account-outline" size={18} color={colors.textSecondary} /></Text>}
-            />
-            <Input 
-              label="Email Address" 
-              value={email} 
-              onChangeText={setEmail} 
-              keyboardType="email-address" 
-              autoCapitalize="none"
-              placeholder="example@mail.com"
-              left={<Text style={styles.inputIcon}><MaterialCommunityIcons name="email-outline" size={18} color={colors.textSecondary} /></Text>}
-            />
-            <Input 
-              label="Phone Number" 
-              value={phone} 
-              onChangeText={setPhone} 
-              keyboardType="phone-pad"
-              placeholder="0912 345 6789"
-              left={<Text style={styles.inputIcon}><MaterialCommunityIcons name="phone-outline" size={18} color={colors.textSecondary} /></Text>}
-            />
-            <Input 
-              label="Password" 
-              value={password} 
-              onChangeText={setPassword} 
-              secureTextEntry 
-              placeholder="Create a strong password"
-              left={<Text style={styles.inputIcon}><MaterialCommunityIcons name="lock-outline" size={18} color={colors.textSecondary} /></Text>}
-            />
-
-            <View style={styles.termsContainer}>
-              <Text style={styles.termsText}>
-                By signing up, you agree to our <Text style={styles.link}>Terms of Service</Text> and <Text style={styles.link}>Privacy Policy</Text>.
-              </Text>
-            </View>
-
-            <Button 
-              variant="primary" 
-              onPress={handleRegister} 
-              disabled={loading}
-              style={styles.registerBtn}
-            >
-              Create Account
-            </Button>
-
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('Login')}
-              style={styles.loginLink}
-            >
-              <Text style={styles.loginText}>
-                Already have an account? <Text style={styles.loginHighlight}>Sign In</Text>
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.terms}>
+            <Text style={styles.termsText}>
+              By signing up, you agree to our <Text style={styles.link}>Terms of Service</Text> and{'\n'}
+              <Text style={styles.link}>Privacy Policy</Text>
+            </Text>
           </View>
-        </Animated.View>
+
+          <TouchableOpacity style={styles.registerBtn} onPress={handleRegister} disabled={loading}>
+            <Text style={styles.registerBtnText}>Create Account</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.signInLink}>
+            <Text style={styles.signInText}>
+              Already have an account? <Text style={styles.signInHighlight}>Sign In</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  header: { 
-    height: 220, 
-    paddingTop: 50, 
-    paddingHorizontal: spacing.lg,
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
     borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomRightRadius: 32
   },
-  backBtn: { marginLeft: -10 },
-  headerText: { marginTop: 10 },
-  title: { fontSize: 32, fontWeight: '800', color: '#fff' },
-  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: '500' },
-  formContainer: { paddingHorizontal: spacing.lg, marginTop: -40 },
-  card: { 
-    backgroundColor: colors.surface, 
-    borderRadius: 24, 
-    padding: spacing.xl, 
-    ...shadows.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.8)'
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20
   },
-  inputIcon: { marginTop: 10 },
-  termsContainer: { marginVertical: spacing.md },
-  termsText: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', lineHeight: 18 },
-  link: { color: colors.primary, fontWeight: '600' },
-  registerBtn: { marginTop: spacing.md },
-  loginLink: { marginTop: spacing.xl, alignItems: 'center' },
-  loginText: { fontSize: 14, color: colors.textSecondary },
-  loginHighlight: { color: colors.primary, fontWeight: '700' }
+  headerContent: {},
+  title: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8
+  },
+  subtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '400'
+  },
+  content: {
+    flex: 1,
+    marginTop: -16
+  },
+  formCard: {
+    backgroundColor: '#fff',
+    borderRadius: 32,
+    marginHorizontal: 20,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5
+  },
+  input: {
+    height: 56,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    fontSize: 15,
+    color: '#1F2937',
+    marginBottom: 16
+  },
+  terms: {
+    marginTop: 8,
+    marginBottom: 24
+  },
+  termsText: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18
+  },
+  link: {
+    color: '#10B981',
+    fontWeight: '600'
+  },
+  registerBtn: {
+    height: 56,
+    backgroundColor: '#10B981',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6
+  },
+  registerBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5
+  },
+  signInLink: {
+    marginTop: 24,
+    alignItems: 'center'
+  },
+  signInText: {
+    fontSize: 14,
+    color: '#6B7280'
+  },
+  signInHighlight: {
+    color: '#10B981',
+    fontWeight: '700'
+  }
 });
