@@ -1,62 +1,45 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Alert, ScrollView, TouchableOpacity, TextInput as RNTextInput, Animated, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput as RNTextInput, Animated, Alert, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAuth } from '@/controllers/hooks/useAuth';
-import { useNavigation } from '@react-navigation/native';
-import { Loading } from '@/views/components/common/Loading';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing } from '@/views/styles/theme';
-
-const { width } = Dimensions.get('window');
+import { useNavigation } from '@react-navigation/native';
+import { colors } from '@/views/styles/theme';
 
 export const RegisterScreen = () => {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    userType: 'passenger'
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [userType, setUserType] = useState<'passenger' | 'driver'>('passenger');
   const [nameFocused, setNameFocused] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [phoneFocused, setPhoneFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
-
-  const { register, loading } = useAuth();
+  const [fullName, setFullName] = useState('');
   const navigation = useNavigation<any>();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const buttonScale1 = useRef(new Animated.Value(1)).current;
+  const buttonScale2 = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 700,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 700,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
-  const animateButton = () => {
+  const animateButton = (scale: Animated.Value) => {
     Animated.sequence([
-      Animated.timing(buttonScale, {
+      Animated.timing(scale, {
         toValue: 0.95,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(buttonScale, {
+      Animated.timing(scale, {
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
@@ -64,337 +47,183 @@ export const RegisterScreen = () => {
     ]).start();
   };
 
-  const handleRegister = async () => {
-    animateButton();
-    if (!formData.name || !formData.email || !formData.phone || !formData.password) {
-      Alert.alert('Validation Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      Alert.alert('Validation Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    try {
-      await register(formData.email, formData.password, {
-        name: formData.name,
-        phone: formData.phone,
-        user_type: formData.userType
-      });
-      Alert.alert('Success', 'Account created! Please sign in.');
-      navigation.replace('Login');
-    } catch (err: any) {
-      Alert.alert('Registration Failed', err.message);
-    }
-  };
-
-  if (loading) return <Loading message="Creating your account..." />;
-
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <LinearGradient 
         colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
         start={{ x: 0, y: 0 }} 
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity 
+          style={styles.backBtn} 
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
           <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Join us to start your journey</Text>
+          <Text style={styles.subtitle}>Join us to get started</Text>
         </View>
       </LinearGradient>
 
-      <Animated.ScrollView 
-        style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]} 
-        showsVerticalScrollIndicator={false}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.formCard}>
-          {/* User Type Selection */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Account Type</Text>
-            <View style={styles.radioGroup}>
+        <Animated.View style={[
+          styles.content,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+        ]}>
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Choose Account Type</Text>
+            <View style={styles.typeSelector}>
               <TouchableOpacity
-                style={[styles.radioOption, formData.userType === 'passenger' && styles.radioOptionSelected]}
-                onPress={() => setFormData({ ...formData, userType: 'passenger' })}
+                style={[styles.typeOption, userType === 'passenger' && styles.typeOptionSelected]}
+                onPress={() => setUserType('passenger')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.radioCircle, formData.userType === 'passenger' && styles.radioCircleSelected]}>
-                  {formData.userType === 'passenger' && <View style={styles.radioDot} />}
-                </View>
-                <View style={styles.radioLabel}>
-                  <MaterialCommunityIcons name="account" size={20} color={colors.primary} />
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.radioText}>Passenger</Text>
-                    <Text style={styles.radioSubtext}>Book rides easily</Text>
-                  </View>
-                </View>
+                <MaterialCommunityIcons 
+                  name="account" 
+                  size={32} 
+                  color={userType === 'passenger' ? colors.primary : colors.textLight}
+                />
+                <Text style={[styles.typeText, userType === 'passenger' && styles.typeTextSelected]}>
+                  Passenger
+                </Text>
+                <Text style={styles.typeSubtext}>Book rides</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.radioOption, formData.userType === 'driver' && styles.radioOptionSelected]}
-                onPress={() => setFormData({ ...formData, userType: 'driver' })}
+                style={[styles.typeOption, userType === 'driver' && styles.typeOptionSelected]}
+                onPress={() => setUserType('driver')}
+                activeOpacity={0.7}
               >
-                <View style={[styles.radioCircle, formData.userType === 'driver' && styles.radioCircleSelected]}>
-                  {formData.userType === 'driver' && <View style={styles.radioDot} />}
-                </View>
-                <View style={styles.radioLabel}>
-                  <MaterialCommunityIcons name="car" size={20} color={colors.primary} />
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.radioText}>Driver</Text>
-                    <Text style={styles.radioSubtext}>Earn by driving</Text>
-                  </View>
-                </View>
+                <MaterialCommunityIcons 
+                  name="car" 
+                  size={32} 
+                  color={userType === 'driver' ? colors.primary : colors.textLight}
+                />
+                <Text style={[styles.typeText, userType === 'driver' && styles.typeTextSelected]}>
+                  Driver
+                </Text>
+                <Text style={styles.typeSubtext}>Earn money</Text>
               </TouchableOpacity>
+            </View>
+
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.dividerText}>Sign Up With</Text>
+              <View style={styles.line} />
+            </View>
+
+            <View style={styles.authOptions}>
+              <Animated.View style={{ transform: [{ scale: buttonScale1 }] }}>
+                <TouchableOpacity 
+                  style={styles.authButton}
+                  onPress={() => {
+                    animateButton(buttonScale1);
+                    // Handle Google signup
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient 
+                    colors={['#1E90FF', '#0DA5C0']} 
+                    style={styles.authGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <MaterialCommunityIcons name="google" size={24} color="#fff" />
+                    <Text style={styles.authButtonText}>Google</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+
+              <Animated.View style={{ transform: [{ scale: buttonScale2 }] }}>
+                <TouchableOpacity 
+                  style={styles.authButton}
+                  onPress={() => {
+                    animateButton(buttonScale2);
+                    navigation.navigate('PhoneLogin');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.phoneAuthGradient}>
+                    <MaterialCommunityIcons name="phone" size={24} color={colors.primary} />
+                    <Text style={styles.phoneAuthButtonText}>Phone</Text>
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
             </View>
           </View>
 
-          {/* Full Name */}
-          <View style={styles.inputGroup}>
-            <Animated.View style={[
-              styles.inputWrapper,
-              nameFocused && styles.inputFocused
-            ]}>
-              <MaterialCommunityIcons 
-                name="account-outline" 
-                size={20} 
-                color={nameFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Full Name"
-                value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
-                onFocus={() => setNameFocused(true)}
-                onBlur={() => setNameFocused(false)}
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-            </Animated.View>
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Animated.View style={[
-              styles.inputWrapper,
-              emailFocused && styles.inputFocused
-            ]}>
-              <MaterialCommunityIcons 
-                name="email-outline" 
-                size={20} 
-                color={emailFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Email Address"
-                value={formData.email}
-                onChangeText={(text) => setFormData({ ...formData, email: text })}
-                onFocus={() => setEmailFocused(true)}
-                onBlur={() => setEmailFocused(false)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-            </Animated.View>
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Animated.View style={[
-              styles.inputWrapper,
-              phoneFocused && styles.inputFocused
-            ]}>
-              <MaterialCommunityIcons 
-                name="phone-outline" 
-                size={20} 
-                color={phoneFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Phone Number"
-                value={formData.phone}
-                onChangeText={(text) => setFormData({ ...formData, phone: text })}
-                onFocus={() => setPhoneFocused(true)}
-                onBlur={() => setPhoneFocused(false)}
-                keyboardType="phone-pad"
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-            </Animated.View>
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Animated.View style={[
-              styles.inputWrapper,
-              passwordFocused && styles.inputFocused
-            ]}>
-              <MaterialCommunityIcons 
-                name="lock-outline" 
-                size={20} 
-                color={passwordFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Password"
-                value={formData.password}
-                onChangeText={(text) => setFormData({ ...formData, password: text })}
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => setPasswordFocused(false)}
-                secureTextEntry={!showPassword}
-                style={[styles.input, { flex: 1 }]}
-                placeholderTextColor={colors.textLight}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <MaterialCommunityIcons 
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                  size={20} 
-                  color={colors.textLight}
-                />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-
-          {/* Confirm Password */}
-          <View style={styles.inputGroup}>
-            <Animated.View style={[
-              styles.inputWrapper,
-              confirmPasswordFocused && styles.inputFocused
-            ]}>
-              <MaterialCommunityIcons 
-                name="lock-check-outline" 
-                size={20} 
-                color={confirmPasswordFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Confirm Password"
-                value={formData.confirmPassword}
-                onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
-                onFocus={() => setConfirmPasswordFocused(true)}
-                onBlur={() => setConfirmPasswordFocused(false)}
-                secureTextEntry={!showConfirmPassword}
-                style={[styles.input, { flex: 1 }]}
-                placeholderTextColor={colors.textLight}
-              />
-              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                <MaterialCommunityIcons 
-                  name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} 
-                  size={20} 
-                  color={colors.textLight}
-                />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-
-          {/* Terms */}
-          <View style={styles.termsSection}>
-            <Text style={styles.termsText}>
-              By creating an account, you agree to our <Text style={styles.termsLink}>Terms of Service</Text> and{'\n'}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
-            </Text>
-          </View>
-
-          {/* Create Account Button */}
-          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-            <TouchableOpacity 
-              style={styles.createBtn} 
-              onPress={handleRegister}
-              activeOpacity={0.8}
-            >
-              <LinearGradient 
-                colors={['#1E90FF', '#0DA5C0']} 
-                style={styles.createGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.createBtnText}>Create Account</Text>
-                <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Sign In Link */}
-          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.signInLink}>
+          <TouchableOpacity 
+            style={styles.signInContainer}
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.signInText}>
-              Already have an account? <Text style={styles.signInHighlight}>Sign In</Text>
+              Already have an account? <Text style={styles.signInLink}>Sign In</Text>
             </Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Social Login */}
-        <View style={styles.socialSection}>
-          <View style={styles.divider}>
-            <View style={styles.line} />
-            <Text style={styles.dividerText}>OR SIGN UP WITH</Text>
-            <View style={styles.line} />
-          </View>
-
-          <View style={styles.socialButtons}>
-            <TouchableOpacity style={styles.socialBtn}>
-              <MaterialCommunityIcons name="google" size={24} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn}>
-              <MaterialCommunityIcons name="facebook" size={24} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn}>
-              <MaterialCommunityIcons name="twitter" size={24} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Animated.ScrollView>
-    </View>
+        </Animated.View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background
+  },
   header: {
     paddingTop: 60,
     paddingBottom: 40,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32
+    borderBottomRightRadius: 32,
+    flexDirection: 'row',
+    alignItems: 'flex-end'
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20
+    marginRight: 16
   },
-  headerContent: {},
+  headerContent: {
+    flex: 1
+  },
   title: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: '800',
     color: '#fff',
-    marginBottom: 8
+    marginBottom: 4,
+    letterSpacing: -0.5
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.9)',
     fontWeight: '500'
   },
-  content: {
-    flex: 1,
-    marginTop: -16
-  },
   scrollContent: {
-    padding: spacing.lg,
+    flexGrow: 1,
+    padding: 20,
     paddingBottom: 40
   },
-  formCard: {
+  content: {
+    flex: 1
+  },
+  card: {
     backgroundColor: colors.surface,
     borderRadius: 28,
     padding: 28,
@@ -403,136 +232,113 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 24,
     elevation: 8,
-    marginBottom: 16
-  },
-  section: {
     marginBottom: 24
   },
-  sectionLabel: {
-    fontSize: 14,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 12
+    marginBottom: 16
   },
-  radioGroup: {
-    gap: 12
-  },
-  radioOption: {
+  typeSelector: {
     flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32
+  },
+  typeOption: {
+    flex: 1,
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     backgroundColor: colors.background,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: colors.border
   },
-  radioOptionSelected: {
+  typeOptionSelected: {
     backgroundColor: colors.primaryLight,
     borderColor: colors.primary
   },
-  radioCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12
-  },
-  radioCircleSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary
-  },
-  radioDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff'
-  },
-  radioLabel: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  radioText: {
-    fontSize: 15,
+  typeText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.text
-  },
-  radioSubtext: {
-    fontSize: 12,
     color: colors.textLight,
-    marginTop: 2
+    marginTop: 8
   },
-  inputGroup: {
-    marginBottom: 16
+  typeTextSelected: {
+    color: colors.primary
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 56,
-    backgroundColor: colors.background,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: 'transparent'
-  },
-  inputFocused: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4
-  },
-  inputIcon: { marginRight: 12 },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
+  typeSubtext: {
+    fontSize: 11,
+    color: colors.textLight,
+    marginTop: 2,
     fontWeight: '500'
   },
-  termsSection: {
-    marginTop: 8,
-    marginBottom: 24
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 20,
+    gap: 12
   },
-  termsText: {
+  line: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: colors.border
+  },
+  dividerText: {
     fontSize: 12,
+    fontWeight: '700',
     color: colors.textLight,
-    textAlign: 'center',
-    lineHeight: 18
+    letterSpacing: 0.5
   },
-  termsLink: {
-    color: colors.primary,
-    fontWeight: '600'
+  authOptions: {
+    gap: 12
   },
-  createBtn: {
+  authButton: {
     height: 56,
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 8
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4
   },
-  createGradient: {
+  authGradient: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8
+    gap: 12,
+    paddingHorizontal: 24
   },
-  createBtnText: {
-    fontSize: 17,
+  authButtonText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#fff',
-    letterSpacing: 0.5
+    letterSpacing: 0.3
   },
-  signInLink: {
-    marginTop: 20,
+  phoneAuthGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    height: 56,
+    borderRadius: 16
+  },
+  phoneAuthButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3
+  },
+  signInContainer: {
     alignItems: 'center'
   },
   signInText: {
@@ -540,48 +346,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '500'
   },
-  signInHighlight: {
+  signInLink: {
     color: colors.primary,
     fontWeight: '700'
-  },
-  socialSection: {
-    marginBottom: 24
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border
-  },
-  dividerText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textLight,
-    letterSpacing: 1,
-    marginHorizontal: 12
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center'
-  },
-  socialBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2
   }
 });

@@ -1,61 +1,55 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, Animated, TouchableOpacity, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Keyboard, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated, TouchableOpacity, ScrollView, Platform, Dimensions } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '@/controllers/hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
-import { Loading } from '@/views/components/common/Loading';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
-import { colors, spacing } from '@/views/styles/theme';
+import { colors } from '@/views/styles/theme';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export const LoginScreen = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const { login, loading } = useAuth();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
+  const buttonScale1 = useRef(new Animated.Value(1)).current;
+  const buttonScale2 = useRef(new Animated.Value(1)).current;
+  const buttonScale3 = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 700,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 700,
+        duration: 800,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 40,
-        friction: 8,
+        friction: 7,
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
-  const animateButton = () => {
+  const animateButton = (scale: Animated.Value) => {
     Animated.sequence([
-      Animated.timing(buttonScale, {
+      Animated.timing(scale, {
         toValue: 0.95,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(buttonScale, {
+      Animated.timing(scale, {
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
@@ -63,21 +57,7 @@ export const LoginScreen = () => {
     ]).start();
   };
 
-  const handleLogin = async () => {
-    Keyboard.dismiss();
-    animateButton();
-    try {
-      const result = await login(email, password);
-      if (result.user.user_type === 'passenger') navigation.replace('Passenger');
-      else if (result.user.user_type === 'driver') navigation.replace('Driver');
-      else navigation.replace('Admin');
-    } catch (err) {
-      Alert.alert('Login Failed', 'Invalid credentials');
-    }
-  };
-
   const handleDemoMode = (userType: 'passenger' | 'driver') => {
-    animateButton();
     const demoUser: any = {
       id: `demo-${userType}`,
       auth_id: 'demo-auth',
@@ -94,244 +74,170 @@ export const LoginScreen = () => {
     dispatch(setDemoUserReducer(demoUser));
   };
 
-  if (loading) return <Loading message="Signing in..." />;
-
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <Animated.ScrollView 
+    <View style={styles.container}>
+      <LinearGradient 
+        colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
+        start={{ x: 0, y: 0 }} 
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
+          Smart Trike
+        </Animated.Text>
+      </LinearGradient>
+
+      <ScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollContent}
-        style={{ opacity: fadeAnim }}
       >
-        <LinearGradient 
-          colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
-          start={{ x: 0, y: 0 }} 
-          end={{ x: 1, y: 1 }}
-          style={styles.header}
-        >
-          <View style={styles.waveContainer}>
-            <View style={styles.waveLine} />
-            <View style={[styles.waveLine, { marginTop: 8 }]} />
+        <Animated.View style={[
+          styles.content,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] }
+        ]}>
+          <View style={styles.welcomeContainer}>
+            <Text style={styles.welcomeTitle}>Welcome Back</Text>
+            <Text style={styles.welcomeSubtitle}>Choose your sign in method</Text>
           </View>
 
-          <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
-            Smart Trike
-          </Animated.Text>
-          <Animated.Text style={[styles.tagline, { opacity: fadeAnim }]}>
-            Your Journey, Simplified
-          </Animated.Text>
-        </LinearGradient>
-
-        <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
-          <View style={styles.formCard}>
-            <View style={styles.welcomeContainer}>
-              <Text style={styles.welcomeTitle}>Welcome Back</Text>
-              <Text style={styles.welcomeSubtitle}>Sign in to continue your ride</Text>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Animated.View style={[
-                styles.inputWrapper,
-                emailFocused && styles.inputFocused
-              ]}>
-                <MaterialCommunityIcons 
-                  name="email-outline" 
-                  size={20} 
-                  color={emailFocused ? colors.primary : colors.textLight} 
-                  style={styles.inputIcon}
-                />
-                <RNTextInput
-                  placeholder="Email Address"
-                  value={email}
-                  onChangeText={setEmail}
-                  onFocus={() => setEmailFocused(true)}
-                  onBlur={() => setEmailFocused(false)}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={styles.input}
-                  placeholderTextColor={colors.textLight}
-                />
-              </Animated.View>
-
-              <Animated.View style={[
-                styles.inputWrapper,
-                passwordFocused && styles.inputFocused
-              ]}>
-                <MaterialCommunityIcons 
-                  name="lock-outline" 
-                  size={20} 
-                  color={passwordFocused ? colors.primary : colors.textLight} 
-                  style={styles.inputIcon}
-                />
-                <RNTextInput
-                  placeholder="Password"
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
-                  secureTextEntry={!showPassword}
-                  style={[styles.input, { flex: 1 }]}
-                  placeholderTextColor={colors.textLight}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <MaterialCommunityIcons 
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
-                    size={20} 
-                    color={colors.textLight} 
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
-
-            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+          <View style={styles.authOptions}>
+            {/* Google Sign-In */}
+            <Animated.View style={{ transform: [{ scale: buttonScale1 }] }}>
               <TouchableOpacity 
-                style={styles.signInBtn} 
-                onPress={handleLogin}
+                style={styles.authButton}
+                onPress={() => {
+                  animateButton(buttonScale1);
+                  navigation.navigate('GoogleSignIn');
+                }}
                 activeOpacity={0.8}
               >
                 <LinearGradient 
                   colors={['#1E90FF', '#0DA5C0']} 
-                  style={styles.signInGradient}
+                  style={styles.authGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.signInBtnText}>Sign In</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+                  <MaterialCommunityIcons name="google" size={24} color="#fff" />
+                  <Text style={styles.authButtonText}>Sign in with Google</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signUpLink}>
-              <Text style={styles.signUpText}>
-                Don't have an account? <Text style={styles.signUpHighlight}>Sign Up</Text>
-              </Text>
-            </TouchableOpacity>
+            {/* Phone Sign-In */}
+            <Animated.View style={{ transform: [{ scale: buttonScale2 }] }}>
+              <TouchableOpacity 
+                style={styles.authButton}
+                onPress={() => {
+                  animateButton(buttonScale2);
+                  navigation.navigate('PhoneLogin');
+                }}
+                activeOpacity={0.8}
+              >
+                <LinearGradient 
+                  colors={['#1E90FF', '#0DA5C0']} 
+                  style={styles.authGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <MaterialCommunityIcons name="phone" size={24} color="#fff" />
+                  <Text style={styles.authButtonText}>Sign in with Phone</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+
+            {/* Email Sign-In */}
+            <Animated.View style={{ transform: [{ scale: buttonScale3 }] }}>
+              <TouchableOpacity 
+                style={styles.authButton}
+                onPress={() => {
+                  animateButton(buttonScale3);
+                  navigation.navigate('EmailLogin');
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.emailButtonGradient}>
+                  <MaterialCommunityIcons name="email-outline" size={24} color={colors.primary} />
+                  <Text style={styles.emailButtonText}>Sign in with Email</Text>
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
           </View>
 
-          <View style={styles.socialSection}>
-            <View style={styles.divider}>
-              <View style={styles.line} />
-              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-              <View style={styles.line} />
-            </View>
-
-            <View style={styles.socialButtons}>
-              <TouchableOpacity style={styles.socialBtn}>
-                <MaterialCommunityIcons name="google" size={24} color={colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialBtn}>
-                <MaterialCommunityIcons name="facebook" size={24} color={colors.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialBtn}>
-                <MaterialCommunityIcons name="twitter" size={24} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
+          <View style={styles.signUpContainer}>
+            <Text style={styles.signUpText}>
+              Don't have an account? <Text style={styles.signUpLink} onPress={() => navigation.navigate('Register')}>Sign Up</Text>
+            </Text>
           </View>
 
-          <View style={styles.quickAccessSection}>
-            <View style={styles.demoHeader}>
-              <Text style={styles.demoLabel}>QUICK ACCESS - DEMO MODE</Text>
-            </View>
-            <View style={styles.quickAccessButtons}>
+          <View style={styles.demoSection}>
+            <Text style={styles.demoLabel}>DEMO MODE</Text>
+            <View style={styles.demoButtons}>
               <TouchableOpacity
-                style={styles.quickAccessBtn}
+                style={styles.demoBtn}
                 onPress={() => handleDemoMode('passenger')}
                 activeOpacity={0.7}
               >
                 <LinearGradient 
                   colors={['#E3F2FD', '#F0F7FF']}
-                  style={styles.quickAccessGradient}
+                  style={styles.demoBtnGradient}
                 >
-                  <View style={styles.quickIconBox}>
-                    <MaterialCommunityIcons name="account" size={32} color={colors.primary} />
-                  </View>
-                  <Text style={styles.quickAccessBtnText}>Passenger</Text>
+                  <MaterialCommunityIcons name="account" size={28} color={colors.primary} />
+                  <Text style={styles.demoBtnText}>Passenger</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.quickAccessBtn}
+                style={styles.demoBtn}
                 onPress={() => handleDemoMode('driver')}
                 activeOpacity={0.7}
               >
                 <LinearGradient 
                   colors={['#E3F2FD', '#F0F7FF']}
-                  style={styles.quickAccessGradient}
+                  style={styles.demoBtnGradient}
                 >
-                  <View style={styles.quickIconBox}>
-                    <MaterialCommunityIcons name="car" size={32} color={colors.primary} />
-                  </View>
-                  <Text style={styles.quickAccessBtnText}>Driver</Text>
+                  <MaterialCommunityIcons name="car" size={28} color={colors.primary} />
+                  <Text style={styles.demoBtnText}>Driver</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
-      </Animated.ScrollView>
-    </KeyboardAvoidingView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { flexGrow: 1 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
+  scrollContent: { 
+    flexGrow: 1 
+  },
   header: {
-    paddingTop: 70,
-    paddingBottom: 60,
+    paddingTop: 60,
+    paddingBottom: 50,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  waveContainer: {
-    position: 'absolute',
-    top: 20,
-    right: -40,
-    width: 200,
-    height: 200,
-    opacity: 0.1
-  },
-  waveLine: {
-    width: 200,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: '#fff',
   },
   appName: {
     fontSize: 48,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: -1,
-    marginBottom: 8
-  },
-  tagline: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.95)',
-    marginTop: 8,
-    fontWeight: '500',
-    letterSpacing: 0.5
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    marginTop: -24
+    paddingTop: 40,
+    paddingBottom: 40
   },
-  formCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 28,
-    padding: 28,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 8,
-    marginBottom: 16
+  welcomeContainer: { 
+    marginBottom: 40, 
+    alignItems: 'center' 
   },
-  welcomeContainer: { marginBottom: 28, alignItems: 'center' },
   welcomeTitle: {
     fontSize: 32,
     fontWeight: '800',
@@ -344,35 +250,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '500'
   },
-  inputContainer: { marginBottom: 24 },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 56,
-    backgroundColor: colors.background,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: 'transparent'
+  authOptions: {
+    marginBottom: 40,
+    gap: 12
   },
-  inputFocused: {
-    backgroundColor: colors.surface,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4
-  },
-  inputIcon: { marginRight: 12 },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    fontWeight: '500'
-  },
-  signInBtn: {
+  authButton: {
     height: 56,
     borderRadius: 16,
     overflow: 'hidden',
@@ -382,91 +264,69 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8
   },
-  signInGradient: {
+  authGradient: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8
+    gap: 12,
+    paddingHorizontal: 24
   },
-  signInBtnText: {
-    fontSize: 17,
+  authButtonText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#fff',
-    letterSpacing: 0.5
+    letterSpacing: 0.3
   },
-  signUpLink: {
-    marginTop: 20,
-    alignItems: 'center'
+  emailButtonGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    backgroundColor: colors.primaryLight,
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.primary
+  },
+  emailButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.3
+  },
+  signUpContainer: {
+    alignItems: 'center',
+    marginBottom: 40
   },
   signUpText: {
     fontSize: 14,
     color: colors.textSecondary,
     fontWeight: '500'
   },
-  signUpHighlight: {
+  signUpLink: {
     color: colors.primary,
     fontWeight: '700'
   },
-  socialSection: {
-    marginBottom: 24
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border
-  },
-  dividerText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.textLight,
-    letterSpacing: 1,
-    marginHorizontal: 12
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center'
-  },
-  socialBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2
-  },
-  quickAccessSection: {
-    marginTop: 24,
-    paddingBottom: 40
-  },
-  demoHeader: {
-    marginBottom: 16,
-    alignItems: 'center'
+  demoSection: {
+    marginTop: 'auto',
+    paddingBottom: 20
   },
   demoLabel: {
     fontSize: 11,
     fontWeight: '800',
     color: colors.textLight,
-    letterSpacing: 1.5
+    letterSpacing: 1.5,
+    marginBottom: 12,
+    textAlign: 'center'
   },
-  quickAccessButtons: {
+  demoButtons: {
     flexDirection: 'row',
     gap: 12
   },
-  quickAccessBtn: {
+  demoBtn: {
     flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
@@ -476,23 +336,15 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3
   },
-  quickAccessGradient: {
-    padding: 18,
+  demoBtnGradient: {
+    padding: 16,
     alignItems: 'center'
   },
-  quickIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  quickAccessBtnText: {
-    fontSize: 14,
+  demoBtnText: {
+    fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
+    marginTop: 8,
     letterSpacing: 0.3
   }
 });
