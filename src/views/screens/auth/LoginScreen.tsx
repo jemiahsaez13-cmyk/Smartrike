@@ -117,16 +117,6 @@ export const LoginScreen = () => {
             <View style={[styles.waveLine, { marginTop: 8 }]} />
           </View>
 
-          <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
-            <LinearGradient 
-              colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.1)']} 
-              style={styles.iconCircle}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <MaterialCommunityIcons name="bike" size={52} color="#fff" />
-            </LinearGradient>
-          </Animated.View>
           <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
             Smart Trike
           </Animated.Text>
@@ -288,9 +278,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1 },
   header: {
-    paddingTop: 60,
-    paddingBottom: 50,
+    paddingTop: 70,
+    paddingBottom: 60,
     alignItems: 'center',
+    justifyContent: 'center',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     position: 'relative',
@@ -310,21 +301,12 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: '#fff',
   },
-  iconContainer: { marginBottom: 16 },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.3)'
-  },
   appName: {
-    fontSize: 44,
+    fontSize: 48,
     fontWeight: '800',
     color: '#fff',
-    letterSpacing: -1
+    letterSpacing: -1,
+    marginBottom: 8
   },
   tagline: {
     fontSize: 16,
