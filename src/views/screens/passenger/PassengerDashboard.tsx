@@ -72,7 +72,7 @@ export const PassengerDashboard = () => {
         showsVerticalScrollIndicator={false}
       >
         {currentBooking ? (
-          <Surface style={[styles.card, styles.activeCard]} elevation={4}>
+          <Surface style={styles.card} elevation={4}>
             <LinearGradient 
               colors={['#fff', '#f0fdf4']} 
               style={styles.cardGradient}

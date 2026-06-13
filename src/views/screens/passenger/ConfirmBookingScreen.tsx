@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 
 export const ConfirmBookingScreen = () => {
-  const { currentBooking, cancelBooking } = useBooking();
+  const { currentBooking } = useBooking();
   const navigation = useNavigation<any>();
   
   // Radar Animation
@@ -51,11 +51,8 @@ export const ConfirmBookingScreen = () => {
     };
   }, [currentBooking, navigation]);
 
-  const handleCancel = async () => {
-    if (currentBooking) {
-      await cancelBooking(currentBooking.id);
-      navigation.navigate('PassengerDashboard');
-    }
+  const handleCancel = () => {
+    navigation.navigate('PassengerDashboard');
   };
 
   return (

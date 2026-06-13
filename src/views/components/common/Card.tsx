@@ -6,7 +6,7 @@ import { shadows } from '@/views/styles/theme';
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
-  elevation?: number;
+  elevation?: 0 | 1 | 2 | 3 | 4 | 5;
 }
 
 export const Card: React.FC<CardProps> = ({ children, style, elevation = 2 }) => {

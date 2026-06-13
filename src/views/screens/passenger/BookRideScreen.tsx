@@ -78,7 +78,7 @@ export const BookRideScreen = () => {
         />
 
         <View style={styles.centerPinContainer}>
-          <Surface style={styles.pinShadow} elevation={4} />
+          <View style={styles.pinShadow} />
           <View style={styles.pinContainer}>
             <View style={styles.pinCircle}>
               <View style={styles.pinInner} />
