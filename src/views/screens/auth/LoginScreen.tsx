@@ -104,7 +104,7 @@ export const LoginScreen = () => {
         contentContainerStyle={styles.scrollContent}
         style={{ opacity: fadeAnim }}
       >
-        <LinearGradient colors={['#059669', '#10B981', '#34D399']} style={styles.header}>
+        <LinearGradient colors={['#00B14F', '#00D563']} style={styles.header}>
           <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
             <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']} style={styles.iconCircle}>
               <MaterialCommunityIcons name="bike" size={48} color="#fff" />
@@ -133,7 +133,7 @@ export const LoginScreen = () => {
                 <MaterialCommunityIcons 
                   name="email-outline" 
                   size={20} 
-                  color={emailFocused ? '#10B981' : '#9CA3AF'} 
+                  color={emailFocused ? '#00B14F' : '#9CA3AF'} 
                   style={styles.inputIcon}
                 />
                 <RNTextInput
@@ -156,7 +156,7 @@ export const LoginScreen = () => {
                 <MaterialCommunityIcons 
                   name="lock-outline" 
                   size={20} 
-                  color={passwordFocused ? '#10B981' : '#9CA3AF'} 
+                  color={passwordFocused ? '#00B14F' : '#9CA3AF'} 
                   style={styles.inputIcon}
                 />
                 <RNTextInput
@@ -186,7 +186,7 @@ export const LoginScreen = () => {
                 activeOpacity={0.8}
               >
                 <LinearGradient 
-                  colors={['#10B981', '#059669']} 
+                  colors={['#00B14F', '#00D563']} 
                   style={styles.signInGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -217,7 +217,7 @@ export const LoginScreen = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.quickIconBox}>
-                  <MaterialCommunityIcons name="account" size={28} color="#10B981" />
+                  <MaterialCommunityIcons name="account" size={28} color="#00B14F" />
                 </View>
                 <Text style={styles.quickAccessBtnText}>Passenger</Text>
               </TouchableOpacity>
@@ -227,7 +227,7 @@ export const LoginScreen = () => {
                 activeOpacity={0.7}
               >
                 <View style={styles.quickIconBox}>
-                  <MaterialCommunityIcons name="car" size={28} color="#10B981" />
+                  <MaterialCommunityIcons name="car" size={28} color="#00B14F" />
                 </View>
                 <Text style={styles.quickAccessBtnText}>Driver</Text>
               </TouchableOpacity>
@@ -314,8 +314,8 @@ const styles = StyleSheet.create({
   },
   inputFocused: {
     backgroundColor: '#fff',
-    borderColor: '#10B981',
-    shadowColor: '#10B981',
+    borderColor: '#00B14F',
+    shadowColor: '#00B14F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#10B981',
+    shadowColor: '#00B14F',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   signUpHighlight: {
-    color: '#10B981',
+    color: '#00B14F',
     fontWeight: '700'
   },
   quickAccessSection: {
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#E6F7ED',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   quickAccessBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#059669',
+    color: '#00B14F',
     letterSpacing: 0.3
   }
 });
