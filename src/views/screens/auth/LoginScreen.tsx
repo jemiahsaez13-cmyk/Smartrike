@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
+import { colors, spacing, shadows } from '@/views/styles/theme';
 
 export const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -46,47 +48,63 @@ export const LoginScreen = () => {
   if (loading) return <Loading message="Signing in..." />;
 
   return (
-    <View style={styles.container}>
-      <Text variant="headlineLarge" style={styles.title}>Smart Trike</Text>
-      <Text variant="bodyLarge" style={styles.subtitle}>Login to continue</Text>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <LinearGradient colors={[colors.primary, colors.secondary]} style={styles.gradient}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>🚲</Text>
+          <Text style={styles.title}>Smart Trike</Text>
+          <Text style={styles.subtitle}>Your ride, your way</Text>
+        </View>
+      </LinearGradient>
 
-      <View style={styles.demoContainer}>
-        <Text style={styles.demoTitle}>🎮 Demo Mode (No Account Needed)</Text>
-        <View style={styles.demoButtons}>
-          <Button mode="contained" onPress={() => handleDemoMode('passenger')} style={styles.demoButton}>
-            Passenger
-          </Button>
-          <Button mode="contained" onPress={() => handleDemoMode('driver')} style={styles.demoButton}>
-            Driver
-          </Button>
-          <Button mode="contained" onPress={() => handleDemoMode('admin')} style={styles.demoButton}>
-            Admin
+      <View style={styles.content}>
+        <View style={styles.card}>
+          <View style={styles.demoSection}>
+            <Text style={styles.demoTitle}>🎮 Quick Demo</Text>
+            <View style={styles.demoButtons}>
+              <Button mode="contained" onPress={() => handleDemoMode('passenger')} style={styles.demoBtn}>👤 Passenger</Button>
+              <Button mode="contained" onPress={() => handleDemoMode('driver')} style={styles.demoBtn}>🚗 Driver</Button>
+            </View>
+          </View>
+
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.dividerText}>or login</Text>
+            <View style={styles.line} />
+          </View>
+
+          <TextInput label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" mode="outlined" style={styles.input} />
+          <TextInput label="Password" value={password} onChangeText={setPassword} secureTextEntry mode="outlined" style={styles.input} />
+          
+          <Button mode="contained" onPress={handleLogin} disabled={loading} style={styles.loginBtn}>Login</Button>
+          
+          <Button mode="text" onPress={() => navigation.navigate('Register')} style={styles.registerBtn}>
+            Don't have an account? Sign up
           </Button>
         </View>
       </View>
-
-      <Text style={styles.orText}>OR</Text>
-
-      <TextInput label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" style={styles.input} />
-      <TextInput label="Password" value={password} onChangeText={setPassword} secureTextEntry style={styles.input} />
-      <Button mode="contained" onPress={handleLogin} disabled={loading} style={styles.button}>Login</Button>
-      <Button mode="text" onPress={() => navigation.navigate('Register')} style={styles.linkButton}>
-        Don't have an account? Register
-      </Button>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, justifyContent: 'center', backgroundColor: '#fff' },
-  title: { textAlign: 'center', marginBottom: 10, fontWeight: 'bold' },
-  subtitle: { textAlign: 'center', marginBottom: 20, color: '#666' },
-  demoContainer: { marginBottom: 20, padding: 15, backgroundColor: '#E3F2FD', borderRadius: 8 },
-  demoTitle: { textAlign: 'center', fontSize: 16, fontWeight: 'bold', marginBottom: 12, color: '#1976D2' },
-  demoButtons: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  demoButton: { flex: 1 },
-  orText: { textAlign: 'center', color: '#999', marginVertical: 15, fontSize: 14 },
-  input: { marginBottom: 15 },
-  button: { marginTop: 10, paddingVertical: 5 },
-  linkButton: { marginTop: 10 }
+  scroll: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flexGrow: 1 },
+  gradient: { paddingTop: 60, paddingBottom: 40, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+  header: { alignItems: 'center' },
+  logo: { fontSize: 64, marginBottom: spacing.sm },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#fff', marginBottom: spacing.xs },
+  subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.9)' },
+  content: { flex: 1, padding: spacing.lg },
+  card: { backgroundColor: colors.surface, borderRadius: 20, padding: spacing.lg, ...shadows.lg },
+  demoSection: { marginBottom: spacing.lg },
+  demoTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md, textAlign: 'center' },
+  demoButtons: { flexDirection: 'row', gap: spacing.sm },
+  demoBtn: { flex: 1 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.lg },
+  line: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { marginHorizontal: spacing.md, color: colors.textLight, fontSize: 14 },
+  input: { marginBottom: spacing.md },
+  loginBtn: { marginTop: spacing.sm, paddingVertical: spacing.xs },
+  registerBtn: { marginTop: spacing.md }
 });
