@@ -1,4 +1,4 @@
-import { Booking } from '@/models/entities/Booking';
+import { Booking } from '@/models/types';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -23,7 +23,7 @@ export class ExportService {
         ...rows.map(row => row.join(','))
       ].join('\n');
 
-      const fileUri = FileSystem.documentDirectory + `bookings_${Date.now()}.csv`;
+      const fileUri = (FileSystem as any).documentDirectory + `bookings_${Date.now()}.csv`;
       await FileSystem.writeAsStringAsync(fileUri, csvContent);
       await Sharing.shareAsync(fileUri);
     } catch (error) {
@@ -48,7 +48,7 @@ export class ExportService {
         ...rows.map(row => row.join(','))
       ].join('\n');
 
-      const fileUri = FileSystem.documentDirectory + `activity_logs_${Date.now()}.csv`;
+      const fileUri = (FileSystem as any).documentDirectory + `activity_logs_${Date.now()}.csv`;
       await FileSystem.writeAsStringAsync(fileUri, csvContent);
       await Sharing.shareAsync(fileUri);
     } catch (error) {

@@ -4,7 +4,7 @@ import { Text, Surface, Chip, Menu } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector } from '@/controllers/store';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
-import { Booking } from '@/models/entities/Booking';
+import { Booking } from '@/models/types';
 import { colors, spacing, shadows } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { ExportService } from '@/models/services/ExportService';
@@ -28,7 +28,8 @@ export const TripHistoryScreen = () => {
 
   const loadBookings = async () => {
     try {
-      const data = await BookingRepository.getBookingsByUserId(user!.id);
+      const repo = new BookingRepository();
+      const data = await repo.findByPassenger(user!.id);
       setBookings(data);
     } catch (error) {
       console.error('Failed to load bookings:', error);

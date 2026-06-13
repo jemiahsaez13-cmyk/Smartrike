@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ScrollView, TouchableOpacity, TextInput as RNTextInput } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Alert, Animated, TouchableOpacity, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,11 +12,58 @@ import { setDemoUserReducer } from '@/controllers/slices/authSlice';
 export const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const { login, loading } = useAuth();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const animateButton = () => {
+    Animated.sequence([
+      Animated.timing(buttonScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   const handleLogin = async () => {
+    Keyboard.dismiss();
+    animateButton();
     try {
       const result = await login(email, password);
       if (result.user.user_type === 'passenger') navigation.replace('Passenger');
@@ -28,6 +75,7 @@ export const LoginScreen = () => {
   };
 
   const handleDemoMode = (userType: 'passenger' | 'driver') => {
+    animateButton();
     const demoUser: any = {
       id: `demo-${userType}`,
       auth_id: 'demo-auth',
@@ -47,45 +95,107 @@ export const LoginScreen = () => {
   if (loading) return <Loading message="Signing in..." />;
 
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <LinearGradient colors={['#059669', '#10B981']} style={styles.header}>
-          <View style={styles.iconContainer}>
-            <View style={styles.iconCircle}>
-              <MaterialCommunityIcons name="bike" size={40} color="#fff" />
-            </View>
-          </View>
-          <Text style={styles.appName}>Smart Trike</Text>
-          <Text style={styles.tagline}>Modern TODA Booking System</Text>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <Animated.ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollContent}
+        style={{ opacity: fadeAnim }}
+      >
+        <LinearGradient colors={['#059669', '#10B981', '#34D399']} style={styles.header}>
+          <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
+            <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']} style={styles.iconCircle}>
+              <MaterialCommunityIcons name="bike" size={48} color="#fff" />
+            </LinearGradient>
+          </Animated.View>
+          <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
+            Smart Trike
+          </Animated.Text>
+          <Animated.Text style={[styles.tagline, { opacity: fadeAnim }]}>
+            Your Journey, Simplified
+          </Animated.Text>
         </LinearGradient>
 
-        <View style={styles.content}>
+        <Animated.View style={[styles.content, { transform: [{ translateY: slideAnim }] }]}>
           <View style={styles.formCard}>
-            <Text style={styles.welcomeTitle}>Welcome Back</Text>
-            <Text style={styles.welcomeSubtitle}>Sign in to continue your ride</Text>
+            <View style={styles.welcomeContainer}>
+              <Text style={styles.welcomeTitle}>Welcome Back</Text>
+              <Text style={styles.welcomeSubtitle}>Sign in to continue your ride</Text>
+            </View>
 
-            <RNTextInput
-              placeholder="Email Address"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              placeholderTextColor="#9CA3AF"
-            />
+            <View style={styles.inputContainer}>
+              <Animated.View style={[
+                styles.inputWrapper,
+                emailFocused && styles.inputFocused
+              ]}>
+                <MaterialCommunityIcons 
+                  name="email-outline" 
+                  size={20} 
+                  color={emailFocused ? '#10B981' : '#9CA3AF'} 
+                  style={styles.inputIcon}
+                />
+                <RNTextInput
+                  placeholder="Email Address"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  placeholderTextColor="#9CA3AF"
+                />
+              </Animated.View>
 
-            <RNTextInput
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              style={styles.input}
-              placeholderTextColor="#9CA3AF"
-            />
+              <Animated.View style={[
+                styles.inputWrapper,
+                passwordFocused && styles.inputFocused
+              ]}>
+                <MaterialCommunityIcons 
+                  name="lock-outline" 
+                  size={20} 
+                  color={passwordFocused ? '#10B981' : '#9CA3AF'} 
+                  style={styles.inputIcon}
+                />
+                <RNTextInput
+                  placeholder="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  secureTextEntry={!showPassword}
+                  style={[styles.input, { flex: 1 }]}
+                  placeholderTextColor="#9CA3AF"
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <MaterialCommunityIcons 
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
+                    size={20} 
+                    color="#9CA3AF" 
+                  />
+                </TouchableOpacity>
+              </Animated.View>
+            </View>
 
-            <TouchableOpacity style={styles.signInBtn} onPress={handleLogin}>
-              <Text style={styles.signInBtnText}>Sign In</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+              <TouchableOpacity 
+                style={styles.signInBtn} 
+                onPress={handleLogin}
+                activeOpacity={0.8}
+              >
+                <LinearGradient 
+                  colors={['#10B981', '#059669']} 
+                  style={styles.signInGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.signInBtnText}>Sign In</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
 
             <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signUpLink}>
               <Text style={styles.signUpText}>
@@ -95,27 +205,37 @@ export const LoginScreen = () => {
           </View>
 
           <View style={styles.quickAccessSection}>
-            <Text style={styles.quickAccessLabel}>QUICK ACCESS</Text>
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.quickAccessLabel}>QUICK ACCESS</Text>
+              <View style={styles.line} />
+            </View>
             <View style={styles.quickAccessButtons}>
               <TouchableOpacity
                 style={styles.quickAccessBtn}
                 onPress={() => handleDemoMode('passenger')}
+                activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="account" size={24} color="#10B981" />
+                <View style={styles.quickIconBox}>
+                  <MaterialCommunityIcons name="account" size={28} color="#10B981" />
+                </View>
                 <Text style={styles.quickAccessBtnText}>Passenger</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.quickAccessBtn}
                 onPress={() => handleDemoMode('driver')}
+                activeOpacity={0.7}
               >
-                <MaterialCommunityIcons name="car" size={24} color="#10B981" />
+                <View style={styles.quickIconBox}>
+                  <MaterialCommunityIcons name="car" size={28} color="#10B981" />
+                </View>
                 <Text style={styles.quickAccessBtnText}>Driver</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </ScrollView>
-    </View>
+        </Animated.View>
+      </Animated.ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -123,87 +243,110 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   scrollContent: { flexGrow: 1 },
   header: {
-    paddingTop: 80,
-    paddingBottom: 60,
+    paddingTop: 70,
+    paddingBottom: 50,
     alignItems: 'center',
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40
   },
-  iconContainer: {
-    marginBottom: 20
-  },
+  iconContainer: { marginBottom: 16 },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)'
   },
   appName: {
-    fontSize: 40,
-    fontWeight: '700',
+    fontSize: 42,
+    fontWeight: '800',
     color: '#fff',
-    letterSpacing: -0.5
+    letterSpacing: -1
   },
   tagline: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 8,
-    fontWeight: '500'
+    color: 'rgba(255,255,255,0.95)',
+    marginTop: 6,
+    fontWeight: '500',
+    letterSpacing: 0.5
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    marginTop: -24
+    paddingHorizontal: 24,
+    marginTop: -20
   },
   formCard: {
     backgroundColor: '#fff',
-    borderRadius: 32,
-    padding: 28,
+    borderRadius: 28,
+    padding: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8
   },
+  welcomeContainer: { marginBottom: 32, alignItems: 'center' },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     color: '#111827',
-    textAlign: 'center',
-    marginBottom: 6
+    marginBottom: 8,
+    letterSpacing: -0.5
   },
   welcomeSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 28
-  },
-  input: {
-    height: 56,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 14,
-    paddingHorizontal: 20,
     fontSize: 15,
-    color: '#1F2937',
-    marginBottom: 16
+    color: '#6B7280',
+    fontWeight: '500'
   },
-  signInBtn: {
-    height: 56,
-    backgroundColor: '#10B981',
-    borderRadius: 16,
-    justifyContent: 'center',
+  inputContainer: { marginBottom: 24 },
+  inputWrapper: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    height: 58,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'transparent'
+  },
+  inputFocused: {
+    backgroundColor: '#fff',
+    borderColor: '#10B981',
     shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 6
+    elevation: 4
+  },
+  inputIcon: { marginRight: 12 },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '500'
+  },
+  signInBtn: {
+    height: 58,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8
+  },
+  signInGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8
   },
   signInBtnText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     color: '#fff',
     letterSpacing: 0.5
@@ -213,8 +356,9 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   signUpText: {
-    fontSize: 14,
-    color: '#6B7280'
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500'
   },
   signUpHighlight: {
     color: '#10B981',
@@ -224,13 +368,22 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingBottom: 40
   },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB'
+  },
   quickAccessLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#9CA3AF',
-    letterSpacing: 1.2,
-    textAlign: 'center',
-    marginBottom: 16
+    letterSpacing: 1.5,
+    marginHorizontal: 16
   },
   quickAccessButtons: {
     flexDirection: 'row',
@@ -238,23 +391,31 @@ const styles = StyleSheet.create({
   },
   quickAccessBtn: {
     flex: 1,
-    height: 80,
     backgroundColor: '#fff',
     borderRadius: 20,
+    padding: 20,
     borderWidth: 2,
-    borderColor: '#10B981',
-    justifyContent: 'center',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2
+    elevation: 3
+  },
+  quickIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12
   },
   quickAccessBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#10B981',
-    marginTop: 8
+    color: '#059669',
+    letterSpacing: 0.3
   }
 });
