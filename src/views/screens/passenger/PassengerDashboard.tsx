@@ -17,7 +17,6 @@ export const PassengerDashboard = () => {
   const { currentBooking, loading } = useBooking();
   const navigation = useNavigation<any>();
 
-  // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -39,10 +38,19 @@ export const PassengerDashboard = () => {
   if (loading) return <Loading message="Syncing with TODA..." />;
 
   const QuickAction = ({ icon, label, onPress, color = colors.primary }: any) => (
-    <TouchableOpacity style={styles.quickActionWrapper} onPress={onPress}>
-      <Surface style={styles.quickActionIcon} elevation={1}>
+    <TouchableOpacity 
+      style={styles.quickActionWrapper} 
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <LinearGradient 
+        colors={[colors.primaryLight, '#E3F2FD']}
+        style={styles.quickActionIcon}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
         <MaterialCommunityIcons name={icon} size={28} color={color} />
-      </Surface>
+      </LinearGradient>
       <Text style={styles.quickActionLabel}>{label}</Text>
     </TouchableOpacity>
   );
@@ -50,18 +58,30 @@ export const PassengerDashboard = () => {
   return (
     <View style={styles.container}>
       <LinearGradient 
-        colors={[colors.primary, colors.primaryDark]} 
+        colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.topSection}
       >
+        <View style={styles.headerWave} />
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Good day,</Text>
             <Text style={styles.name}>{user?.name || 'Passenger'}</Text>
           </View>
-          <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
-            <View style={styles.avatar}>
+          <TouchableOpacity 
+            style={styles.profileBtn} 
+            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient 
+              colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.1)']}
+              style={styles.avatar}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
               <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -72,9 +92,9 @@ export const PassengerDashboard = () => {
         showsVerticalScrollIndicator={false}
       >
         {currentBooking ? (
-          <Surface style={styles.card} elevation={4}>
+          <Surface style={[styles.card, styles.tripCard]} elevation={4}>
             <LinearGradient 
-              colors={['#fff', '#f0fdf4']} 
+              colors={['#fff', '#F0F7FF']} 
               style={styles.cardGradient}
             >
               <View style={styles.cardHeader}>
@@ -101,31 +121,59 @@ export const PassengerDashboard = () => {
                 </View>
               </View>
 
-              <Button 
-                variant="primary" 
-                onPress={() => navigation.navigate('ActiveTrip')} 
+              <TouchableOpacity 
                 style={styles.viewBtn}
+                onPress={() => navigation.navigate('ActiveTrip')}
+                activeOpacity={0.8}
               >
-                Track My Ride
-              </Button>
+                <LinearGradient 
+                  colors={['#1E90FF', '#0DA5C0']}
+                  style={styles.viewBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.viewBtnText}>Track My Ride</Text>
+                  <MaterialCommunityIcons name="map-marker" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                </LinearGradient>
+              </TouchableOpacity>
             </LinearGradient>
           </Surface>
         ) : (
           <Surface style={[styles.card, styles.bookCard]} elevation={4}>
-            <View style={styles.bookContent}>
-              <View style={styles.bookTextContainer}>
-                <Text style={styles.bookTitle}>Need a ride?</Text>
-                <Text style={styles.bookSubtitle}>Available tricycles are nearby</Text>
-              </View>
-              <MaterialCommunityIcons name="bike" size={60} color={colors.primary} />
-            </View>
-            <Button 
-              variant="primary" 
-              onPress={() => navigation.navigate('BookRide')} 
-              style={styles.bookBtn}
+            <LinearGradient 
+              colors={['#fff', '#F0F7FF']}
+              style={styles.bookGradient}
             >
-              Book Now
-            </Button>
+              <View style={styles.bookContent}>
+                <View style={styles.bookTextContainer}>
+                  <Text style={styles.bookTitle}>Need a ride?</Text>
+                  <Text style={styles.bookSubtitle}>Available tricycles are nearby</Text>
+                </View>
+                <View style={styles.bookIconContainer}>
+                  <LinearGradient 
+                    colors={[colors.primaryLight, '#E3F2FD']}
+                    style={styles.bookIconBox}
+                  >
+                    <MaterialCommunityIcons name="bike" size={48} color={colors.primary} />
+                  </LinearGradient>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.bookBtn}
+                onPress={() => navigation.navigate('BookRide')}
+                activeOpacity={0.8}
+              >
+                <LinearGradient 
+                  colors={['#1E90FF', '#0DA5C0']}
+                  style={styles.bookBtnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.bookBtnText}>Book Now</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" style={{ marginLeft: 8 }} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </LinearGradient>
           </Surface>
         )}
 
@@ -150,10 +198,14 @@ export const PassengerDashboard = () => {
             { id: 1, title: 'Public Market', sub: 'Boac, Marinduque', icon: 'storefront-outline' },
             { id: 2, title: 'Marinduque State College', sub: 'Tanza, Boac', icon: 'school-outline' },
           ].map(item => (
-            <TouchableOpacity key={item.id} style={styles.recentItem}>
-              <View style={styles.recentIconBox}>
+            <TouchableOpacity 
+              key={item.id} 
+              style={styles.recentItem}
+              activeOpacity={0.7}
+            >
+              <Surface style={styles.recentIconBox} elevation={1}>
                 <MaterialCommunityIcons name={item.icon as any} size={24} color={colors.primary} />
-              </View>
+              </Surface>
               <View style={styles.recentInfo}>
                 <Text style={styles.recentTitle}>{item.title}</Text>
                 <Text style={styles.recentSub}>{item.sub}</Text>
@@ -173,25 +225,50 @@ const styles = StyleSheet.create({
     height: 180, 
     paddingTop: 60, 
     paddingHorizontal: spacing.lg,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    position: 'relative',
+    overflow: 'hidden'
   },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  greeting: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
-  name: { fontSize: 28, fontWeight: '800', color: '#fff', marginTop: 2 },
+  headerWave: {
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40
+  },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    zIndex: 1
+  },
+  greeting: { 
+    fontSize: 14, 
+    color: 'rgba(255,255,255,0.85)', 
+    fontWeight: '500' 
+  },
+  name: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#fff', 
+    marginTop: 4 
+  },
   profileBtn: { padding: 4 },
   avatar: { 
-    width: 50, 
-    height: 50, 
-    borderRadius: 25, 
-    backgroundColor: 'rgba(255,255,255,0.2)', 
+    width: 54, 
+    height: 54, 
+    borderRadius: 27, 
     justifyContent: 'center', 
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)'
+    borderColor: 'rgba(255,255,255,0.4)'
   },
-  avatarText: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
-  scroll: { flex: 1, marginTop: -40 },
+  avatarText: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
+  scroll: { flex: 1, marginTop: -32 },
   scrollContent: { padding: spacing.lg, paddingBottom: 40 },
   card: { 
     backgroundColor: colors.surface, 
@@ -201,19 +278,43 @@ const styles = StyleSheet.create({
     ...shadows.lg
   },
   cardGradient: { padding: spacing.lg },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  tripCard: {},
+  cardHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: spacing.lg 
+  },
   statusBadge: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: '#DCFCE7', 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
     borderRadius: 20 
   },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success, marginRight: 8 },
-  statusText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
-  fareAmount: { fontSize: 24, fontWeight: '800', color: colors.text },
-  tripPath: { marginBottom: spacing.lg, position: 'relative', paddingLeft: 20 },
+  pulseDot: { 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    backgroundColor: colors.success, 
+    marginRight: 8 
+  },
+  statusText: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: '#047857' 
+  },
+  fareAmount: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    color: colors.text 
+  },
+  tripPath: { 
+    marginBottom: spacing.lg, 
+    position: 'relative', 
+    paddingLeft: 20 
+  },
   pathLine: { 
     position: 'absolute', 
     left: 4, 
@@ -223,33 +324,127 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     borderStyle: 'dashed'
   },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -20 },
-  locationText: { fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  viewBtn: { borderRadius: 14 },
+  locationRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginVertical: 8 
+  },
+  dot: { 
+    width: 10, 
+    height: 10, 
+    borderRadius: 5, 
+    position: 'absolute', 
+    left: -20 
+  },
+  locationText: { 
+    fontSize: 15, 
+    color: colors.textSecondary, 
+    fontWeight: '500',
+    flex: 1
+  },
+  viewBtn: { 
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden'
+  },
+  viewBtnGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4
+  },
+  viewBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff'
+  },
   bookCard: { padding: spacing.lg },
-  bookContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  bookGradient: { padding: 0 },
+  bookContent: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: spacing.lg 
+  },
   bookTextContainer: { flex: 1 },
-  bookTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
-  bookSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
-  bookBtn: { borderRadius: 14 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, marginTop: spacing.sm },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  seeAll: { fontSize: 14, color: colors.primary, fontWeight: '600' },
-  quickActionsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl },
-  quickActionWrapper: { alignItems: 'center', width: (width - 64) / 4 },
+  bookTitle: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    color: colors.text 
+  },
+  bookSubtitle: { 
+    fontSize: 14, 
+    color: colors.textSecondary, 
+    marginTop: 4 
+  },
+  bookIconContainer: {
+    marginLeft: spacing.md
+  },
+  bookIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  bookBtn: { 
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden'
+  },
+  bookBtnGradient: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4
+  },
+  bookBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff'
+  },
+  sectionHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: spacing.md, 
+    marginTop: spacing.lg 
+  },
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: colors.text 
+  },
+  seeAll: { 
+    fontSize: 14, 
+    color: colors.primary, 
+    fontWeight: '600' 
+  },
+  quickActionsGrid: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: spacing.xl 
+  },
+  quickActionWrapper: { 
+    alignItems: 'center', 
+    width: (width - 64) / 4 
+  },
   quickActionIcon: { 
-    width: 56, 
-    height: 56, 
+    width: 60, 
+    height: 60, 
     borderRadius: 18, 
-    backgroundColor: colors.surface, 
     justifyContent: 'center', 
     alignItems: 'center',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.borderLight
+    marginBottom: 10
   },
-  quickActionLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  quickActionLabel: { 
+    fontSize: 12, 
+    color: colors.textSecondary, 
+    fontWeight: '600',
+    textAlign: 'center'
+  },
   recentList: { gap: spacing.md },
   recentItem: { 
     flexDirection: 'row', 
@@ -260,8 +455,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight
   },
-  recentIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
+  recentIconBox: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 12, 
+    backgroundColor: colors.primaryLight, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: spacing.md 
+  },
   recentInfo: { flex: 1 },
-  recentTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  recentSub: { fontSize: 12, color: colors.textSecondary },
+  recentTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    color: colors.text 
+  },
+  recentSub: { 
+    fontSize: 12, 
+    color: colors.textSecondary,
+    marginTop: 2
+  }
 });

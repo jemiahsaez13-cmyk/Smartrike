@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, Animated, TouchableOpacity, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, StyleSheet, Alert, Animated, TouchableOpacity, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Keyboard, Dimensions } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,9 @@ import { useNavigation } from '@react-navigation/native';
 import { Loading } from '@/views/components/common/Loading';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
+import { colors, spacing } from '@/views/styles/theme';
+
+const { width, height } = Dimensions.get('window');
 
 export const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -20,27 +23,26 @@ export const LoginScreen = () => {
   const dispatch = useAppDispatch();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 700,
         useNativeDriver: true,
       }),
-      Animated.spring(slideAnim, {
+      Animated.timing(slideAnim, {
         toValue: 0,
-        tension: 50,
-        friction: 7,
+        duration: 700,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        tension: 50,
-        friction: 7,
+        tension: 40,
+        friction: 8,
         useNativeDriver: true,
       }),
     ]).start();
@@ -104,10 +106,25 @@ export const LoginScreen = () => {
         contentContainerStyle={styles.scrollContent}
         style={{ opacity: fadeAnim }}
       >
-        <LinearGradient colors={['#00B14F', '#00D563']} style={styles.header}>
+        <LinearGradient 
+          colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
+          start={{ x: 0, y: 0 }} 
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <View style={styles.waveContainer}>
+            <View style={styles.waveLine} />
+            <View style={[styles.waveLine, { marginTop: 8 }]} />
+          </View>
+
           <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
-            <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)']} style={styles.iconCircle}>
-              <MaterialCommunityIcons name="bike" size={48} color="#fff" />
+            <LinearGradient 
+              colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.1)']} 
+              style={styles.iconCircle}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <MaterialCommunityIcons name="bike" size={52} color="#fff" />
             </LinearGradient>
           </Animated.View>
           <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
@@ -133,7 +150,7 @@ export const LoginScreen = () => {
                 <MaterialCommunityIcons 
                   name="email-outline" 
                   size={20} 
-                  color={emailFocused ? '#00B14F' : '#9CA3AF'} 
+                  color={emailFocused ? colors.primary : colors.textLight} 
                   style={styles.inputIcon}
                 />
                 <RNTextInput
@@ -145,7 +162,7 @@ export const LoginScreen = () => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   style={styles.input}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textLight}
                 />
               </Animated.View>
 
@@ -156,7 +173,7 @@ export const LoginScreen = () => {
                 <MaterialCommunityIcons 
                   name="lock-outline" 
                   size={20} 
-                  color={passwordFocused ? '#00B14F' : '#9CA3AF'} 
+                  color={passwordFocused ? colors.primary : colors.textLight} 
                   style={styles.inputIcon}
                 />
                 <RNTextInput
@@ -167,13 +184,13 @@ export const LoginScreen = () => {
                   onBlur={() => setPasswordFocused(false)}
                   secureTextEntry={!showPassword}
                   style={[styles.input, { flex: 1 }]}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.textLight}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <MaterialCommunityIcons 
                     name={showPassword ? 'eye-off-outline' : 'eye-outline'} 
                     size={20} 
-                    color="#9CA3AF" 
+                    color={colors.textLight} 
                   />
                 </TouchableOpacity>
               </Animated.View>
@@ -186,7 +203,7 @@ export const LoginScreen = () => {
                 activeOpacity={0.8}
               >
                 <LinearGradient 
-                  colors={['#00B14F', '#00D563']} 
+                  colors={['#1E90FF', '#0DA5C0']} 
                   style={styles.signInGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -204,11 +221,29 @@ export const LoginScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.quickAccessSection}>
+          <View style={styles.socialSection}>
             <View style={styles.divider}>
               <View style={styles.line} />
-              <Text style={styles.quickAccessLabel}>QUICK ACCESS</Text>
+              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
               <View style={styles.line} />
+            </View>
+
+            <View style={styles.socialButtons}>
+              <TouchableOpacity style={styles.socialBtn}>
+                <MaterialCommunityIcons name="google" size={24} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialBtn}>
+                <MaterialCommunityIcons name="facebook" size={24} color={colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.socialBtn}>
+                <MaterialCommunityIcons name="twitter" size={24} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.quickAccessSection}>
+            <View style={styles.demoHeader}>
+              <Text style={styles.demoLabel}>QUICK ACCESS - DEMO MODE</Text>
             </View>
             <View style={styles.quickAccessButtons}>
               <TouchableOpacity
@@ -216,20 +251,30 @@ export const LoginScreen = () => {
                 onPress={() => handleDemoMode('passenger')}
                 activeOpacity={0.7}
               >
-                <View style={styles.quickIconBox}>
-                  <MaterialCommunityIcons name="account" size={28} color="#00B14F" />
-                </View>
-                <Text style={styles.quickAccessBtnText}>Passenger</Text>
+                <LinearGradient 
+                  colors={['#E3F2FD', '#F0F7FF']}
+                  style={styles.quickAccessGradient}
+                >
+                  <View style={styles.quickIconBox}>
+                    <MaterialCommunityIcons name="account" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={styles.quickAccessBtnText}>Passenger</Text>
+                </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.quickAccessBtn}
                 onPress={() => handleDemoMode('driver')}
                 activeOpacity={0.7}
               >
-                <View style={styles.quickIconBox}>
-                  <MaterialCommunityIcons name="car" size={28} color="#00B14F" />
-                </View>
-                <Text style={styles.quickAccessBtnText}>Driver</Text>
+                <LinearGradient 
+                  colors={['#E3F2FD', '#F0F7FF']}
+                  style={styles.quickAccessGradient}
+                >
+                  <View style={styles.quickIconBox}>
+                    <MaterialCommunityIcons name="car" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={styles.quickAccessBtnText}>Driver</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -240,84 +285,101 @@ export const LoginScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1 },
   header: {
-    paddingTop: 70,
+    paddingTop: 60,
     paddingBottom: 50,
     alignItems: 'center',
     borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40
+    borderBottomRightRadius: 40,
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  waveContainer: {
+    position: 'absolute',
+    top: 20,
+    right: -40,
+    width: 200,
+    height: 200,
+    opacity: 0.1
+  },
+  waveLine: {
+    width: 200,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#fff',
   },
   iconContainer: { marginBottom: 16 },
   iconCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.3)'
   },
   appName: {
-    fontSize: 42,
+    fontSize: 44,
     fontWeight: '800',
     color: '#fff',
     letterSpacing: -1
   },
   tagline: {
-    fontSize: 15,
+    fontSize: 16,
     color: 'rgba(255,255,255,0.95)',
-    marginTop: 6,
+    marginTop: 8,
     fontWeight: '500',
     letterSpacing: 0.5
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    marginTop: -20
+    paddingHorizontal: 20,
+    marginTop: -24
   },
   formCard: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.surface,
     borderRadius: 28,
-    padding: 32,
-    shadowColor: '#000',
+    padding: 28,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.15,
     shadowRadius: 24,
-    elevation: 8
+    elevation: 8,
+    marginBottom: 16
   },
-  welcomeContainer: { marginBottom: 32, alignItems: 'center' },
+  welcomeContainer: { marginBottom: 28, alignItems: 'center' },
   welcomeTitle: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.text,
     marginBottom: 8,
     letterSpacing: -0.5
   },
   welcomeSubtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: colors.textSecondary,
     fontWeight: '500'
   },
   inputContainer: { marginBottom: 24 },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 58,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    paddingHorizontal: 18,
+    height: 56,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    paddingHorizontal: 16,
     marginBottom: 16,
     borderWidth: 2,
     borderColor: 'transparent'
   },
   inputFocused: {
-    backgroundColor: '#fff',
-    borderColor: '#00B14F',
-    shadowColor: '#00B14F',
+    backgroundColor: colors.surface,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4
   },
@@ -325,16 +387,16 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#1F2937',
+    color: colors.text,
     fontWeight: '500'
   },
   signInBtn: {
-    height: 58,
+    height: 56,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#00B14F',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 12,
     elevation: 8
   },
@@ -352,62 +414,95 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5
   },
   signUpLink: {
-    marginTop: 24,
+    marginTop: 20,
     alignItems: 'center'
   },
   signUpText: {
-    fontSize: 15,
-    color: '#6B7280',
+    fontSize: 14,
+    color: colors.textSecondary,
     fontWeight: '500'
   },
   signUpHighlight: {
-    color: '#00B14F',
+    color: colors.primary,
     fontWeight: '700'
   },
-  quickAccessSection: {
-    marginTop: 32,
-    paddingBottom: 40
+  socialSection: {
+    marginBottom: 24
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20
+    marginBottom: 16
   },
   line: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB'
+    backgroundColor: colors.border
   },
-  quickAccessLabel: {
+  dividerText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#9CA3AF',
-    letterSpacing: 1.5,
-    marginHorizontal: 16
+    color: colors.textLight,
+    letterSpacing: 1,
+    marginHorizontal: 12
+  },
+  socialButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center'
+  },
+  socialBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  quickAccessSection: {
+    marginTop: 24,
+    paddingBottom: 40
+  },
+  demoHeader: {
+    marginBottom: 16,
+    alignItems: 'center'
+  },
+  demoLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textLight,
+    letterSpacing: 1.5
   },
   quickAccessButtons: {
     flexDirection: 'row',
-    gap: 16
+    gap: 12
   },
   quickAccessBtn: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 3
+  },
+  quickAccessGradient: {
+    padding: 18,
+    alignItems: 'center'
   },
   quickIconBox: {
     width: 56,
     height: 56,
     borderRadius: 16,
-    backgroundColor: '#E6F7ED',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12
@@ -415,7 +510,7 @@ const styles = StyleSheet.create({
   quickAccessBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#00B14F',
+    color: colors.primary,
     letterSpacing: 0.3
   }
 });
