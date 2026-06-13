@@ -40,6 +40,19 @@ export const updateDriverStatus = createAsyncThunk(
   }
 );
 
+export const acceptBooking = createAsyncThunk(
+  'driver/acceptBooking',
+  async (payload: { bookingId: string; driverId: string }, { rejectWithValue }) => {
+    try {
+      const booking = await bookingRepo.assignDriver(payload.bookingId, payload.driverId);
+      await userRepo.updateDriverStatus(payload.driverId, 'on-trip');
+      return booking;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const fetchCompletedTrips = createAsyncThunk('driver/fetchCompletedTrips', async (driverId: string, { rejectWithValue }) => {
   try {
     return await bookingRepo.findByDriver(driverId);
@@ -58,7 +71,10 @@ const driverSlice = createSlice({
       state.totalEarnings = action.payload.total_earnings;
     },
     addIncomingRequest: (state, action: PayloadAction<Booking>) => {
-      state.incomingRequests.push(action.payload);
+      // Check if already in list to avoid duplicates
+      if (!state.incomingRequests.find(r => r.id === action.payload.id)) {
+        state.incomingRequests.unshift(action.payload);
+      }
     },
     removeIncomingRequest: (state, action: PayloadAction<string>) => {
       state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload);
@@ -71,6 +87,18 @@ const driverSlice = createSlice({
     builder
       .addCase(updateDriverStatus.fulfilled, (state, action) => {
         state.currentStatus = action.payload;
+      })
+      .addCase(acceptBooking.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(acceptBooking.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentStatus = 'on-trip';
+        state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload.id);
+      })
+      .addCase(acceptBooking.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       })
       .addCase(fetchCompletedTrips.fulfilled, (state, action) => {
         state.completedTrips = action.payload.filter(b => b.status === 'completed');

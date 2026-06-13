@@ -1,116 +1,267 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Text } from 'react-native-paper';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Animated, Dimensions } from 'react-native';
+import { Text, Surface } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { colors, spacing, shadows } from '@/views/styles/theme';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width } = Dimensions.get('window');
 
 export const PassengerDashboard = () => {
   const { user } = useAuth();
   const { currentBooking, loading } = useBooking();
   const navigation = useNavigation<any>();
 
-  if (loading) return <Loading message="Loading dashboard..." />;
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  if (loading) return <Loading message="Syncing with TODA..." />;
+
+  const QuickAction = ({ icon, label, onPress, color = colors.primary }: any) => (
+    <TouchableOpacity style={styles.quickActionWrapper} onPress={onPress}>
+      <Surface style={styles.quickActionIcon} elevation={1}>
+        <MaterialCommunityIcons name={icon} size={28} color={color} />
+      </Surface>
+      <Text style={styles.quickActionLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello,</Text>
-          <Text style={styles.name}>{user?.name || 'Guest'}</Text>
+    <View style={styles.container}>
+      <LinearGradient 
+        colors={[colors.primary, colors.primaryDark]} 
+        style={styles.topSection}
+      >
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Good day,</Text>
+            <Text style={styles.name}>{user?.name || 'Passenger'}</Text>
+          </View>
+          <TouchableOpacity style={styles.profileBtn} onPress={() => navigation.navigate('Profile')}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
+            </View>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.avatar} onPress={() => navigation.navigate('Profile')}>
-          <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'G'}</Text>
-        </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
-      {currentBooking ? (
-        <View style={[styles.card, styles.activeCard]}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>🚗 Active Ride</Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{currentBooking.status}</Text>
-            </View>
-          </View>
-          <View style={styles.locationRow}>
-            <Text style={styles.locationIcon}>📍</Text>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>Pickup</Text>
-              <Text style={styles.locationText}>{currentBooking.pickup_location.address}</Text>
-            </View>
-          </View>
-          <View style={styles.locationRow}>
-            <Text style={styles.locationIcon}>🎯</Text>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationLabel}>Dropoff</Text>
-              <Text style={styles.locationText}>{currentBooking.dropoff_location.address}</Text>
-            </View>
-          </View>
-          <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Total Fare</Text>
-            <Text style={styles.fareAmount}>₱{currentBooking.total_fare}</Text>
-          </View>
-          <Button mode="contained" onPress={() => navigation.navigate('ActiveTrip')} style={styles.viewBtn}>
-            View Details
-          </Button>
-        </View>
-      ) : (
-        <View style={[styles.card, styles.bookCard]}>
-          <Text style={styles.bookIcon}>🚲</Text>
-          <Text style={styles.bookTitle}>Ready for your next ride?</Text>
-          <Text style={styles.bookSubtitle}>Book a tricycle in just a few taps</Text>
-          <Button mode="contained" onPress={() => navigation.navigate('BookRide')} style={styles.bookBtn}>
-            Book a Ride
-          </Button>
-        </View>
-      )}
+      <Animated.ScrollView 
+        style={[styles.scroll, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {currentBooking ? (
+          <Surface style={[styles.card, styles.activeCard]} elevation={4}>
+            <LinearGradient 
+              colors={['#fff', '#f0fdf4']} 
+              style={styles.cardGradient}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.statusBadge}>
+                  <View style={styles.pulseDot} />
+                  <Text style={styles.statusText}>Trip in Progress</Text>
+                </View>
+                <Text style={styles.fareAmount}>₱{currentBooking.total_fare}</Text>
+              </View>
 
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('TripHistory')}>
-          <Text style={styles.actionIcon}>📊</Text>
-          <Text style={styles.actionText}>Trip History</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('Profile')}>
-          <Text style={styles.actionIcon}>👤</Text>
-          <Text style={styles.actionText}>Profile</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+              <View style={styles.tripPath}>
+                <View style={styles.pathLine} />
+                <View style={styles.locationRow}>
+                  <View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {currentBooking.pickup_location.address}
+                  </Text>
+                </View>
+                <View style={styles.locationRow}>
+                  <View style={[styles.dot, { backgroundColor: colors.accent }]} />
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {currentBooking.dropoff_location.address}
+                  </Text>
+                </View>
+              </View>
+
+              <Button 
+                variant="primary" 
+                onPress={() => navigation.navigate('ActiveTrip')} 
+                style={styles.viewBtn}
+              >
+                Track My Ride
+              </Button>
+            </LinearGradient>
+          </Surface>
+        ) : (
+          <Surface style={[styles.card, styles.bookCard]} elevation={4}>
+            <View style={styles.bookContent}>
+              <View style={styles.bookTextContainer}>
+                <Text style={styles.bookTitle}>Need a ride?</Text>
+                <Text style={styles.bookSubtitle}>Available tricycles are nearby</Text>
+              </View>
+              <MaterialCommunityIcons name="bike" size={60} color={colors.primary} />
+            </View>
+            <Button 
+              variant="primary" 
+              onPress={() => navigation.navigate('BookRide')} 
+              style={styles.bookBtn}
+            >
+              Book Now
+            </Button>
+          </Surface>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        </View>
+
+        <View style={styles.quickActionsGrid}>
+          <QuickAction icon="history" label="History" onPress={() => navigation.navigate('History')} />
+          <QuickAction icon="bookmark-outline" label="Saved" onPress={() => {}} />
+          <QuickAction icon="message-text-outline" label="Support" onPress={() => {}} />
+          <QuickAction icon="cog-outline" label="Settings" onPress={() => navigation.navigate('Profile')} />
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Destinations</Text>
+          <TouchableOpacity><Text style={styles.seeAll}>See All</Text></TouchableOpacity>
+        </View>
+
+        <View style={styles.recentList}>
+          {[
+            { id: 1, title: 'Public Market', sub: 'Boac, Marinduque', icon: 'storefront-outline' },
+            { id: 2, title: 'Marinduque State College', sub: 'Tanza, Boac', icon: 'school-outline' },
+          ].map(item => (
+            <TouchableOpacity key={item.id} style={styles.recentItem}>
+              <View style={styles.recentIconBox}>
+                <MaterialCommunityIcons name={item.icon as any} size={24} color={colors.primary} />
+              </View>
+              <View style={styles.recentInfo}>
+                <Text style={styles.recentTitle}>{item.title}</Text>
+                <Text style={styles.recentSub}>{item.sub}</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textLight} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg, paddingTop: spacing.xl },
-  greeting: { fontSize: 16, color: colors.textSecondary },
-  name: { fontSize: 24, fontWeight: 'bold', color: colors.text, marginTop: spacing.xs },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  card: { backgroundColor: colors.surface, borderRadius: 20, padding: spacing.lg, margin: spacing.md, ...shadows.md },
-  activeCard: { borderLeftWidth: 4, borderLeftColor: colors.success },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  cardTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
-  statusBadge: { backgroundColor: colors.primaryLight, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: '600', color: colors.primary, textTransform: 'capitalize' },
-  locationRow: { flexDirection: 'row', marginBottom: spacing.md },
-  locationIcon: { fontSize: 24, marginRight: spacing.sm },
-  locationInfo: { flex: 1 },
-  locationLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.xs },
-  locationText: { fontSize: 14, color: colors.text },
-  fareRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm, marginBottom: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  fareLabel: { fontSize: 14, color: colors.textSecondary },
-  fareAmount: { fontSize: 24, fontWeight: 'bold', color: colors.primary },
-  viewBtn: { marginTop: spacing.sm },
-  bookCard: { alignItems: 'center', paddingVertical: spacing.xl },
-  bookIcon: { fontSize: 64, marginBottom: spacing.md },
-  bookTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text, marginBottom: spacing.xs },
-  bookSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.lg, textAlign: 'center' },
-  bookBtn: { width: '100%' },
-  quickActions: { flexDirection: 'row', padding: spacing.md, gap: spacing.md },
-  actionCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 16, padding: spacing.lg, alignItems: 'center', ...shadows.sm },
-  actionIcon: { fontSize: 32, marginBottom: spacing.sm },
-  actionText: { fontSize: 14, fontWeight: '600', color: colors.text }
+  topSection: { 
+    height: 180, 
+    paddingTop: 60, 
+    paddingHorizontal: spacing.lg,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  greeting: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500' },
+  name: { fontSize: 28, fontWeight: '800', color: '#fff', marginTop: 2 },
+  profileBtn: { padding: 4 },
+  avatar: { 
+    width: 50, 
+    height: 50, 
+    borderRadius: 25, 
+    backgroundColor: 'rgba(255,255,255,0.2)', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)'
+  },
+  avatarText: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+  scroll: { flex: 1, marginTop: -40 },
+  scrollContent: { padding: spacing.lg, paddingBottom: 40 },
+  card: { 
+    backgroundColor: colors.surface, 
+    borderRadius: 24, 
+    overflow: 'hidden',
+    marginBottom: spacing.xl,
+    ...shadows.lg
+  },
+  cardGradient: { padding: spacing.lg },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  statusBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#DCFCE7', 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 20 
+  },
+  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success, marginRight: 8 },
+  statusText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
+  fareAmount: { fontSize: 24, fontWeight: '800', color: colors.text },
+  tripPath: { marginBottom: spacing.lg, position: 'relative', paddingLeft: 20 },
+  pathLine: { 
+    position: 'absolute', 
+    left: 4, 
+    top: 10, 
+    bottom: 10, 
+    width: 2, 
+    backgroundColor: colors.border,
+    borderStyle: 'dashed'
+  },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, position: 'absolute', left: -20 },
+  locationText: { fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
+  viewBtn: { borderRadius: 14 },
+  bookCard: { padding: spacing.lg },
+  bookContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  bookTextContainer: { flex: 1 },
+  bookTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
+  bookSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  bookBtn: { borderRadius: 14 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md, marginTop: spacing.sm },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
+  seeAll: { fontSize: 14, color: colors.primary, fontWeight: '600' },
+  quickActionsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xl },
+  quickActionWrapper: { alignItems: 'center', width: (width - 64) / 4 },
+  quickActionIcon: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 18, 
+    backgroundColor: colors.surface, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.borderLight
+  },
+  quickActionLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  recentList: { gap: spacing.md },
+  recentItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: spacing.md, 
+    backgroundColor: colors.surface, 
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderLight
+  },
+  recentIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
+  recentInfo: { flex: 1 },
+  recentTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  recentSub: { fontSize: 12, color: colors.textSecondary },
 });
