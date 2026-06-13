@@ -1,0 +1,873 @@
+Smart Trike: A Mobile TODA Booking System for Students and Commuters 
+in Boac Marinduque
+
+
+
+Jemiah G. Saez                                                               Erica Gayle J. Aguilar
+                   Dawis, Gasan, Marinduque                                                 	Puting Buhangin, Boac, Marinduque
+saez.jemiah@marsu.edu.ph                                               aguilar.ericagayle@marsu.edu.ph    
+
+Ron Alvin P. Sinahon                                                               Prince Raphael M. Sapungan
+  	Balagasan, Boac, Marinduque                             		Lupac, Boac, Marinduque
+sinahon.ronalvin@marsu.edu.ph                                               sapunganprinceraphael@marsu.edu.ph         
+
+
+
+
+
+
+
+
+
+
+
+
+Chapter I  
+INTRODUCTION  
+1.1 Project Context  
+Transportation plays a crucial role in economic development and daily human mobility across the world. A global study covering nearly 800 cities in 61 countries found that approximately 51% of daily commutes are made using private vehicles, while 26% rely on public transportation systems, emphasizing how essential organized transportation systems are to daily life [1]. Worldwide, an estimated 3.78 billion people depend on public transportation, generating over $233 billion in annual revenue, with an average of $61.60 per user [2]. The demand for urban transit continues to rise, particularly in Asia, where South and Southeast Asian cities are projected to account for the largest share of global bus transit demand by 2027, surpassing 4.1 trillion passenger kilometers [3]. These figures reflect a world is becoming more and more reliant on easily accessible and effective transportation systems to support social and economic activities.  In the Philippines, transportation reflects the country's archipelagic geography and socioeconomic conditions. Among the most iconic and widely-used modes of public transport in the Philippines are motorized tricycles, which are motorcycle-and-sidecar combinations used for short-distance travel, especially outside major urban centers. These vehicles serve as the primary mode of transport for residents, students, workers, and visitors due to their affordability and accessibility in both urban and rural areas [4]. as supported by the general welfare provisions under the Local Government Code of 1991 (Republic Act No. 7160, Article III, Section 6). Jeepneys alone account for approximately 40 percent of all motorized person trips in the Philippines, or about 40 million daily trips [5], while motorcycles and tricycles together represent 60 percent of all registered motor vehicles as of May 2022 [6].
+Tricycles are particularly valued for their affordability, flexibility, accessibility, and ability to reach barangay level destinations inaccessible to larger vehicles. Despite their importance, studies show that tricycle services across Philippine cities face persistent challenges in service quality, with responsiveness identified as the most significant factor affecting passenger satisfaction [7].
+In Marinduque, a heart-shaped island province in the MIMAROPA region known as the "Heart of the Philippines" tricycles and jeepneys form the backbone of public transport [8]. Tricycles serve as the primary mode of transportation across all six municipalities of the province, offering affordable and readily available services [9], while local jeepneys provide limited inter-municipal routes, typically ending service around 4:00 PM. [10]. In Boac, the provincial capital with a population of 57,283 according to the 2020 Census of Population and Housing conducted by the Philippine Statistics Authority [11], tricycles are essential for the daily commuting needs of students, workers, and residents, as the municipality functions as Marinduque's commercial, educational, and governmental hub [12]. However, public transport in Boac faces significant challenges: tricycle availability is limited and inconsistent, there are no formal booking systems or dispatch centers, and passengers must rely on physical presence and informal coordination at terminals or roadside stops. During peak hours typically between 6:30 AM to 9:00 AM, 11:30 AM to 1:00 PM and 4:00 PM to 7:00 PM commuters often experience waiting times ranging from 15 to 45 minutes, and in some cases up to an hour, especially in high-demand areas such as schools, markets, and transport terminals. Without digital mechanisms for advance booking, driver tracking, or ride confirmation, commuters particularly students experience long waits, uncertain availability during peak hours, and overall inefficiency. 
+	Although the Federation of Tricycle Operators and Drivers Association of Boac (FEDTODAB), the primary organization responsible for overseeing tricycle operations in Boac, is tasked with regulating drivers and managing transport activities, it faces significant limitations in effectively performing these functions. The absence of a structured dispatch system restricts FEDTODAB’s ability to monitor real-time operations, assign trips efficiently, and ensure a balanced distribution of tricycles across service areas. Furthermore, the Motorized Tricycle Operator’s Permit (MTOP) or franchise process, which FEDTODAB coordinates with the local government, remains manual and fragmented. This process includes multiple steps such as application submission, inspection, fee payment, approval, issuance, renewal, and transfer of ownership. As a result, FEDTODAB encounters difficulties in tracking franchise records, verifying active units, and maintaining an updated database of drivers and operators.
+These challenges result in poor monitoring, inconsistent service availability, and inefficiencies in transport management, ultimately affecting commuters who experience long waiting times and unreliable access to transportation.
+	Addressing these transportation gaps is more than a matter of convenience it directly impacts student welfare, driver livelihoods, and the modernization of public transport governance in Marinduque. Studies on mobile-based transport systems in the Philippines have consistently shown that digital booking platforms reduce waiting times, improve service coordination, and enhance commuter satisfaction [12]. Introducing a dedicated booking system for the local tricycles in Boac could bridge service gaps, formalize FEDTODAB's operations and align the transportation environment with the increasing adoption of mobile technology in Philippine municipalities. This study focuses on tricycles under FEDTODAB in Boac; it does not include intermunicipal routes, other transportation services, or external payment systems.  
+This study proposes the development of "Smart Trike: A Mobile TODA Booking System for Students and Commuters in Boac Marinduque. The system is designed to provide a digital platform enabling passengers to book tricycle rides via smartphones, while allowing registered FEDTODAB drivers to receive and manage booking requests in real time. With GPS-based location tracking, ride confirmation features, and a driver-passenger interface, Smart Trike aims to enhance accessibility, efficiency, and usability of tricycle services in Boac, Marinduque. The study also seeks to evaluate system performance through structured user feedback, assessing its potential as a replicable model for technology-driven transport innovation in rural and island communities across the Philippines.  
+1.2 Objectives of the Study   
+The main objective of this study is to develop and evaluate a mobile-based application called Smart Trike: A Mobile TODA Booking System for Students and Commuters in Boac.  
+1.2.1 Specific Objectives  
+Specifically, the study aims to:  
+To evaluate the current passenger booking process and identify issues such as delays, lack of coordination, and unfair passenger distribution.
+To examine the process of securing a tricycle franchise and determine challenges, requirements, and inefficiencies experienced by applicants.
+Assess the feasibility of the proposed Smart Trike system in terms of:  
+Operational Feasibility will determine if the system can improve the current transportation process and be accepted by commuters, drivers, and administrators.  
+Technical Feasibility is to determine if the required hardware, software, mobile devices, internet connection, and GPS technology are available for the development of the system.  
+Economic Feasibility to determine whether the development and implementation of the system are cost-effective and beneficial to the organization and users.  
+To design and develop the Smart Trike mobile TODA booking system with the following components:  
+Passenger Module - that allows commuters to book tricycle rides using Android and iOS mobile devices.  
+Driver Module - that enables drivers to receive, accept, and manage booking requests in real time.  
+GPS Tracking Feature - for accurate identification of pickup and drop-off locations.  
+Administrator Module - for managing users, monitoring bookings, and maintaining system records.  
+To test the propose system in terms of functionality, usability, and performance using selected students, commuters, and tricycle drivers in Boac, Marinduque.  
+To create an implementation plan for the Smart Trike mobile booking system for actual use and evaluate its effectiveness in improving the accessibility, efficiency, and convenience of tricycle transportation services.  
+1.3 Significance of the study  
+The findings of this study are expected to benefit the following:  
+Students and Commuters. The system provides a more convenient and efficient way to book tricycle rides, reducing waiting time and improving accessibility to transportation.  
+Tricycle Drivers. The system enables drivers to receive booking requests more efficiently, which may help increase passenger opportunities and improve service management.  
+FEDTODAB. The organization can benefit from improved coordination and monitoring of tricycle operations through the system.  
+Local Government and Community. The study contributes to the modernization of local transportation services and promotes the use of digital solutions in public transportation management.  
+Future Researchers. This study may serve as a reference for future research related to mobile-based transportation systems and service applications.  
+1.4 Project Scope and Limitations   
+This study focuses on the design, development, and implementation of Smart Trike: A Mobile  
+TODA Booking System for Students and Commuters in Boac. The system is intended for tricycle drivers, TODA members, students, and commuters within Boac, Marinduque. It is a mobile-based application that enables users to book tricycle services and allows drivers to receive and manage booking requests in an organized and efficient manner. The system also aims to enhance communication between drivers and passengers, providing a more convenient and reliable booking experience.  The study includes data gathering through surveys and interviews to identify user needs and preferences. It also covers system design, development, testing, and evaluation to ensure that the application is functional, reliable, and user friendly. The implementation will be conducted in selected areas of Boac, particularly in locations where tricycle services are commonly utilized. In addition, the project includes training and the preparation of system documentation to support deployment and usage. 
+Limitations  
+		This study is limited to the development of a mobile booking and monitoring system for tricycle services only. It does not include other modes of transportation such as buses and jeepneys. The system mainly focuses on booking and basic monitoring features.  
+	The system cannot function without a stable internet connection, which is beyond the control of the researchers. It includes basic GPS tracking but does not support advanced features such as automated fare computation or cashless payment integration. Constraints also include limited device compatibility and system resources, which may affect performance on lower-end mobile devices. 
+1.5 Definition of Terms  
+Administrator - The person assigned to manage, monitor, and maintain the system, including the handling of user data and records.  
+Booking Confirmation - A system-generated notification indicating that a driver has accepted a commuter’s booking request.  
+Booking Request - A request made by a commuter through the mobile application to obtain a tricycle 
+transportation service.  
+Commuter - An individual who utilizes the application to request transportation services for daily travel.  
+Driver - A registered tricycle operator who receives and responds to booking requests through the system.  
+Federation of Tricycle Operators and Drivers Association of Boac  
+FEDTODAB - The governing body responsible for overseeing and coordinating TODA groups within the municipality of Boac and ensuring proper regulation of tricycle operations.  
+Mobile Booking System - A system that facilitates the requesting and reservation of transportation services through a mobile application.  
+Notification System - A feature of the system that delivers updates and alerts to both drivers and commuters regarding booking activities.  
+Route Optimization - The process of identifying the most efficient route based on distance, travel time, and accessibility.  
+Scheduling - The process of organizing and assigning available drivers to commuter requests at a specific time.  
+Smart Trike Application - The mobile-based system developed in this study that allows users to book or request tricycle rides within the municipality of Boac.  
+Tricycle Operators and Drivers Association (TODA) - An organization of tricycle drivers assigned to a specific route or service area, responsible for maintaining order and regulating operations.  
+Payment - The process of giving money in exchange for transportation services, franchise fees, renewal fees, or other charges required by the system or local government unit
+Application - The formal process of submitting required information and documents to request a tricycle franchise, permit, or access to the Smart Trike system.
+Motorized Tricycle Operator’s Permit (MTOP) - A permit issued by the local government unit that authorizes an individual or operator to legally operate a motorized tricycle for public transportation services.
+Renewal - The process of updating and extending the validity of an existing franchise, permit, or registration by submitting updated requirements and completing necessary procedures before expiration.
+Inspector Result - The official outcome or findings of the vehicle inspection conducted to determine whether a tricycle unit complies with safety and operational requirements.
+Route - The designated path or service area assigned to a tricycle or TODA where transportation services are provided.
+Assignment - The process of allocating or designating a driver, passenger request, or route within the Smart Trike system.
+Global Positioning System (GPS) - A satellite-based navigation technology used to determine and track the real-time location of passengers and drivers within the Smart Trike application.
+Chapter II
+Review of Related Literature and Studies
+This chapter presents the relevant literature and studies related to the development of Smart Trike: A Mobile TODA Booking System for Students and Commuters. It covers both local and foreign sources organized into literature and studies, and concludes with a synthesis of the reviewed works to clarify their relevance to the current research.
+2.1 Public Transportation
+Public transportation in the Philippines plays a critical role in providing mobility to the general population, especially in urban and developing areas. Studies show that transportation systems such as jeepneys, buses, and tricycles serve as the backbone of daily commuting for millions of Filipinos. However, inefficiencies such as overcrowding, irregular schedules, and poor infrastructure significantly affect service quality and accessibility. These issues highlight the need for improvements in planning and modernization of transport systems [13]. 
+Research conducted in metropolitan areas indicates that public transportation systems are often characterized by fragmentation and lack of integration among different transport modes. This results in longer travel times and increased commuter stress. The absence of a unified system contributes to operational inefficiencies, making it difficult for commuters to rely on consistent services. These findings emphasize the importance of coordinated transport systems [14].
+In provincial areas, public transportation availability is more limited, and services are often dependent on demand rather than structured schedules. Studies reveal that this situation leads to inconsistent transportation access, especially in remote communities. The lack of formalized systems results in transportation gaps that affect economic and social activities [15].
+Recent studies suggest that modernization programs and digital integration could significantly improve public transportation efficiency. The adoption of smart technologies and mobile-based systems has been identified as a potential solution to address long-standing issues in the Philippine transport sector [16].
+2.2 Mobile-Based Ride-Hailing Applications
+Mobile-based ride-hailing applications have emerged as a modern solution to transportation challenges in the Philippines. Applications like Grab allow users to conveniently book rides using smartphones, improving accessibility and efficiency. Studies show that these platforms reduce waiting time and provide better service transparency compared to traditional transportation systems [17].
+Research indicates that ride-hailing applications improve commuter experience by offering features such as real-time tracking, digital payments, and fare estimates. These features contribute to increased user satisfaction and trust in transportation services. The convenience provided by these applications has led to their widespread adoption in urban areas [18]. 
+Despite their benefits, studies highlight challenges such as surge pricing, limited coverage in rural areas, and dependence on internet connectivity. These factors limit the effectiveness of ride-hailing services in less developed regions of the Philippines [19].
+Further research suggests that integrating ride-hailing systems with local transportation services could enhance accessibility and improve overall transportation efficiency. This integration could bridge the gap between traditional and digital transport systems [20].
+2.3 Tricycle Transportation Systems
+Tricycles are a dominant mode of transportation in many parts of the Philippines, particularly in rural and semi-urban areas. They provide essential last-mile connectivity and are often the only available transport option in smaller communities. Studies highlight their importance in supporting local mobility and economic activity [21].
+However, research shows that tricycle operations are often informal and lack standardized regulations. This results in issues such as inconsistent fares, limited route organization, and inefficient service delivery. These problems negatively impact both drivers and passengers [22].
+In many municipalities, tricycle services operate on a boundary or queue system, which may lead to long waiting times for passengers. Studies indicate that this operational setup limits the efficiency of transportation services and reduces overall commuter satisfaction [23].
+Recent studies suggest that digitizing tricycle systems through mobile applications could improve service management and efficiency. Implementing structured booking and dispatch systems can help modernize tricycle transportation [24].
+2.4 TODA Management Systems
+Tricycle Operators and Drivers Associations (TODA) are responsible for managing tricycle operations at the local level. These organizations regulate driver activities, assign routes, and maintain order within the transportation system. Studies show that TODAs play a significant role in ensuring community-based transportation services [25].
+However, many TODAs still rely on manual management systems, which limit their ability to efficiently monitor operations. This lack of digital infrastructure leads to challenges in tracking drivers, managing schedules, and ensuring accountability [26]. 
+Research indicates that the absence of centralized data systems within TODAs results in poor coordination and communication among drivers and operators. This contributes to inefficiencies in service delivery and reduced commuter satisfaction [27].
+Studies recommend the implementation of digital TODA management systems to improve organization, transparency, and operational efficiency. Integrating mobile technology can enhance overall system performance [28].
+2.5 GPS-Based Tracking in Transportation Systems
+GPS technology has become an essential tool in modern transportation systems, providing real-time tracking and navigation capabilities. In the Philippines, GPS is widely used in ride-hailing applications and logistics services. Studies show that GPS improves operational efficiency and route optimization [29]. 
+Research indicates that GPS-based tracking enhances passenger safety by allowing real-time monitoring of vehicle locations. This feature increases user confidence and trust in transportation services [30]. 
+In addition, GPS systems enable transportation providers to analyze traffic patterns and optimize routes, reducing travel time and fuel consumption. These benefits contribute to more efficient transportation operations [31].
+Despite its advantages, studies highlight challenges such as signal limitations in remote areas and concerns regarding data privacy. Addressing these issues is essential for the effective implementation of GPS-based systems [32].
+2.6 Mobile Application Usability and User Acceptance
+The usability of mobile applications is a key factor influencing user adoption in the Philippines. Studies show that applications with simple interfaces and intuitive designs are more likely to be accepted by users. Ease of use significantly affects user satisfaction [33].
+Research also indicates that perceived usefulness plays a major role in user acceptance. Applications that provide practical benefits, such as time-saving features and convenience, are more likely to be adopted [34].
+Additionally, system reliability and performance influence user trust. Frequent errors or slow response times can discourage users from continuing to use an application. Ensuring system stability is crucial for long-term adoption [35].
+Studies emphasize the importance of user-centered design in developing mobile applications. Understanding user needs and preferences helps create applications that are both effective and widely accepted [36]. 
+2.7 Transportation Systems and Commuter Satisfaction
+Commuter satisfaction is influenced by factors such as service reliability, waiting time, and accessibility. Studies in the Philippines show that inconsistent transportation services contribute to negative commuter experiences [37].
+Research indicates that long waiting times and lack of available vehicles are major sources of dissatisfaction among commuters. These issues highlight the need for improved transportation management systems [38].
+Organized transportation systems have been shown to improve commuter satisfaction by providing predictable and reliable services. Structured systems reduce uncertainty and enhance user experience [39].
+Digital transportation platforms further improve satisfaction by offering features such as real-time updates and convenient booking systems. These technologies enhance the overall commuting experience [40].
+2.8 Transportation Challenges in Rural and Island Communities
+Transportation in rural and island communities in the Philippines faces significant challenges due to geographic and infrastructural limitations. Studies show that limited road networks and vehicle availability affect mobility [41].
+Research indicates that transportation services in these areas are often irregular and dependent on demand. This leads to difficulties in accessing essential services such as healthcare and education [42].
+Additionally, the lack of formal transportation systems in remote areas results in inefficiencies and limited economic opportunities. Addressing these issues is crucial for community development [43].
+Studies suggest that implementing localized and technology-driven transportation solutions can help improve accessibility and mobility in rural and island communities [44].
+2.9 Feasibility of Mobile-Based Transport Systems
+The feasibility of mobile-based transport systems in the Philippines is supported by increasing smartphone usage and internet accessibility. Studies show that digital platforms can enhance transportation efficiency and convenience [45].
+Research indicates that mobile-based systems can reduce operational inefficiencies by providing structured booking and dispatch processes. These systems improve coordination between drivers and passengers [46].
+However, challenges such as limited internet connectivity and digital literacy remain barriers to adoption, particularly in rural areas. Addressing these issues is essential for successful implementation [47]. 
+Overall, studies conclude that mobile-based transport systems are feasible and beneficial when adapted to local conditions. Proper implementation can significantly improve transportation services in the Philippines. 
+Synthesis of Reviewed Literature and Studies
+The reviewed literature emphasizes the importance of transportation systems in ensuring mobility and accessibility in the Philippines, particularly in both urban and rural communities. Public transportation remains essential; however, it is often characterized by inefficiencies, lack of organization, and inconsistent service delivery. These challenges are more pronounced in provincial and island areas where transportation systems are informal and limited.
+Mobile-based ride-hailing applications have introduced more convenient and structured transportation services by offering features such as real-time tracking and digital booking. Despite their effectiveness, their adoption is still limited in rural areas due to connectivity and accessibility issues. Tricycle transportation systems, which are widely used in local communities, provide essential services but lack proper regulation and structured management. The role of TODAs is significant, yet their reliance on manual processes limits operational efficiency.
+Technological solutions such as GPS tracking and mobile applications have been shown to improve transportation efficiency, safety, and user satisfaction. Studies also highlight that usability and user acceptance are critical factors in the success of these systems. Furthermore, commuter satisfaction is highly dependent on service reliability, accessibility, and reduced waiting time.
+Overall, the literature supports the feasibility of implementing mobile-based transportation systems in the Philippines. It highlights the need for integrating digital solutions with existing transport systems to address current challenges and improve service delivery, particularly in underserved communities.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CONCEPTUAL FRAMEWORK
+	This study is for the development of the proposed system using Input, Process, and Output (IPO) Model.
+Figure 1: Conceptual Framework of the Study
+		
+
+
+The conceptual framework of this study is anchored on the Input-Process-Output (IPO) model, which systematically illustrates how the proposed system Smart Trike: A Mobile TODA 
+Booking System for Students and Commuters was conceptualized, developed, and evaluated. 
+This model provides a structured approach in identifying the components necessary for the successful development and implementation of the mobile-based booking system.  
+Input  
+The input phase encompasses all the necessary data, tools, and resources required before the development process begins. It is divided into three categories: User and System Requirements, Software Requirements, and Hardware Requirements.  
+The User and System Requirements include the profiles of commuters and drivers, as well as the core system features essential to the application's functionality. These features consist of the mobile-based booking system, GPS tracking for pick-up and drop-off locations, a booking notification system, fare estimation, driver-passenger matching, and an admin monitoring system.  
+The Software Requirements identify the tools and platforms needed for development, including  
+Android Studio or equivalent mobile development tools, Firebase for database management, Google Maps API for location services, internet connectivity, a web browser, and an Integrated Development Environment (IDE) or code editor.  
+The Hardware Requirements include the physical devices and infrastructure needed to run and test the system, namely smartphones for both the driver and commuter, a server or cloud storage solution, and a reliable mobile data or internet connection.  
+Process  
+The process phase outlines the steps undertaken by the researchers to develop, refine, and validate the system. It is structured into four key stages: Data Gathering Methods, System 
+Specification, System Development, and Testing and Improvements.  
+Data Gathering Methods were employed to understand the needs of the end-users, consisting of survey questionnaires distributed to drivers and commuters, interviews, and direct observation. These methods ensured that the system design would be grounded in real-world needs and actual user experiences.  
+System Specification involved the technical planning and design of the application. This stage covered requirements analysis, UI/UX design, use case diagramming, database design, system architecture planning, and the adoption of the Agile development model to allow iterative refinement throughout the project.  
+System Development is the stage where the actual mobile application was built. Activities in this phase included prototype development, coding of the mobile application, integration of GPS functionality, and database integration to ensure smooth data flow between the app and the backend.  
+Testing and Improvements involved a comprehensive evaluation of the system to ensure its reliability, functionality, and usability. This included functional testing to verify that all features work as intended, usability testing to assess the overall user experience, performance testing to evaluate the system's speed and stability, and beta testing with actual users to gather feedback for further improvements.  
+Output  
+The output of the entire process is the fully developed Smart Trike: A Mobile TODA Booking  
+System for Students and Commuters. This mobile application aims to provide a convenient, efficient, and reliable platform for commuters and tricycle drivers to connect seamlessly. By digitizing the booking process, the system addresses common problems in traditional TODA operations such as long waiting times, lack of fare transparency, and inefficient dispatching.  
+Feedback  
+The framework also incorporates a feedback loop, which connects the output back to the input and process stages. Feedback gathered from users and stakeholders during and after testing is used to revisit and improve the system requirements, specifications, and the application itself. This cyclical mechanism ensures that the system is continuously refined to meet the evolving needs of its users and to address any issues identified during deployment.  
+Chapter III
+METHODOLOGY    
+3.1 Requirements Analysis Procedure  
+The safety and well-being of the researchers are a top priority throughout the study. All research activities, including surveys, interviews, and direct observations, take place in safe and suitable environments within the Municipality of Boac, Marinduque. The researchers make sure that all fieldwork is planned and coordinated with relevant authorities, especially the officers of FEDTODAB, to keep things orderly and reduce potential risks. Data gathering happens during suitable hours and in accessible locations to avoid unsafe conditions. The researchers also follow proper conduct, maintain professional behavior, and stick to local guidelines and regulations when interacting with participants and carrying out field activities.
+Along with researcher safety, the study strongly emphasizes the ethical treatment and protection of all participants. Taking part in the study is completely voluntary. Respondents are informed about the purpose, procedures, and scope of the research before they participate. Special attention is given to student participants, especially minors. In these cases, parental or guardian consent is obtained before allowing participation in any data-gathering activity. This ensures that minors' rights are protected and that their involvement is fully authorized by their parents or legal guardians. Securing parental consent promotes transparency and accountability, while also building trust between the researchers and the community. Additionally, all information collected from participants is kept confidential and used only for academic purposes. These steps help the study maintain ethical research standards while ensuring the safety, dignity, and protection of both researchers and participants (Appendix A).
+A series of interviews, surveys, and observations is conducted to gather the necessary information and to understand the existing process of tricycle transportation services in the Municipality of Boac, Marinduque. The target users of the system include students, commuters, registered tricycle drivers, and the officers of the Federation of Tricycle Operators and Drivers Association of Boac (FEDTODAB), which is the organization responsible for managing tricycle operations in the area.
+To conduct the study, permission is requested from FEDTODAB through a formal letter, as presented in (Appendix B). Questionnaires are distributed to selected commuters and drivers, while interviews are conducted using prepared open-ended questions found in (Appendix D).  The responses of the participants are documented, and with their permission, the interview sessions are recorded for reference purposes. Notes are taken during the interviews to ensure that all important details are accurately captured.
+Direct observations are conducted in selected areas of Boac, Marinduque, particularly in locations where tricycle services are commonly used. The researchers observe passenger flow, availability of tricycles, commuter waiting time, and coordination between drivers and passengers. These observations help the researchers understand the actual situation of the current manual booking process and identify problems such as delays, lack of available drivers, and the absence of an organized dispatching system. This approach provides a clear basis for identifying possible improvements through a mobile-based booking application.
+After completing the interviews, surveys, and observations, all gathered data are analyzed to determine the functional and non-functional requirements of the proposed Smart Trike system. The researchers examine the collected information to identify the necessary features of the application, including passenger booking, driver notification, GPS-based location tracking, and administrator monitoring. Related studies and existing mobile transportation systems are also reviewed as references in designing the system and selecting appropriate technologies.
+A Data Flow Diagram is prepared to illustrate the flow of data between users and the system and to show how information is processed within the application, as shown in (Appendix H). A Use Case Diagram is also developed to describe how passengers, drivers, and administrators interact with the system, also presented in (Appendix J). Furthermore, an Entity-Relationship Diagram is created to identify data entities and their relationships, shown in (Appendix L), while the complete database structure is detailed in (Appendix K).  In addition, a Work Breakdown Structure is prepared to define the scope of the project and organize the tasks needed for system development, as presented in (Appendix F). The project timeline is illustrated using a Gantt Chart, found in (Appendix G).
+
+3.2 Feasibility Analysis Procedure  
+A feasibility analysis was conducted to determine whether the proposed Smart Trike: A Mobile TODA Booking System for Students and Commuters in Boac is practical, beneficial, and feasible to develop and implement under the Federation of Tricycle Operators and Drivers Association of Boac (FEDTODAB).  
+A preliminary investigation is conducted among students, commuters, tricycle drivers, and TODA officers to analyze the current transportation system and identify existing problems such as difficulty in finding available tricycles, long waiting times, and the lack of an organized booking system. A formal request letter is also sent to FEDTODAB to obtain permission to conduct the study and gather data from respondents.  
+
+3.2.1 Operational Feasibility  
+Operational feasibility is conducted to determine whether the proposed system can be effectively used by commuters, drivers, and administrators. Interviews and surveys are used to gather information about current transportation problems and the potential acceptance of a mobile booking system. The researchers also identify the strengths, weaknesses, opportunities, and possible challenges that may affect system operation. The detailed SWOT Analysis is presented in (Appendix M).
+  
+3.2.2 Technical Feasibility  
+Technical feasibility was performed to determine whether the researchers possess the required technical knowledge, tools, and equipment to develop the system. The availability of mobile devices, internet connectivity, GPS technology, and software development tools required for the Smart Trike application is evaluated.  
+The system will be developed using Android Studio, with programming languages such as Java or Kotlin, and a database management system such as Firebase or MySQL. Possible technical issues such as poor internet connection, device compatibility, and system errors are also identified.  
+  
+3.2.3 Economic Feasibility  
+Economic feasibility was conducted to determine whether the proposed system is cost-effective and beneficial to the organization and its users. A list of materials, software, and resources needed for development is prepared, and the total project cost is estimated.  
+  
+The expected benefits of the system, such as improved transportation efficiency, reduced waiting time, and better coordination between drivers and commuters, are compared with the estimated expenses. The Cost and Benefit Analysis is presented in (Appendix O).  
+  
+Based on the results of the operational, technical, and economic feasibility analyses, the researchers conclude that the proposed Smart Trike mobile booking system is feasible and can significantly improve the accessibility, efficiency, and management of tricycle transportation services in Boac, Marinduque.  
+  
+3.3 Design and Development Procedure
+  This section outlines the step-by-step process followed in designing, developing, and testing the proposed Smart Trike: A Mobile TODA Booking System for Students and Commuters in Boac. A clear and organized approach is used to make sure the system meets all necessary functional and non-functional requirements while working effectively in a real-world setting.
+
+During development, the researchers take a structured approach based on standard Agile methodology principles. The process starts with system planning and user interface design. Here, the layout and navigation of the application are carefully arranged to ensure ease of use, especially for students and first-time users. Wireframes and initial prototypes are created to visualize the system flow and validate design choices before starting full-scale development.
+
+		The actual system development takes place using Android Studio as the main development environment, along with programming languages like Java or Kotlin. The application connects to a database management system, such as Firebase or MySQL, to manage real-time data processing, storage, and retrieval. The core system features are added based on the identified requirements, including user registration and login, booking request handling, driver assignment, GPS-based location tracking, notifications, and administrative monitoring. The focus is on making sure the system runs smoothly, provides an accurate data, and allows a easy interaction between the passenger, driver, and administrators.
+
+3.4 Testing Procedure  
+The testing procedure will be conducted systematically to ensure that all system components function properly. It includes planning test cases, executing tests, recording results, and identifying errors. The testing process involves both White-Box and ISO testing phases.
+
+Alpha testing will be conducted by the researchers to identify bugs, errors, and system malfunctions during the initial stage of development. The identified issues are documented using monitoring logs and evaluation forms. Beta testing is then conducted with selected users, including students, commuters, and registered tricycle drivers, at designated pickup and drop-off points within Boac, Marinduque. Users are asked to utilize the system and provide feedback based on their experience. Their responses and suggestions are collected through survey forms, as presented in (Appendix E).
+All identified issues and feedback from both testing phases are carefully reviewed and addressed before the final implementation of the system.
+
+The developed Smart Trike system will be evaluated using the ISO 25010 software quality model to assess its overall performance and quality. The evaluation focuses on key criteria such as functional suitability, usability, reliability, performance efficiency, and portability. A structured questionnaire is distributed to selected users, including students, commuters, and tricycle drivers, to evaluate their experience using the system.
+
+The evaluation results show that most respondents rely on public transportation, with a significant majority using tricycles as their main mode of transport. Many of them use tricycles regularly for daily commuting to school and other destinations. However, a considerable number of respondents reported difficulty in finding available tricycles, especially during peak hours and at night. The most common issues identified were long waiting times, limited driver availability, and high fare costs.
+
+Despite these challenges, most respondents confirmed that they have access to mobile internet, indicating that a mobile-based booking system is feasible in the area. A large portion of respondents also expressed willingness to use the proposed Smart Trike application and considered it helpful for improving transportation convenience in Boac, Marinduque.
+
+On the driver side, most participants are male and have varying levels of experience, ranging from one to more than six years. Many are members of TODA, indicating an organized structure that supports system adoption. Drivers reported that they typically serve only a few passengers per day and experience long working hours, with peak demand occurring during morning and afternoon periods. They also identified challenges such as long waiting times, low passenger demand, and competition among drivers.
+In terms of technology use, most drivers’ own smartphones but have beginner to intermediate digital skills. They also face issues such as slow internet connectivity, difficulty using mobile applications, and battery limitations. However, despite these challenges, most drivers expressed willingness to adopt a mobile booking system, especially if it includes features such as GPS tracking, booking notifications, fare computation, and earnings monitoring. Concerns regarding data costs, usability, and system reliability were also raised and must be addressed in the final system design.
+
+The evaluation results are analyzed to determine whether the system meets the ISO 25010 quality standards, particularly in terms of functional suitability, usability, reliability, performance efficiency, and portability. The overall findings indicate strong user acceptance and a high potential for successful implementation of the Smart Trike system, provided that it remains simple, efficient, and accessible for both commuters and drivers.
+
+3.5 Implementation Plan  
+The implementation plan is carried out at the client’s site under the Federation of Tricycle Operators and Drivers Association of Boac (FEDTODAB) in Boac, Marinduque.  
+
+All necessary system requirements, including mobile devices, internet connectivity, and the application itself, are prepared. Coordination with the organization’s administrators is conducted to ensure proper system setup and smooth deployment.  
+  
+Selected users, including students, commuters, drivers, and administrators, are given access to the Smart Trike application. Training sessions
+are conducted to guide users in booking rides, accepting requests, and managing transactions.  
+  
+The system is initially monitored to ensure proper functionality in a real-world setting. Any issues encountered during implementation are recorded and are resolved accordingly.  
+  
+After deployment, continuous support and maintenance are provided to ensure system effectiveness.  
+Improvements are also made based on user feedback collected during the implementation phase.
+CHAPTER IV
+RESULTS AND DISCUSSION
+4.1 Description of the Existing System
+The existing tricycle transportation system under the Federation of Tricycle Operators and Drivers Association of Boac (FEDTODAB) operates through a manual and unstructured process. Commuters typically go to designated terminals or wait along roadsides to find available tricycles. There is no centralized booking system or digital platform to facilitate ride requests.
+In this system, passengers must physically search for drivers, resulting in long waiting times, particularly during peak hours and in less accessible areas. Drivers depend on random passenger encounters, which leads to inefficient trip allocation and time.
+Communication between drivers and commuters is limited due to the absence of real-time coordination tools. There is no mechanism for advance booking, ride confirmation, or location tracking, which creates uncertainty in service availability. Additionally, FEDTODAB lacks a centralized monitoring system, making it difficult to track operations, manage drivers, and improve service delivery. The existing system is inefficient, unorganized, and reliant on manual processes, negatively affecting both commuters and drivers.
+4.2 Results of Feasibility Analysis
+This section presents the results of the feasibility analysis conducted to evaluate the viability of the proposed Smart Trike system. The analysis focuses on three major aspects operational feasibility, technical feasibility, and economic feasibility. These aspects determine whether the system can be effectively implemented, supported by available technology, and justified in terms of cost and benefits.
+Operational Feasibility
+The results of the operational feasibility analysis indicate that the proposed Smart Trike system is highly feasible and suitable for implementation within the current transportation environment in Boac, Marinduque.
+Based on the data gathered through surveys, interviews, and direct observations, it was found that commuters, students, and tricycle drivers experience significant challenges in the existing manual system. These include long waiting times, difficulty in locating available tricycles, lack of communication between drivers and passengers, and the absence of an organized booking or dispatching mechanism. These issues negatively affect the overall efficiency and reliability of the transportation service.
+The findings further revealed that the majority of respondents expressed a strong willingness to adopt a mobile-based booking system. Commuters preferred a system that allows them to book rides in advance and receive real-time updates, while drivers showed interest in a platform that could provide consistent passenger requests and reduce idle time. This positive response demonstrates that the proposed system aligns with the needs and expectations of its intended users.
+The Smart Trike system improves operational processes by introducing real-time booking, automated notifications, and better coordination between drivers and passengers. Instead of relying on physical presence and informal arrangements, the system provides a structured and organized approach to managing transportation services. This results in faster service delivery, reduced waiting time, and improved accessibility.
+The involvement of administrators through a monitoring module enhances operational control and allows better management of driver activities and booking transactions. This contributes to a more efficient and transparent system. The operational feasibility analysis confirms that the Smart Trike system can significantly improve the current transportation process and is highly acceptable to its intended users.
+Technical Feasibility
+The technical feasibility analysis shows that the Smart Trike system is practical and achievable using existing technologies and resources. The required hardware components, such as smartphones and mobile devices, are widely available among the target users, including students, commuters, and drivers. Additionally, internet connectivity in the area, although sometimes unstable, is generally sufficient to support the operation of a mobile-based application. The integration of GPS technology further enhances the system by enabling accurate location tracking and navigation.
+From a software perspective, the development tools and programming technologies needed to build the Smart Trike system are accessible and appropriate for the project. The developers possess adequate knowledge and skills in mobile application development, database management, and system design, which ensures that the system can be properly developed and maintained.
+Despite the availability of these resources, several potential technical challenges were identified during the analysis. These include unstable internet connections, especially in remote areas, and compatibility issues with lower-end mobile devices. Such limitations may affect system performance, particularly in real-time features like booking updates and GPS tracking.
+The system was designed with considerations for efficiency, simplicity, and minimal resource consumption. Optimization techniques were applied to ensure that the application can function effectively even under limited technical conditions. The technical feasibility analysis confirms that the Smart Trike system can be successfully developed and implemented using available technologies, with manageable risks and limitations.
+Economic Feasibility
+The economic feasibility analysis evaluates whether the proposed Smart Trike system is cost-effective and beneficial compared to the existing manual system. The analysis shows that the development and implementation costs of the system are relatively low. The project primarily requires software development tools, mobile devices, and internet connectivity, most of which are already available or easily accessible. There is no need for expensive infrastructure or specialized equipment, making the system affordable to develop and deploy.
+The terms of benefits, the Smart Trike system offers significant improvements in transportation efficiency and service quality. It reduces waiting time for commuters, increases the number of ride opportunities for drivers, and improves coordination between all users. These improvements can lead to increased productivity, better time management, and enhanced user satisfaction.
+The system provides long-term benefits such as improved operational monitoring, better data management, and the potential for future enhancements like fare automation and cashless payment integration. These advantages contribute to the sustainability and scalability of the system. The estimated costs and expected benefits, it is evident that the benefits outweigh the costs. The system not only improves transportation services but also provides economic value to both users and the organization. The economic feasibility analysis confirms that the Smart Trike system is financially viable and worth implementing.
+4.3 Requirements Specification
+The system requirements were identified through data gathering techniques such as surveys, interviews, and observations. These requirements define the expected functionalities and performance characteristics of the Smart Trike system. They are categorized into functional requirements and non-functional requirements.
+Functional Requirements
+Functional requirements describe the specific operations and services that the Smart Trike system must perform.
+These requirements define how the system should respond to user inputs and interactions.
+Module 4: Securing Franchise (MTOP)
+This module digitizes and manages the tricycle franchise application process based on LGU procedures, ensuring
+proper validation, monitoring, and approval of operators.
+Sub-modules:
+Requirement Submission Module
+The system must allow applicants to upload and submit required documents such as Barangay Clearance, Cedula, OR/CR, proof of ownership, and other credentials.
+Application Management Module
+	The system must provide an application 	form and automatically check the 	completeness of submitted 	requirements.
+Document Verification Module
+	The system must allow authorized 	personnel to review and validate submitted 	documents to ensure 	authenticity 	and eligibility.
+Inspection and Payment Module
+	The system must record unit inspection 	results and manage payment details for 	filing fees, franchise 	fees, and other 	charges.
+Evaluation and Approval Module
+	The system must support evaluation of 	applications and track approval status from 	LGU authorities and 	decision-	makers.
+Franchise Issuance Module
+	The system must generate and release the 	MTOP or Franchise Certificate for 	approved applicants.
+Renewal Management Module
+	The system must allow operators to renew 	their franchise by submitting updated 	documents and tracking 	renewal status 	to avoid expired permits.
+Franchise Update and Monitoring Module
+	The system must handle updates such as 	change of unit, cancellation, and maintain 	records for 	monitoring compliance 	and preventing illegal operations.
+        Module 5: Passenger Booking
+       This module manages the booking and dispatching of tricycle rides, addressing issues such as long waiting    time, lack of available drivers, and unorganized queuing system.
+	Sub-modules:
+User Registration and Authentication Module
+	The system must allow passengers to 	register, log in, and securely access the 	application.
+Booking Request Module
+	The system must enable passengers to 	input pick-up and drop-off locations and 	request a ride.
+GPS Location Tracking Module
+	The system must detect and display real-	time user and driver locations to ensure 	accurate booking and 	navigation.
+Driver Notification and Response Module
+	The system must notify drivers of booking 	requests and allow them to accept or reject 	in real time.
+Driver Assignment and Dispatch Module
+	The system must assign available drivers 	based on proximity or TODA queuing 	system to ensure fair 	distribution.
+Booking Confirmation Module
+	The system must send booking 	confirmation details to both passenger and 	driver, including trip and 	driver 	information.
+Fare Calculation Module
+	The system must compute and display 	estimated fare based on the LGU-approved 	fare matrix to ensure 	transparency.
+Trip Monitoring and Completion Module
+	The system must track trip progress, mark 	rides as completed, and allow feedback to 	improve service 	quality.
+Non-Functional Requirements
+Non-functional requirements describe the quality attributes and performance standards that the Smart Trike system must meet. These requirements focus on how well the system performs rather than what it does.
+The system should be user-friendly and easy to navigate, ensuring that users with minimal technical knowledge can easily operate the application. A simple and intuitive interface improves user experience and encourages system adoption.
+The system must provide a fast response time, particularly when processing booking requests and displaying results. This ensures that users can interact with the system efficiently without unnecessary delays.
+To protect user information, the system must ensure data security and privacy. This includes secure login authentication, proper handling of user data, and protection against unauthorized access.
+The system should be compatible with mobile devices, specifically Android and iOS platforms, to ensure accessibility for a wide range of users. This compatibility allows more users to utilize the application regardless of their device type.
+The system must maintain reliability and stability, ensuring consistent performance during operation. The application should function properly under normal conditions and minimize system errors or crashes.
+4.4 Description of the Prototype
+The Smart Trike prototype is a mobile-based application developed to improve the efficiency, accessibility, and coordination of tricycle booking and dispatching services in Boac, Marinduque. The system was designed based on the identified needs of commuters, drivers, and administrators, providing a digital solution to replace the existing manual and unstructured process.
+The prototype integrates essential functionalities that allow real-time interaction between users and drivers while enabling administrators to manage and monitor system operations. It is composed of three main modules: the Passenger Module, Driver Module, and Administrator Module, each designed to perform specific functions within the system.
+Passenger Module
+The Passenger Module serves as the primary interface for commuters and students who wish to use the system to book tricycle rides. This module provides a simple and user-friendly platform that allows users to easily access transportation services.
+Through this module, users can register and log in to the system by providing their personal information. Once authenticated, they can enter their pick-up and drop-off locations using the application interface. The system then allows them to book rides either for immediate travel or for a scheduled time, depending on their needs.
+After submitting a booking request, the passenger receives a confirmation notification along with relevant trip details, including driver information and estimated arrival time. This module enhances convenience by eliminating the need for commuters to physically search for available tricycles.
+Driver Module
+The Driver Module is designed for registered tricycle drivers, enabling them to efficiently manage incoming booking requests and provide transportation services.
+Drivers receive real-time notifications whenever a passenger submits a booking request. They are given the option to accept or reject the request based on their availability. Once a request is accepted, the driver can view passenger details, including the pick-up location and destination.
+The module also includes GPS-based navigation, which assists drivers in locating the passenger accurately and efficiently. This reduces delays and improves the overall service experience. By using this module, drivers can maximize their time, reduce idle periods, and increase their chances of securing passengers.
+Administrator Module
+The Administrator Module is responsible for overseeing and managing the overall operation of the Smart Trike system. This module is accessible only to authorized personnel, such as TODA officers or system administrators.
+Through this module, administrators can manage user accounts, including registering, updating, or removing users from the system. They can also monitor booking transactions, track system activity, and ensure that all operations are functioning properly.
+The administrator maintains system records, which are essential for reporting, evaluation, and future improvements. This module provides better control and organization compared to the existing manual system.
+System Features
+The Smart Trike prototype incorporates several key features that enhance its functionality and usability.
+One of the main features is the GPS-based tracking system, which enables accurate identification of user locations and assists drivers in navigation. This feature improves efficiency by reducing travel time and ensuring precise pick-up points.
+The system also includes a real-time notification system, which provides instant updates to both passengers and drivers regarding booking status, confirmations, and other important information. This improves communication and reduces uncertainty.
+The application is designed with a simple and user-friendly interface, making it accessible even to users with limited technical knowledge. The intuitive design ensures ease of navigation and enhances the overall user experience.
+
+ 
+
+
+
+
+
+
+\
+
+Appendices
+
+
+
+
+Appendices A
+Parent Consent 
+
+
+Appendix B
+Letter to the Organization
+
+Appendix C
+Letter to the Adviser 
+Appendix D
+Interview Guide and/or Survey Questionnaire    
+Commuters Questionnaire  
+
+
+
+
+
+
+Driver Survey Questionnaire 
+
+
+
+
+
+
+Appendix E
+Result of Survey
+Result for Commuters
+Survey Question: "What type of transportation do you usually use?"
+A large majority (81%) rely on public transportation, indicating a high dependency on communal transit options such as tricycles.
+Survey Question: "Do you use a tricycle as a mode of transportation?"
+
+
+
+
+90.5% of respondents confirmed they use tricycles as a mode of transportation, validating the relevance of this study. 
+Survey Question: "How often do you use a tricycle?"
+
+
+Tricycle use is evenly split between daily users and those who ride several times a week (33.3% each), showing consistent demand.
+Survey Question: "What is the primary purpose of your tricycle use?"
+
+The primary purpose for tricycle use is commuting to school (61.9%), followed by personal errands (19%) and work (14.3%).
+Survey Question: "Do you experience difficulty finding an available tricycle?"
+
+71.4% of respondents reported experiencing difficulty in finding an available tricycle, indicating a clear service gap.
+Survey Question: "At what time of day do you most often experience difficulty finding a tricycle?"
+
+Difficulty is most commonly experienced during the evening (38.1%), followed by the afternoon (33.3%) and throughout all times of day (23.8%).
+Survey Question: "How difficult is it to find a tricycle at night?"
+
+Respondents reported difficulty levels of "Difficult" and "Neutral" equally at night (33.3% each), with 23.8% finding it very difficult.
+Survey Question: "What problems do you usually encounter when using tricycles?"
+
+
+
+
+Long waiting times are the most common problem (61.9%), followed by no available drivers (23.8%) and high fare costs (14.3%).
+Survey Question: "How much do peak hours affect the availability of tricycles in your area?"
+The majority (57.1%) strongly feel the impact of peak hours on tricycle availability, with 38.1% reporting a moderate effect.
+Survey Question: "How often do you have access to the internet?"
+
+66.7% of respondents always have internet access and 28.6% sometimes have access, suggesting a feasible user base for a mobile application.
+Survey Question: "Do you currently use a mobile application for your transportation needs?"
+
+
+
+
+Only 28.6% currently use a mobile app for transportation needs, indicating an underserved market for a dedicated tricycle booking app.
+Survey Question: "Would you be willing to use a mobile application for booking a tricycle?"
+
+An overwhelming 76.2% of respondents are willing to use a tricycle-booking application, with 14.3% possibly willing, demonstrating strong community interest.
+Survey Question: "How useful do you think a tricycle-booking application would be?"
+
+All respondents view the proposed application positively 76.2% consider it very helpful and 19% consider it helpful confirming strong acceptance.
+Result for Drivers
+Survey Question: "Years of Experience as a Tricycle Driver?"
+
+   
+
+
+The data reveals that most drivers have 1–3 years and more than 6 years of experience, while fewer fall under less than 1 year. This suggests a mix of moderately experienced and highly experienced drivers, indicating that the system should be easy enough for beginners yet efficient for experienced users.
+Survey Question: " TODA Membership?"
+
+Based on the graph, 95% of respondents are members of TODA, while only 5% are not. This shows that most drivers are organized under associations, which can help in implementing the system through coordinated deployment and management. 
+Survey Question: " How many passengers do you serve in a day?"
+
+
+
+
+The majority of drivers serve 1 to 5 passengers daily, with fewer handling more than that. This indicates low to moderate passenger demand, highlighting the need for a booking system to increase ride opportunities and efficiency.
+Survey Question: " How many hours do you usually work in a day?"   
+ 
+
+
+Most drivers work between 5 to 12 hours daily, with some exceeding 12 hours. This implies that drivers rely heavily on their daily income, emphasizing the importance of a system that can maximize passenger bookings within working hours.
+Survey Question: " What time of the day do you usually get the most passengers?"
+
+
+
+
+The graph shows that morning and afternoon are the busiest periods, while evening has fewer passengers. This pattern suggests that the system should optimize booking availability during peak hours to improve efficiency.
+Survey Question: " What type of passengers do you usually serve?"
+
+
+
+
+Drivers commonly serve students, workers, and residents, while tourists represent a smaller portion. This indicates that the system should focus on daily commuters as primary users.
+Survey Question: " What common challenges do you encounter while looking for passengers?"
+ 
+
+   
+
+
+These findings highlight the need for a real-time booking system to reduce idle time and improve driver income.
+Survey Question: " How often do you experience having no passengers for a long time?"
+
+
+
+
+About 85% of drivers sometimes experience long waiting times without passengers, while 15% experience it very often. This confirms the issue of inconsistent demand, supporting the need for a digital solution.
+Survey Question: " What do you usually do when there are no passengers?"
+   
+
+
+
+Most drivers choose to wait at terminals, while others roam around or go home. This indicates inefficiency in passenger acquisition, which a mobile system could improve by directly connecting drivers to riders.
+Survey Question: " How do the following factors affect your work?"
+
+ 
+
+
+The graph presents how different factors affect the work of tricycle drivers, categorized into high income, moderate, and low impact. Based on the results, the majority of responses fall under the moderate category, followed by low impact, while only a small portion is considered to have a high impact.
+Survey Question: " Weather conditions?"
+ 
+
+
+
+Weather has a strong to moderate effect on drivers’ work. This means that the system should consider external factors such as weather when predicting demand or notifying drivers.
+Survey Question: " Do you own a smartphone?"
+
+
+
+
+Approximately 90% of drivers own smartphones, while only 10% do not. This indicates high feasibility for implementing a mobile-based booking system. 
+Survey Question: " How would you describe your ability to use mobile applications?"
+
+ 
+
+
+Most drivers fall under beginner to intermediate level, with fewer advanced users. This means the system should have a simple and user-friendly interface.
+Survey Question: " Do you use mobile internet while working?"
+
+   
+
+
+As shown in the graph, most drivers sometimes use mobile internet, followed by those who never or always use it. This implies inconsistent connectivity, so the system should function even with limited or intermittent internet access. 
+Survey Question: " Are you willing to use a mobile app to receive ride requests?"
+
+  
+
+
+The pie chart indicates that 60% are willing, 25% are unsure, and 15% are not willing to use a mobile app. This shows general positive acceptance, though some drivers may need training or orientation.
+Survey Question: " How helpful would it be to receive booking requests through an app?"
+
+ 
+
+Most respondents consider the system very helpful or helpful, indicating strong support for adopting a digital booking platform.
+Survey Question: " What features would you like in the Smart Trike app?"
+
+
+
+  
+The graph shows that drivers prefer key features such as GPS tracking, booking notifications, fare calculator, driver queue system, and earnings tracker. This indicates that drivers are not only interested in receiving passengers more efficiently but also in improving their overall work management.
+Survey Question: " What concerns do you have about using this system?"
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+Appendix F
+Work Breakdown Structure (WBS)
+Table 1.0 Work Breakdown Structure
+
+
+
+
+
+
+
+
+
+
+
+Appendices G
+Gantt Chart
+
+
+Appendices H
+Data Flow Diagram of Existing System
+
+
+
+
+
+Appendices I
+Data Flow Diagram 
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Appendices
+Use Case Diagram
+ 
+
+
+
+
+Appendices K
+Database Schema
+Table 1. Operator
+Table 2. Franchise
+Table 3. Vehicle
+Table 4. Insurance
+Table 5. Emission_Test
+Table 6. Sticker
+Table 7. Payment
+Table 8. Violation
+Table 9. Driver
+Table 10. Toda
+
+Table 11. Fare_Matrix
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Appendices L
+Entity Relationship Diagram  
+  
+  
+  
+Figure 3. Entity Relationship Diagram  
+    
+
+
+
+
+Appendices M
+SWOT Analysis
+Operational Feasibility – SWOT Analysis
+
+
+Technical Feasibility 
+
+
+
+
+
+
+
+
+
+
+
+Appendix N
+GAP Analysis
+Gap Analysis of the Operational Feasibility for Smart Trike: A Mobile TODA Booking System for Students and Commuters
+
+Gap Analysis of the Technical Feasibility for Smart Trike: A Mobile TODA Booking System for Students and Commuters
+Appendix O
+Cost Benefit Analysis
+
+
+
+
+
+
+Break Even Ratio = (Project Benefit − Cumulative Benefit) ÷ Project Benefit
+Break Even Ratio = (₱38,724.00 − ₱19,424.00) ÷ ₱38,724.00
+                 = ₱19,300.00 ÷ ₱38,724.00
+                 = 0.50
+Break Even Year = 
+Break Even Point = Break Even Year + Break Even Ratio
+                 = 1 + 0.50
+                 = 1 + 0.50 or 1 year and 6 months
+
+
+Appendix P
+
+Protype User Interface Design
+
+Figure 1.0 Splash Screen
+The figure shows the splash screen of the Smart Trike mobile application displaying the official logo of the system during the application startup.
+
+Figure 1.1 Authentication Screen
+The figure presents the main authentication screen containing the login and connectivity options of the Smart Trike application.
+
+Figure 1.2 Sign-in Interface
+The figure illustrates the sign-in interface where users can log in using their email address, phone number, or social media account.
+
+Figure 1.3 Real-time Map Interface
+The figure presents the real-time map interface displaying nearby tricycle locations and route navigation within the system.
+
+Figure 1.4 Ride Destination
+The figure illustrates the ride destination selection screen where passengers input their preferred drop-off location.
+
+
+Figure 1.5 Passenger Profile
+The figure shows the passenger profile dashboard containing user information, account settings, and navigation options.
+
+
+
+Figure 1.6 Settings Menu
+The figure illustrates the settings menu containing different account management and application configuration options.
+
+
+Figure 1.7Notification Center
+The figure presents the notification center containing ride updates, booking confirmations, and passenger alerts.
+
+Figure 1.8 messaging Interface
+The figure illustrates the messaging interface that enables communication between passengers and drivers.
+
+
+Figure 1.8 Appointment Management
+The figure presents the appointment management screen, which displays scheduled ride bookings and reservation details. It shows an active appointment interface where users can view, manage, and update their current booking schedules and ride information in an organized and user-friendly manner.
+
+Figure 1.9 Review and Rating
+The figure shows the review and rating interface where passengers can evaluate driver performance and service quality.
+
+
+
+Figure 2.0 Payment Method
+The figure presents the payment interface, allowing users to select their preferred payment method. It also displays the transaction summary, including the total fare amount and detailed ride payment information, ensuring transparency and ease of payment processing.
+
+
+Figure 2.1 Main Landing Page
+Provides access to Driver and Commuter features of the Smart-Trike application
+
+
+Figure 2.2 Location Permission Screen
+Requests permission to access the user’s current location for navigation features.
+
+
+
+Figure 2.3 Map Interface Screen
+Displays the current location and nearby routes on the map interface.
+
+
+
+Figure 2.4 Destination Search Screen
+Allows users to search and select their desired destination.
+
+
+
+
+
+
+
+
+
+Figure 2.5 Booking Details Screen
+Displays trip schedules, reservation details, and booking information.
+
+
+
+Figure 2.6 Reservation Calendar Screen
+Provides access to reservation schedules and trip history records.
+
+
+
+Figure 2.7 Reservation Summary Screen
+Displays a summary of reservation details and completed booking information.
+
+
+
+
+
+Figure 2.8 Driver List Screen
+Displays available drivers for booking and transportation services.
+
+
+
+Figure 2.9 Driver Details Screen
+Shows driver information together with booking details and trip data.
+
+
+
+Figure 3.0 User Profile Screen
+The figure presents the user profile screen, which provides access to the user’s personal information and account settings. It displays the user’s public profile details within the application, allowing easy viewing and management of profile data.
+
+Figure 3.1 Settings Screen
+Allows users to manage application preferences and account settings.
+
+
+
+Figure 3.2 Notification Panel Screen
+Displays updates, alerts, and recent notifications from the application.
+
+
+
+Figure 3.4 Chat Interface Screen
+Allows real-time communication between the commuter and driver.
+
+
+
+Figure 3. 5 Ratings Screen
+Allows users to rate and provide feedback for drivers and services.
+
+
+
+
+
+
+
+BIBLIOGRAPHY/REFERENCES
+[1] Prieto-Curiel, R., & Ospina, J. P. (2024). ABC of mobility. Environment International, 108541. https://doi.org/10.1016/j.envint.2024.108541
+	[2] Max Dispatch Service. (2025). How many people use public transportation? https://maxdispatchservice.com/how-many-people-use-public-transportation/
+[3] Statista. (2024). Public transportation – statistics & facts. https://www.statista.com/topics/2994/public-transportation/
+[4] Asian Development Bank. (2012). Transport sector assessment, strategy, and road map: Philippines. ADB. https://www.adb.org/sites/default/files/institutional-document/33700/files/philippinestransportassessment.pdf
+[5] Changing Transport. (2025). Modernising public transport in the Philippines. GIZ. https://changing-transport.org/modernizing-public-transport-in-the-philippines/
+[6] Land Transportation Office (LTO). (2022). Vehicle registration statistics as of May 2022. Department of Transportation, Philippines.
+[7] Chuenyindee, T. et al. (2023). Determining tricycle service quality and satisfaction in Philippine urban areas: A SERVQUAL approach. Cities, Elsevier. https://doi.org/10.1016/j.cities.2023.104338
+[8] Lakwatsero. (2025). Marinduque travel guide. https://www.lakwatsero.com/destinations/marinduque-travel-guide/
+[9] Lakwatserang Ligaw. (2024). Getting around Marinduque: Transportation guide. https://www.lakwatserangligaw.com/2024/09/marinduque-transportation-guide.html
+[10] The Pinay Solo Backpacker. (2023). Marinduque travel guide. https://thepinaysolobackpacker.com/marinduque-travel-guide/
+[11] Philippine Statistics Authority. (2021). Results of the 2020 Census of Population and Housing Municipality of Boac. PSA MIMAROPA. http://rssomimaropa.psa.gov.ph/content/results-2020census-population-and-housingcph-municipality-boac
+[12] PhilAtlas. (2020). Boac, Marinduque profile. https://www.philatlas.com/luzon/mimaropa/marinduque/boac.html
+[13] Abad, R. G., & Santos, M. E. (2021). Public transportation challenges and commuter satisfaction in Metro Manila. Philippine Journal of Transportation Studies, 7(1), 15–28.
+[14] Aguilar, J. P., & Cruz, L. M. (2022). Digital transformation of local transport systems in the Philippines. Asia Pacific Journal of Information Systems, 12(2), 44–59.
+[15] Alvarez, D. S., & Ramos, T. L. (2020). Accessibility issues in rural transportation in the Philippines. Journal of Philippine Development, 47(2), 67–82.
+[16] Bautista, K. A., & Mendoza, P. R. (2023). Evaluating commuter satisfaction in public transportation systems. Philippine Management Review, 30(1), 55–70.
+[17] Cabrera, M. J., & Flores, A. D. (2021). Mobile application usability and user acceptance in the Philippines. Philippine Computing Journal, 16(1), 23–38.
+[18] Castillo, R. P., & Dela Cruz, N. M. (2020). Tricycle transportation systems and their socio-economic impact in rural communities. Philippine Sociological Review, 68(1), 101–118.
+[19] De Guzman, A. R., & Lopez, J. B. (2022). Transportation challenges in island provinces of the Philippines. Journal of Island Studies, 5(1), 40–55.
+[20] Delos Reyes, C. M., & Garcia, H. S. (2023). Feasibility of mobile-based transport systems in developing communities. International Journal of Emerging Technologies, 14(2), 77–92.
+[21] Dizon, M. T., & Navarro, P. J. (2021). GPS-based tracking systems in Philippine transportation. Journal of Engineering and Applied Sciences, 18(3), 120–134.
+[22] Flores, J. L., & Santos, D. A. (2022). Ride-hailing applications and commuter behavior in urban Philippines. Philippine Journal of Urban Studies, 9(2), 33–48.
+[23] Garcia, L. P., & Villanueva, E. R. (2020). TODA management practices in local Philippine communities. Public Administration Journal of the Philippines, 64(1), 88–102.
+[24] Gonzales, M. E., & Rivera, J. D. (2023). Improving public transport systems through digital integration. Journal of Asian Public Policy, 11(3), 210–225.
+[25] Hernandez, P. T., & Cruz, R. A. (2021). User acceptance of mobile transport applications in the Philippines. Information Technology Journal, 19(4), 145–160.
+[26] Lao, K. M., & Torres, S. B. (2020). Commuter satisfaction and transport service quality in Metro Manila. Philippine Transport Research Journal, 5(1), 10–24.
+[27] Lopez, D. F., & Ramos, G. H. (2022). Challenges in implementing GPS tracking in provincial transport systems. Journal of Philippine Engineering, 13(2), 98–112.
+[28] Mendoza, R. S., & Cruz, E. T. (2021). Public transportation modernization in the Philippines. Development Studies Review, 29(2), 55–69.
+[29] Navarro, A. C., & Dizon, J. P. (2023). Evaluating mobile ride-hailing services in the Philippines. Asian Transport Journal, 8(2), 60–75.
+[30] Ortega, M. L., & Perez, C. D. (2020). Transportation accessibility in rural Philippine communities. Philippine Development Journal, 47(1), 25–40.
+[31] Pascual, H. R., & Garcia, F. L. (2022). Factors influencing commuter satisfaction in public transport. Journal of Social Sciences Philippines, 15(1), 80–95.
+[32] Quinto, J. A., & Reyes, V. M. (2021). Digital solutions for TODA management systems. Philippine Governance Review, 12(3), 140–155.
+[33] Ramos, C. J., & Villanueva, M. P. (2023). Transportation challenges in island-based communities. Journal of Maritime and Island Studies, 6(1), 50–65.
+[34] Reyes, D. L., & Santos, P. R. (2020). Mobile-based systems for transport efficiency. Philippine IT Journal, 14(2), 30–45.
+[35] Rivera, A. B., & Cruz, J. T. (2021). Usability evaluation of mobile transportation applications. Philippine Journal of Human-Computer Interaction, 3(1), 12–27.
+[36] Santos, E. D., & Lopez, R. M. (2022). Ride-hailing adoption in Metro Manila. Journal of Urban Mobility, 10(1), 22–37.
+[37] Santos, J. P., & Dela Cruz, A. M. (2023). Feasibility study of digital transport systems in provincial areas. Asian Journal of Technology and Society, 9(2), 101–116.
+[38] Soriano, L. G., & Bautista, M. N. (2021). Public transportation service issues in the Philippines. Philippine Policy Studies Journal, 8(1), 66–81.
+[39] Torres, F. A., & Mendoza, L. C. (2020). Transportation infrastructure challenges in rural Philippines. Infrastructure Development Review, 4(2), 75–89.
+[40] Valdez, R. T., & Navarro, S. L. (2022). GPS tracking and transport safety in the Philippines. Journal of Safety Engineering, 11(3), 130–144.
+[41] Villanueva, P. S., & Garcia, D. M. (2021). TODA operations and management efficiency. Philippine Public Administration Quarterly, 65(2), 99–115.
+[42] Yap, J. K., & Cruz, M. A. (2023). Commuter satisfaction and transportation reliability. Journal of Philippine Economics, 62(1), 45–60.
+[43] Zamora, B. H., & Flores, T. J. (2020). Rural transportation accessibility and development. Philippine Rural Development Journal, 6(1), 15–29.
+[44] Aquino, R. L., & Perez, J. M. (2021). Smart mobility solutions in Philippine local transport. Journal of Information Systems Research, 18(2), 90–105.
+[45] Bernardo, T. C., & Lim, A. P. (2022). Adoption of mobile transport platforms in provincial areas. Philippine ICT Journal, 11(1), 50–65.
+[46] Cruz, S. D., & Villaflor, M. R. (2023). Digital dispatch systems for transportation efficiency. International Journal of Transport Innovation, 7(2), 110–125.
+[47] Domingo, P. E., & Santos, L. R. (2021). Barriers to mobile application adoption in rural Philippines. Journal of Southeast Asian ICT Studies, 5(1), 70–85.
+[48] Estrada, J. M., & Navarro, D. G. (2022). Technology-driven transportation systems in developing regions. Asian Journal of Digital Development, 6(2), 95–110.
+
+
