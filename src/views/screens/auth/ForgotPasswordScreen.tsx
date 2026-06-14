@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput as RNTextInput } from 'react-native';
-import { Text } from 'react-native-paper';
+import { View, StyleSheet, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { AuthService } from '@/models/services/AuthService';
-import { colors, spacing } from '@/views/styles/theme';
+import { TricycleIcon } from '@/views/components/common/TricycleIcon';
+import { Input } from '@/views/components/common/Input';
+import { Button } from '@/views/components/common/Button';
+import { colors, spacing, typography, radius } from '@/views/styles/theme';
 
 const authService = new AuthService();
 
 export const ForgotPasswordScreen = () => {
   const navigation = useNavigation<any>();
   const [email, setEmail] = useState('');
-  const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -22,7 +23,7 @@ export const ForgotPasswordScreen = () => {
     try {
       await authService.resetPassword(email.trim());
     } catch {
-      // In prototype mode the reset always "succeeds".
+      // Prototype mode fallback
     } finally {
       setLoading(false);
       setSent(true);
@@ -30,137 +31,156 @@ export const ForgotPasswordScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={[colors.primaryDark, colors.primary, colors.secondary]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Forgot Password</Text>
-        <Text style={styles.subtitle}>We'll help you get back in</Text>
-      </LinearGradient>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
+          </TouchableOpacity>
 
-      <View style={styles.content}>
-        {sent ? (
-          <View style={styles.successBox}>
-            <View style={styles.successIcon}>
-              <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.primary} />
-            </View>
-            <Text style={styles.successTitle}>Check your email</Text>
-            <Text style={styles.successText}>
-              If an account exists for {email}, you'll receive password reset instructions shortly.
-            </Text>
-            <TouchableOpacity style={styles.resetBtn} onPress={() => navigation.navigate('Login')} activeOpacity={0.8}>
-              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                <Text style={styles.resetBtnText}>Back to Sign In</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+          <View style={styles.header}>
+            <TricycleIcon size={48} color={colors.primary} />
+            <Text style={styles.title}>Reset password</Text>
+            <Text style={styles.subtitle}>Enter your email to receive instructions</Text>
           </View>
-        ) : (
-          <>
-            <Text style={styles.instructions}>
-              Enter the email address linked to your account and we'll send you a reset link.
-            </Text>
 
-            <View style={[styles.inputWrapper, focused && styles.inputFocused]}>
-              <MaterialCommunityIcons
-                name="email-outline"
-                size={20}
-                color={focused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Email Address"
-                value={email}
-                onChangeText={setEmail}
-                onFocus={() => setFocused(true)}
-                onBlur={() => setFocused(false)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-            </View>
+          <View style={styles.content}>
+            {sent ? (
+              <View style={styles.successBox}>
+                <View style={styles.successIcon}>
+                  <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.primary} />
+                </View>
+                <Text style={styles.successTitle}>Check your email</Text>
+                <Text style={styles.successText}>
+                  Instructions have been sent to {email}. Please check your inbox and spam folder.
+                </Text>
+                <Button 
+                  variant="primary" 
+                  onPress={() => navigation.navigate('Login')}
+                  style={styles.actionBtn}
+                >
+                  Return to Sign In
+                </Button>
+              </View>
+            ) : (
+              <>
+                <Input
+                  label="Email address"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
+                />
 
-            <TouchableOpacity
-              style={[styles.resetBtn, (!email.trim() || loading) && { opacity: 0.6 }]}
-              onPress={handleReset}
-              disabled={!email.trim() || loading}
-              activeOpacity={0.8}
-            >
-              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                <Text style={styles.resetBtnText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <Button
+                  variant="primary"
+                  onPress={handleReset}
+                  disabled={!email.trim() || loading}
+                  loading={loading}
+                  style={styles.actionBtn}
+                >
+                  Send Reset Link
+                </Button>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backLink}>
-              <Text style={styles.backText}>
-                Remembered it? <Text style={styles.backHighlight}>Sign In</Text>
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-    </View>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backLink}>
+                  <Text style={styles.backText}>
+                    Remembered it? <Text style={styles.backHighlight}>Sign In</Text>
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 40,
-    paddingHorizontal: 24,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.surface 
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
+    marginLeft: -4,
   },
-  title: { fontSize: 32, fontWeight: '800', color: '#fff', marginBottom: 6 },
-  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.9)', fontWeight: '500' },
-  content: { flex: 1, padding: spacing.lg, paddingTop: spacing.xl },
-  instructions: { fontSize: 15, color: colors.textSecondary, lineHeight: 22, marginBottom: spacing.xl },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 56,
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
-    marginBottom: spacing.lg,
+  header: {
+    marginBottom: spacing.xl,
   },
-  inputFocused: { borderColor: colors.primary },
-  inputIcon: { marginRight: 12 },
-  input: { flex: 1, fontSize: 15, color: colors.text, fontWeight: '500' },
-  resetBtn: { height: 56, borderRadius: 16, overflow: 'hidden' },
-  resetGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  resetBtnText: { fontSize: 17, fontWeight: '700', color: '#fff', letterSpacing: 0.5 },
-  backLink: { marginTop: spacing.lg, alignItems: 'center' },
-  backText: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
-  backHighlight: { color: colors.primary, fontWeight: '700' },
-  successBox: { alignItems: 'center', paddingTop: spacing.xl },
+  title: { 
+    ...typography.h1,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  subtitle: { 
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  content: { 
+    flex: 1,
+  },
+  actionBtn: {
+    marginTop: spacing.md,
+    height: 52,
+  },
+  backLink: { 
+    marginTop: spacing.xl, 
+    alignItems: 'center' 
+  },
+  backText: { 
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+  },
+  backHighlight: { 
+    color: colors.accent, 
+    fontWeight: '700' 
+  },
+  successBox: { 
+    alignItems: 'center', 
+    paddingTop: spacing.lg 
+  },
   successIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
-  successTitle: { fontSize: 22, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  successText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xl },
+  successTitle: { 
+    ...typography.h2,
+    marginBottom: spacing.sm,
+  },
+  successText: { 
+    ...typography.body,
+    textAlign: 'center', 
+    lineHeight: 22, 
+    marginBottom: spacing.xl,
+  },
 });

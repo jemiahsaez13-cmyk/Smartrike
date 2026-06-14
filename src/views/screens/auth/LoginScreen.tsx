@@ -267,12 +267,14 @@ const styles = StyleSheet.create({
   },
   alternateRow: {
     flexDirection: 'row',
+    justifyContent: 'center',
     gap: spacing.md,
     marginBottom: spacing.xxl,
   },
   altBtn: {
     flex: 1,
     minHeight: 48,
+    maxWidth: 160,
   },
   demoBox: {
     padding: spacing.md,

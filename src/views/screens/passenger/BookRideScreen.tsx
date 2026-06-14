@@ -13,20 +13,7 @@ import { FareCalculationService } from '@/models/services/FareCalculationService
 import { Location } from '@/models/types';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
-// react-native-maps has no web implementation — load it only on native so
-// the web bundle keeps working with the faux-map fallback below.
-let MapView: any, Marker: any, Polyline: any, PROVIDER_GOOGLE: any;
-if (Platform.OS !== 'web') {
-  try {
-    const Maps = require('react-native-maps');
-    MapView = Maps.default;
-    Marker = Maps.Marker;
-    Polyline = Maps.Polyline;
-    PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
-  } catch {
-    // native maps unavailable (e.g. Expo Go without dev client) — fall back
-  }
-}
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 
 // Desaturated "silver" Google Maps style — the clean, low-contrast look Uber uses.
 const UBER_MAP_STYLE = [

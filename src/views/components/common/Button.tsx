@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button as PaperButton, ButtonProps } from 'react-native-paper';
-import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp, View } from 'react-native';
+import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp, View, Text } from 'react-native';
 import { colors, radius, typography, spacing } from '@/views/styles/theme';
 
 interface CustomButtonProps extends Omit<ButtonProps, 'style'> {
@@ -37,8 +37,6 @@ export const Button: React.FC<CustomButtonProps> = ({
     }).start();
   };
 
-  const isOutlineOrGhost = variant === 'outline' || variant === 'ghost';
-  
   return (
     <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, containerStyle]}>
       <Pressable
@@ -48,35 +46,29 @@ export const Button: React.FC<CustomButtonProps> = ({
         disabled={disabled || loading}
         style={({ pressed }) => [
           styles.pressable,
-          disabled && styles.disabled,
-          style
-        ]}
-      >
-        <View style={[
           styles.buttonContainer,
           variant === 'primary' && styles.primaryBtn,
           variant === 'secondary' && styles.secondaryBtn,
           variant === 'outline' && styles.outlineBtn,
           variant === 'ghost' && styles.ghostBtn,
           variant === 'danger' && styles.dangerBtn,
-        ]}>
+          disabled && styles.disabled,
+          style
+        ]}
+      >
+        <View style={styles.contentWrapper}>
           {loading ? (
             <PaperButton loading={true} children="" labelStyle={styles.hiddenLabel} />
           ) : (
-            <PaperButton
-              mode="text"
-              style={styles.innerPaperButton}
-              labelStyle={[
-                styles.label,
-                (variant === 'primary' || variant === 'danger') && styles.textWhite,
-                variant === 'secondary' && styles.textPrimary,
-                variant === 'outline' && styles.textPrimary,
-                variant === 'ghost' && styles.textSecondary,
-              ]}
-              {...props}
-            >
+            <Text style={[
+              styles.label,
+              (variant === 'primary' || variant === 'danger') && styles.textWhite,
+              variant === 'secondary' && styles.textPrimary,
+              variant === 'outline' && styles.textPrimary,
+              variant === 'ghost' && styles.textSecondary,
+            ]}>
               {children}
-            </PaperButton>
+            </Text>
           )}
         </View>
       </Pressable>
@@ -90,12 +82,16 @@ const styles = StyleSheet.create<any>({
     overflow: 'hidden',
   },
   buttonContainer: {
-    minHeight: 54,
+    minHeight: 52,
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'row',
     paddingHorizontal: spacing.md,
+  },
+  contentWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryBtn: {
     backgroundColor: colors.primary,
