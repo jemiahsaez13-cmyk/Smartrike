@@ -120,7 +120,7 @@ export const OTPVerificationScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <LinearGradient 
-        colors={['#1E90FF', '#0DA5C0', '#00C9FF']} 
+        colors={[colors.primaryDark, colors.primary, colors.secondary]} 
         start={{ x: 0, y: 0 }} 
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -201,7 +201,7 @@ export const OTPVerificationScreen = () => {
                 activeOpacity={0.8}
               >
                 <LinearGradient 
-                  colors={['#1E90FF', '#0DA5C0']} 
+                  colors={[colors.primary, colors.primaryDark]} 
                   style={styles.verifyBtnGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
     marginBottom: 4,
-    letterSpacing: -0.5
+    letterSpacing: 0
   },
   subtitle: {
     fontSize: 14,

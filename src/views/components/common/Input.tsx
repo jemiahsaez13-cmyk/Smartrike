@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { TextInput, TextInputProps, Text } from 'react-native-paper';
-import { colors, spacing, theme } from '@/views/styles/theme';
+import { colors, radius, spacing, typography } from '@/views/styles/theme';
 
 interface CustomInputProps extends TextInputProps {
   errorText?: string;
@@ -20,9 +20,10 @@ export const Input: React.FC<CustomInputProps> = ({
         mode={mode}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
+        textColor={colors.text}
+        placeholderTextColor={colors.textLight}
         outlineStyle={styles.outline}
         contentStyle={styles.content}
-        placeholderTextColor={colors.textLight}
         error={!!errorText}
         {...props}
       />
@@ -39,18 +40,20 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   outline: {
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
   content: {
+    ...typography.body,
     paddingHorizontal: spacing.md,
     fontSize: 16,
+    minHeight: 52,
   },
   error: {
+    ...typography.label,
     color: colors.error,
-    fontSize: 12,
+    fontSize: 13,
     marginTop: spacing.xs,
     marginLeft: spacing.xs,
-    fontWeight: '500',
   },
 });

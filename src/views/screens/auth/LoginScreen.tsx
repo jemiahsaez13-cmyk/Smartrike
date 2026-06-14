@@ -20,7 +20,7 @@ import { setDemoUserReducer } from '@/controllers/slices/authSlice';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
-import { colors, gradients, radius, shadows, spacing } from '@/views/styles/theme';
+import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const LoginScreen = () => {
   const navigation = useNavigation<any>();
@@ -38,6 +38,7 @@ export const LoginScreen = () => {
   const signInScale = useRef(new Animated.Value(1)).current;
   const passengerScale = useRef(new Animated.Value(1)).current;
   const driverScale = useRef(new Animated.Value(1)).current;
+  const adminScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -85,20 +86,21 @@ export const LoginScreen = () => {
     }
   };
 
-  const handleDemoMode = (userType: 'passenger' | 'driver', scale: Animated.Value) => {
+  const handleDemoMode = (userType: 'passenger' | 'driver' | 'admin', scale: Animated.Value) => {
     animateButton(scale);
+    const roleLabel = userType.charAt(0).toUpperCase() + userType.slice(1);
     const demoUser: any = {
       id: `demo-${userType}`,
       auth_id: 'demo-auth',
       user_type: userType,
       email: `demo@${userType}.com`,
       phone: '09123456789',
-      name: `Demo ${userType.charAt(0).toUpperCase() + userType.slice(1)}`,
+      name: `Demo ${roleLabel}`,
       profile_photo_url: null,
       created_at: new Date(),
       status: 'active',
-      rating: 4.5,
-      total_trips: 10,
+      rating: userType === 'admin' ? 5 : 4.8,
+      total_trips: userType === 'admin' ? 1284 : 42,
     };
     dispatch(setDemoUserReducer(demoUser));
   };
@@ -121,11 +123,30 @@ export const LoginScreen = () => {
           end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          <View style={styles.brandMark}>
+          <View style={styles.brandRow}>
             <TricycleIcon size={56} color="#FFFFFF" />
+            <View style={styles.brandCopy}>
+              <Text style={styles.brandKicker}>FEDTODAB transport</Text>
+              <Text style={styles.appName}>Smart Trike</Text>
+            </View>
           </View>
-          <Text style={styles.appName}>Smart Trike</Text>
-          <Text style={styles.tagline}>Boac TODA booking for passengers and verified drivers.</Text>
+          <Text style={styles.tagline}>Real-time TODA booking, driver dispatch, MTOP tracking, and operator oversight for Boac trips.</Text>
+          <View style={styles.heroStats}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>4 min</Text>
+              <Text style={styles.heroStatLabel}>avg wait</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>42</Text>
+              <Text style={styles.heroStatLabel}>active drivers</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>24/7</Text>
+              <Text style={styles.heroStatLabel}>trip logs</Text>
+            </View>
+          </View>
         </LinearGradient>
 
         <Animated.View
@@ -236,7 +257,7 @@ export const LoginScreen = () => {
           <View style={styles.demoCard}>
             <View>
               <Text style={styles.demoTitle}>Quick demo</Text>
-              <Text style={styles.demoSubtitle}>Open the app with a sample role.</Text>
+              <Text style={styles.demoSubtitle}>Open a realistic workflow instantly.</Text>
             </View>
             <View style={styles.demoButtons}>
               <Animated.View style={[styles.demoButtonWrap, { transform: [{ scale: passengerScale }] }]}>
@@ -257,6 +278,16 @@ export const LoginScreen = () => {
                 >
                   <MaterialCommunityIcons name="car-hatchback" size={22} color={colors.primary} />
                   <Text style={styles.demoButtonText}>Driver</Text>
+                </TouchableOpacity>
+              </Animated.View>
+              <Animated.View style={[styles.demoButtonWrap, { transform: [{ scale: adminScale }] }]}>
+                <TouchableOpacity
+                  style={styles.demoButton}
+                  onPress={() => handleDemoMode('admin', adminScale)}
+                  activeOpacity={0.82}
+                >
+                  <MaterialCommunityIcons name="view-dashboard-outline" size={22} color={colors.violet} />
+                  <Text style={styles.demoButtonText}>Admin</Text>
                 </TouchableOpacity>
               </Animated.View>
             </View>
@@ -287,34 +318,70 @@ const styles = StyleSheet.create({
   },
   hero: {
     minHeight: 268,
-    paddingTop: 64,
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.lg,
-    paddingBottom: 48,
+    paddingBottom: 42,
     justifyContent: 'flex-end',
   },
-  brandMark: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.26)',
-    justifyContent: 'center',
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  brandCopy: {
+    flex: 1,
+  },
+  brandKicker: {
+    ...typography.label,
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 12,
+    textTransform: 'uppercase',
   },
   appName: {
+    ...typography.display,
     fontSize: 40,
-    fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0,
   },
   tagline: {
+    ...typography.body,
     color: 'rgba(255,255,255,0.88)',
     fontSize: 16,
     lineHeight: 24,
     marginTop: spacing.sm,
-    maxWidth: 330,
+    maxWidth: 360,
+  },
+  heroStats: {
+    minHeight: 72,
+    marginTop: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  heroStat: {
+    flex: 1,
+  },
+  heroStatValue: {
+    ...typography.number,
+    color: '#FFFFFF',
+    fontSize: 18,
+  },
+  heroStatLabel: {
+    ...typography.body,
+    color: 'rgba(255,255,255,0.76)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  heroStatDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginHorizontal: spacing.sm,
   },
   content: {
     paddingHorizontal: spacing.lg,
@@ -333,19 +400,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   welcomeTitle: {
+    ...typography.title,
     fontSize: 26,
-    fontWeight: '800',
     color: colors.text,
   },
   welcomeSubtitle: {
+    ...typography.body,
     color: colors.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     marginTop: spacing.xs,
   },
   label: {
+    ...typography.label,
     fontSize: 13,
-    fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -356,9 +424,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   forgotText: {
+    ...typography.label,
     color: colors.primary,
     fontSize: 13,
-    fontWeight: '700',
     paddingVertical: spacing.xs,
   },
   inputWrapper: {
@@ -379,11 +447,11 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   input: {
+    ...typography.body,
     flex: 1,
     minHeight: 52,
     color: colors.text,
     fontSize: 16,
-    fontWeight: '500',
   },
   iconButton: {
     width: 44,
@@ -406,9 +474,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   signInText: {
+    ...typography.label,
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
     letterSpacing: 0,
   },
   secondaryActions: {
@@ -429,9 +497,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   secondaryButtonText: {
+    ...typography.label,
     color: colors.primary,
     fontSize: 13,
-    fontWeight: '800',
   },
   demoCard: {
     marginTop: spacing.md,
@@ -442,11 +510,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   demoTitle: {
+    ...typography.subtitle,
     color: colors.text,
     fontSize: 16,
-    fontWeight: '800',
   },
   demoSubtitle: {
+    ...typography.body,
     color: colors.textSecondary,
     fontSize: 13,
     marginTop: 2,
@@ -471,9 +540,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   demoButtonText: {
+    ...typography.label,
     color: colors.text,
     fontSize: 14,
-    fontWeight: '800',
   },
   signUpContainer: {
     minHeight: 48,
@@ -482,13 +551,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   signUpText: {
+    ...typography.body,
     color: colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
     textAlign: 'center',
   },
   signUpLink: {
+    ...typography.label,
     color: colors.primary,
-    fontWeight: '800',
   },
 });

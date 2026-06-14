@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { Alert, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
@@ -8,7 +8,7 @@ import { useAppDispatch } from '@/controllers/store';
 import { completeTrip, submitRating } from '@/controllers/slices/bookingSlice';
 import { Button } from '@/views/components/common/Button';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height } = Dimensions.get('window');
@@ -34,6 +34,22 @@ export const ActiveTripScreen = () => {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  const handleCallDriver = () => {
+    Alert.alert('Call Driver', 'Driver contact is ready for production phone linking.');
+  };
+
+  const handleMessageDriver = () => {
+    Alert.alert('Message Driver', 'Send pickup instructions or landmark details from this trip screen.');
+  };
+
+  const handleSOS = () => {
+    Alert.alert('Emergency SOS', 'Choose the fastest support path for this trip.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Call TODA Desk', onPress: () => undefined },
+      { text: 'Flag Emergency', style: 'destructive', onPress: () => undefined },
+    ]);
+  };
 
   const handleSubmitRating = async () => {
     if (!currentBooking) return;
@@ -105,10 +121,10 @@ export const ActiveTripScreen = () => {
             </View>
           </View>
           <View style={styles.driverActions}>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleCallDriver} activeOpacity={0.76} accessibilityLabel="Call driver">
               <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleMessageDriver} activeOpacity={0.76} accessibilityLabel="Message driver">
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
@@ -120,6 +136,22 @@ export const ActiveTripScreen = () => {
             <Text style={styles.vehicleDesc}>Blue Tricycle • FEDTODAB</Text>
           </View>
           <TricycleIcon size={56} color={colors.primaryDark} />
+        </View>
+
+        <View style={styles.routeProgress}>
+          {[
+            { label: 'Driver assigned', active: true },
+            { label: 'Pickup', active: currentBooking?.status === 'in-transit' },
+            { label: 'Drop-off', active: false },
+          ].map((step, index) => (
+            <View key={step.label} style={styles.progressStep}>
+              <View style={[styles.progressDot, step.active && styles.progressDotActive]}>
+                {step.active && <View style={styles.progressDotInner} />}
+              </View>
+              {index < 2 && <View style={[styles.progressLine, index === 0 && styles.progressLineActive]} />}
+              <Text style={[styles.progressLabel, step.active && styles.progressLabelActive]}>{step.label}</Text>
+            </View>
+          ))}
         </View>
 
         <View style={styles.tripDetails}>
@@ -142,7 +174,7 @@ export const ActiveTripScreen = () => {
         </View>
 
         <TouchableOpacity style={styles.completeBtn} onPress={() => setRatingVisible(true)} activeOpacity={0.85}>
-          <LinearGradient colors={['#1E90FF', '#0DA5C0']} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
             <MaterialCommunityIcons name="flag-checkered" size={20} color="#fff" />
             <Text style={styles.completeText}>Complete Trip</Text>
           </LinearGradient>
@@ -150,7 +182,8 @@ export const ActiveTripScreen = () => {
 
         <Button
           variant="outline"
-          onPress={() => {}}
+          icon="shield-alert-outline"
+          onPress={handleSOS}
           style={styles.sosBtn}
         >
           Emergency SOS
@@ -193,7 +226,7 @@ export const ActiveTripScreen = () => {
               disabled={submitting}
               activeOpacity={0.85}
             >
-              <LinearGradient colors={['#1E90FF', '#0DA5C0']} style={styles.submitRatingGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitRatingGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 <Text style={styles.submitRatingText}>{submitting ? 'Submitting...' : 'Submit & Finish'}</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -208,34 +241,87 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   mapView: { flex: 1, backgroundColor: '#CBD5E1', position: 'relative' },
   mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  backBtn: { position: 'absolute', top: 50, left: 20, zIndex: 10, ...shadows.md },
-  trackingOverlay: { position: 'absolute', top: 60, alignSelf: 'center', zIndex: 5 },
+  backBtn: { position: 'absolute', top: layout.headerTop - 10, left: 20, zIndex: 10, ...shadows.md },
+  trackingOverlay: { position: 'absolute', top: layout.headerTop, alignSelf: 'center', zIndex: 5 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, ...shadows.md },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  statusText: { fontSize: 13, fontWeight: '700' },
-  trackingCard: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: colors.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: spacing.lg, paddingBottom: 40, ...shadows.xl },
+  statusText: { ...typography.label, fontSize: 13 },
+  trackingCard: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: 40, ...shadows.xl },
   handle: { width: 40, height: 5, backgroundColor: colors.borderLight, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.lg },
   driverSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
   driverInfo: { flexDirection: 'row', alignItems: 'center' },
   driverAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
-  driverName: { fontSize: 18, fontWeight: '800', color: colors.text },
+  driverName: { ...typography.title, fontSize: 18, color: colors.text },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  ratingText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  ratingText: { ...typography.body, fontSize: 12, color: colors.textSecondary },
   driverActions: { flexDirection: 'row', gap: spacing.sm },
   actionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderLight },
-  vehicleCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryLight, padding: spacing.md, borderRadius: 16, marginBottom: spacing.lg },
+  vehicleCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryLight, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.lg },
   vehicleInfo: { flex: 1 },
-  vehiclePlate: { fontSize: 18, fontWeight: '900', color: colors.primaryDark, letterSpacing: 1 },
-  vehicleDesc: { fontSize: 12, color: colors.primary, fontWeight: '600', marginTop: 2 },
+  vehiclePlate: { ...typography.number, fontSize: 18, color: colors.primaryDark, letterSpacing: 0 },
+  vehicleDesc: { ...typography.body, fontSize: 12, color: colors.primary, marginTop: 2 },
+  routeProgress: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
+  },
+  progressStep: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  progressDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  progressDotActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  progressDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  progressLine: {
+    position: 'absolute',
+    top: 9,
+    left: '50%',
+    right: '-50%',
+    height: 2,
+    backgroundColor: colors.borderLight,
+  },
+  progressLineActive: {
+    backgroundColor: colors.primaryLight,
+  },
+  progressLabel: {
+    ...typography.body,
+    color: colors.textLight,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  progressLabelActive: {
+    color: colors.text,
+  },
   tripDetails: { marginBottom: spacing.xl },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   detailIcon: { marginRight: spacing.md },
   detailTextContainer: { flex: 1 },
-  detailLabel: { fontSize: 10, fontWeight: '800', color: colors.textLight, letterSpacing: 1, textTransform: 'uppercase' },
-  detailValue: { fontSize: 14, fontWeight: '600', color: colors.text, marginTop: 2 },
+  detailLabel: { ...typography.label, fontSize: 10, color: colors.textLight, letterSpacing: 0, textTransform: 'uppercase' },
+  detailValue: { ...typography.body, fontSize: 14, color: colors.text, marginTop: 2 },
   completeBtn: { height: 52, borderRadius: 14, overflow: 'hidden', marginBottom: spacing.md },
   completeGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  completeText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+  completeText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
   sosBtn: { borderColor: colors.error, borderRadius: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', padding: spacing.lg },
   ratingCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
@@ -248,8 +334,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  ratingTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
-  ratingSubtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },
+  ratingTitle: { ...typography.title, fontSize: 22, color: colors.text },
+  ratingSubtitle: { ...typography.body, fontSize: 14, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },
   starsRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.lg },
   commentInput: {
     width: '100%',
@@ -258,6 +344,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: spacing.md,
     fontSize: 14,
+    ...typography.body,
     color: colors.text,
     textAlignVertical: 'top',
     marginBottom: spacing.lg,
@@ -266,5 +353,5 @@ const styles = StyleSheet.create({
   },
   submitRatingBtn: { width: '100%', height: 52, borderRadius: 14, overflow: 'hidden' },
   submitRatingGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  submitRatingText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+  submitRatingText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
 });

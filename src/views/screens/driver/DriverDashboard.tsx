@@ -1,17 +1,21 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, ScrollView, Animated, Dimensions, TouchableOpacity } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text, Surface, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAppSelector, useAppDispatch } from '@/controllers/store';
-import { updateDriverStatus, fetchCompletedTrips, addIncomingRequest } from '@/controllers/slices/driverSlice';
-import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useAppDispatch, useAppSelector } from '@/controllers/store';
+import { addIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
-import { colors, spacing, shadows } from '@/views/styles/theme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
-const { width } = Dimensions.get('window');
+const DEMAND_ZONES = [
+  { area: 'Boac Public Market', demand: 'High', eta: '4 min', color: colors.coral },
+  { area: 'Terminal / Town Plaza', demand: 'Moderate', eta: '6 min', color: colors.warning },
+  { area: 'MSC Tanza Gate', demand: 'Steady', eta: '9 min', color: colors.secondary },
+];
 
 export const DriverDashboard = () => {
   const dispatch = useAppDispatch();
@@ -21,27 +25,25 @@ export const DriverDashboard = () => {
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 700,
+        duration: 320,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 700,
+        duration: 320,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Populate today's earnings / completed trips from history.
     if (user?.id) dispatch(fetchCompletedTrips(user.id));
-  }, []);
+  }, [dispatch, fadeAnim, slideAnim, user?.id]);
 
-  // While online, surface nearby pending bookings as incoming requests.
   useEffect(() => {
     if (!isOnline) return;
     let cancelled = false;
@@ -50,171 +52,175 @@ export const DriverDashboard = () => {
       .then((bookings) => {
         if (cancelled) return;
         bookings
-          .filter((b) => b.status === 'pending')
-          .forEach((b) => dispatch(addIncomingRequest(b)));
+          .filter((booking) => booking.status === 'pending')
+          .forEach((booking) => dispatch(addIncomingRequest(booking)));
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [isOnline, dispatch]);
+  }, [dispatch, isOnline]);
 
   const toggleStatus = async () => {
+    if (!user?.id) return;
     const newStatus = isOnline ? 'offline' : 'online';
-    await dispatch(updateDriverStatus({ driverId: user!.id, status: newStatus }));
+    await dispatch(updateDriverStatus({ driverId: user.id, status: newStatus }));
   };
 
   if (loading) return <Loading message="Updating duty status..." />;
 
   const StatCard = ({ label, value, icon, color = colors.primary }: any) => (
-    <Surface style={styles.statCard} elevation={2}>
-      <LinearGradient 
-        colors={[color + '15', color + '08']}
-        style={styles.statCardGradient}
-      >
-        <View style={[styles.statIconBox, { backgroundColor: color + '25' }]}>
-          <MaterialCommunityIcons name={icon} size={28} color={color} />
-        </View>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
-      </LinearGradient>
+    <Surface style={styles.statCard} elevation={1}>
+      <View style={[styles.statIconBox, { backgroundColor: `${color}18` }]}>
+        <MaterialCommunityIcons name={icon} size={24} color={color} />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </Surface>
   );
 
   return (
     <View style={styles.container}>
-      <LinearGradient 
-        colors={isOnline ? ['#1E90FF', '#0DA5C0', '#00C9FF'] : ['#7E8FA3', '#334E7E']}
+      <LinearGradient
+        colors={isOnline ? gradients.brand : gradients.offline}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <View style={styles.headerWave} />
         <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.welcome}>Welcome back,</Text>
-            <Text style={styles.driverName}>{user?.name || 'Driver'}</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.welcome}>Driver console</Text>
+            <Text style={styles.driverName} numberOfLines={1}>{user?.name || 'Driver'}</Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.profileBtn}
             onPress={() => navigation.navigate('Profile')}
             activeOpacity={0.8}
+            accessibilityLabel="Open profile"
           >
-            <LinearGradient 
-              colors={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.1)']}
-              style={styles.profileBtnGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
-            </LinearGradient>
+            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
           </TouchableOpacity>
         </View>
 
-        <Surface style={styles.statusCard} elevation={4}>
+        <Surface style={styles.statusCard} elevation={2}>
           <View style={styles.statusInfo}>
             <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.success : colors.textLight }]} />
-            <View style={{ flex: 1 }}>
+            <View style={styles.statusCopy}>
               <Text style={styles.statusLabelText}>
-                You are currently <Text style={[styles.statusLabelBold, { color: isOnline ? colors.primary : colors.textSecondary }]}>
-                  {isOnline ? 'ONLINE' : 'OFFLINE'}
-                </Text>
+                {isOnline ? 'Online and ready' : 'Offline'}
               </Text>
               <Text style={styles.statusSubtext}>
-                {isOnline ? 'Ready to accept rides' : 'Go online to receive requests'}
+                {isOnline ? 'Incoming passenger requests will appear below.' : 'Go online to receive TODA bookings.'}
               </Text>
             </View>
           </View>
-          <Switch 
-            value={isOnline} 
-            onValueChange={toggleStatus} 
-            color={colors.primary}
-            style={styles.statusSwitch}
-          />
+          <Switch value={isOnline} onValueChange={toggleStatus} color={colors.primary} />
         </Surface>
       </LinearGradient>
 
-      <Animated.ScrollView 
+      <Animated.ScrollView
         style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.statsGrid}>
-          <StatCard 
-            label="Earnings Today" 
-            value={`₱${dailyEarnings.toFixed(2)}`} 
-            icon="cash-multiple" 
-            color={colors.success} 
+          <StatCard
+            label="Earnings Today"
+            value={`₱${dailyEarnings.toFixed(2)}`}
+            icon="cash-multiple"
+            color={colors.success}
           />
-          <StatCard 
-            label="Trip Acceptance" 
-            value="94%" 
-            icon="check-all" 
-            color={colors.primary} 
-          />
+          <StatCard label="Acceptance" value="94%" icon="check-all" color={colors.primary} />
         </View>
 
+        <Surface style={styles.shiftCard} elevation={1}>
+          <View style={styles.shiftHeader}>
+            <View>
+              <Text style={styles.shiftTitle}>Shift Target</Text>
+              <Text style={styles.shiftSubtitle}>Daily goal based on current TODA queue.</Text>
+            </View>
+            <Text style={styles.shiftAmount}>₱850</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.min(100, (dailyEarnings / 850) * 100)}%` }]} />
+          </View>
+          <View style={styles.shiftFooter}>
+            <Text style={styles.shiftMeta}>Collected ₱{dailyEarnings.toFixed(0)}</Text>
+            <Text style={styles.shiftMeta}>₱{Math.max(0, 850 - dailyEarnings).toFixed(0)} left</Text>
+          </View>
+        </Surface>
+
         {incomingRequests.length > 0 ? (
-          <Surface style={styles.requestAlert} elevation={4}>
-            <LinearGradient 
-              colors={['#FFFBEB', '#FEF3C7']} 
-              style={styles.requestGradient}
-            >
-              <View style={styles.requestHeader}>
-                <View style={styles.requestTitleRow}>
-                  <MaterialCommunityIcons name="bell-ring-outline" size={24} color="#92400E" style={{ marginRight: 12 }} />
-                  <Text style={styles.requestTitle}>New Requests</Text>
-                </View>
-                <Surface style={styles.countBadge} elevation={3}>
-                  <Text style={styles.countText}>{incomingRequests.length}</Text>
-                </Surface>
+          <Surface style={styles.requestAlert} elevation={2}>
+            <View style={styles.requestHeader}>
+              <View style={styles.requestIconBox}>
+                <MaterialCommunityIcons name="bell-ring-outline" size={24} color={colors.warning} />
               </View>
-              <Text style={styles.requestDesc}>Passengers are looking for a ride near your location.</Text>
-              <TouchableOpacity 
-                style={styles.actionBtn}
-                onPress={() => navigation.navigate('BookingRequests')}
-                activeOpacity={0.8}
-              >
-                <LinearGradient 
-                  colors={['#F59E0B', '#FBBF24']}
-                  style={styles.actionBtnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.actionBtnText}>View Requests</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" style={{ marginLeft: 8 }} />
-                </LinearGradient>
-              </TouchableOpacity>
-            </LinearGradient>
+              <View style={styles.requestCopy}>
+                <Text style={styles.requestTitle}>New ride requests</Text>
+                <Text style={styles.requestDesc}>Passengers are waiting near your location.</Text>
+              </View>
+              <View style={styles.countBadge}>
+                <Text style={styles.countText}>{incomingRequests.length}</Text>
+              </View>
+            </View>
+            <Button
+              variant="primary"
+              icon="format-list-bulleted"
+              onPress={() => navigation.navigate('BookingRequests')}
+            >
+              View Requests
+            </Button>
           </Surface>
         ) : isOnline ? (
-          <View style={styles.waitingContainer}>
-            <Surface style={styles.waitingIconBox} elevation={2}>
-              <MaterialCommunityIcons name="radar" size={40} color={colors.primary} />
-            </Surface>
-            <Text style={styles.waitingTitle}>Searching for rides...</Text>
-            <Text style={styles.waitingSubtitle}>Keep the app open to receive instant booking alerts</Text>
-          </View>
+          <Surface style={styles.emptyState} elevation={1}>
+            <View style={styles.emptyIconBox}>
+              <MaterialCommunityIcons name="radar" size={34} color={colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>Listening for nearby bookings</Text>
+            <Text style={styles.emptySubtitle}>Keep this screen open while waiting for passenger alerts.</Text>
+          </Surface>
         ) : (
-          <View style={styles.offlinePlaceholder}>
-            <MaterialCommunityIcons name="power-sleep" size={48} color={colors.textLight} style={{ marginBottom: spacing.md }} />
-            <Text style={styles.offlineTitle}>You're Offline</Text>
-            <Text style={styles.offlineSubtitle}>Go online to start receiving booking requests from passengers</Text>
-          </View>
+          <Surface style={styles.emptyState} elevation={1}>
+            <View style={[styles.emptyIconBox, { backgroundColor: colors.surfaceAlt }]}>
+              <MaterialCommunityIcons name="power-sleep" size={34} color={colors.textSecondary} />
+            </View>
+            <Text style={styles.emptyTitle}>You are offline</Text>
+            <Text style={styles.emptySubtitle}>Use the duty switch above when you are ready to accept rides.</Text>
+          </Surface>
         )}
 
         <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Demand Zones</Text>
+        </View>
+
+        <View style={styles.zoneList}>
+          {DEMAND_ZONES.map((zone) => (
+            <TouchableOpacity key={zone.area} style={styles.zoneItem} activeOpacity={0.76}>
+              <View style={[styles.zoneMarker, { backgroundColor: `${zone.color}20` }]}>
+                <View style={[styles.zoneDot, { backgroundColor: zone.color }]} />
+              </View>
+              <View style={styles.zoneCopy}>
+                <Text style={styles.zoneArea}>{zone.area}</Text>
+                <Text style={styles.zoneMeta}>{zone.demand} demand • {zone.eta} pickup radius</Text>
+              </View>
+              <MaterialCommunityIcons name="navigation-variant-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
-        
-        {[1, 2, 3].map(i => (
-          <TouchableOpacity key={i} style={styles.activityItem} activeOpacity={0.7}>
-            <Surface style={styles.activityIcon} elevation={1}>
+
+        {[1, 2, 3].map((item) => (
+          <TouchableOpacity key={item} style={styles.activityItem} activeOpacity={0.76}>
+            <View style={styles.activityIcon}>
               <MaterialCommunityIcons name="check-circle-outline" size={22} color={colors.success} />
-            </Surface>
+            </View>
             <View style={styles.activityInfo}>
               <Text style={styles.activityTitle}>Trip Completed</Text>
               <Text style={styles.activityTime}>Today, 10:30 AM</Text>
@@ -227,31 +233,24 @@ export const DriverDashboard = () => {
           <Text style={styles.sectionTitle}>Performance</Text>
         </View>
 
-        <Surface style={styles.performanceCard} elevation={2}>
-          <LinearGradient 
-            colors={['#E3F2FD', '#F0F7FF']}
-            style={styles.performanceGradient}
-          >
-            <View style={styles.performanceRow}>
-              <View>
-                <Text style={styles.performanceLabel}>Rating</Text>
-                <View style={styles.ratingContainer}>
-                  <MaterialCommunityIcons name="star" size={20} color="#FFA500" />
-                  <Text style={styles.ratingValue}>4.8</Text>
-                </View>
-              </View>
-              <View style={styles.performanceDivider} />
-              <View>
-                <Text style={styles.performanceLabel}>Completed</Text>
-                <Text style={styles.performanceValue}>247</Text>
-              </View>
-              <View style={styles.performanceDivider} />
-              <View>
-                <Text style={styles.performanceLabel}>Cancelled</Text>
-                <Text style={styles.performanceValue}>3</Text>
-              </View>
+        <Surface style={styles.performanceCard} elevation={1}>
+          <View style={styles.performanceItem}>
+            <Text style={styles.performanceLabel}>Rating</Text>
+            <View style={styles.ratingContainer}>
+              <MaterialCommunityIcons name="star" size={18} color={colors.warning} />
+              <Text style={styles.performanceValue}>4.8</Text>
             </View>
-          </LinearGradient>
+          </View>
+          <View style={styles.performanceDivider} />
+          <View style={styles.performanceItem}>
+            <Text style={styles.performanceLabel}>Completed</Text>
+            <Text style={styles.performanceValue}>247</Text>
+          </View>
+          <View style={styles.performanceDivider} />
+          <View style={styles.performanceItem}>
+            <Text style={styles.performanceLabel}>Cancelled</Text>
+            <Text style={styles.performanceValue}>3</Text>
+          </View>
         </Surface>
       </Animated.ScrollView>
     </View>
@@ -259,331 +258,393 @@ export const DriverDashboard = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { 
-    paddingTop: 60, 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.lg,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    position: 'relative',
-    overflow: 'hidden'
+    paddingBottom: spacing.xl,
   },
-  headerWave: {
-    position: 'absolute',
-    bottom: -2,
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40
-  },
-  headerTop: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.lg,
-    zIndex: 1
   },
-  welcome: { 
-    fontSize: 14, 
-    color: 'rgba(255,255,255,0.85)', 
-    fontWeight: '500' 
+  headerText: {
+    flex: 1,
+    paddingRight: spacing.md,
   },
-  driverName: { 
-    fontSize: 28, 
-    fontWeight: '800', 
-    color: '#fff',
-    marginTop: 4
+  welcome: {
+    ...typography.body,
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 14,
   },
-  profileBtn: { padding: 4 },
-  profileBtnGradient: {
+  driverName: {
+    ...typography.display,
+    color: '#FFFFFF',
+    fontSize: 28,
+    marginTop: spacing.xs,
+    letterSpacing: 0,
+  },
+  profileBtn: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)'
   },
-  avatarText: { 
-    color: '#fff', 
-    fontSize: 22, 
-    fontWeight: 'bold' 
+  avatarText: {
+    ...typography.title,
+    color: '#FFFFFF',
+    fontSize: 22,
   },
-  statusCard: { 
-    backgroundColor: colors.surface, 
-    borderRadius: 20, 
-    padding: spacing.md, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center',
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.borderLight
-  },
-  statusInfo: { 
-    flexDirection: 'row', 
-    alignItems: 'center',
-    flex: 1
-  },
-  statusDot: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    marginRight: 12 
-  },
-  statusLabelText: { 
-    fontSize: 14, 
-    color: colors.textSecondary,
-    fontWeight: '500'
-  },
-  statusLabelBold: {
-    fontWeight: '800',
-    letterSpacing: 0.5
-  },
-  statusSubtext: {
-    fontSize: 12,
-    color: colors.textLight,
-    marginTop: 2
-  },
-  statusSwitch: { 
-    transform: [{ scale: 1.1 }] 
-  },
-  content: { flex: 1 },
-  scrollContent: { padding: spacing.lg, paddingBottom: 40 },
-  statsGrid: { 
-    flexDirection: 'row', 
-    gap: spacing.md, 
-    marginBottom: spacing.xl 
-  },
-  statCard: { 
-    flex: 1, 
-    backgroundColor: colors.surface, 
-    borderRadius: 20, 
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.borderLight
-  },
-  statCardGradient: {
+    borderColor: colors.borderLight,
     padding: spacing.md,
-    alignItems: 'center'
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  statIconBox: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 16, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: 12 
-  },
-  statValue: { 
-    fontSize: 20, 
-    fontWeight: '800', 
-    color: colors.text 
-  },
-  statLabel: { 
-    fontSize: 11, 
-    color: colors.textSecondary, 
-    fontWeight: '600', 
-    marginTop: 4,
-    textAlign: 'center'
-  },
-  requestAlert: { 
-    borderRadius: 24, 
-    overflow: 'hidden', 
-    marginBottom: spacing.xl,
-    ...shadows.md
-  },
-  requestGradient: { 
-    padding: spacing.lg 
-  },
-  requestHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 12 
-  },
-  requestTitleRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center' 
-  },
-  requestTitle: { 
-    fontSize: 20, 
-    fontWeight: '800', 
-    color: '#92400E' 
-  },
-  countBadge: { 
-    backgroundColor: '#F59E0B', 
-    paddingHorizontal: 12, 
-    paddingVertical: 4, 
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  countText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    fontSize: 14 
-  },
-  requestDesc: { 
-    fontSize: 15, 
-    color: '#B45309', 
-    marginBottom: spacing.md,
-    fontWeight: '500'
-  },
-  actionBtn: {
-    height: 48,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  actionBtnGradient: {
+  statusInfo: {
     flex: 1,
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: spacing.sm,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.md,
+  },
+  statusCopy: {
+    flex: 1,
+  },
+  statusLabelText: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontSize: 15,
+  },
+  statusSubtext: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 2,
+  },
+  content: {
+    flex: 1,
+    marginTop: -20,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: layout.contentBottom,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.md,
+    ...shadows.sm,
+  },
+  statIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 4
-  },
-  actionBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff'
-  },
-  waitingContainer: { 
-    alignItems: 'center', 
-    paddingVertical: spacing.xl 
-  },
-  waitingIconBox: { 
-    width: 80, 
-    height: 80, 
-    borderRadius: 40, 
-    backgroundColor: colors.primaryLight, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginBottom: spacing.md 
-  },
-  waitingTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: colors.text 
-  },
-  waitingSubtitle: { 
-    fontSize: 14, 
-    color: colors.textSecondary, 
-    textAlign: 'center', 
-    marginTop: 6,
-    paddingHorizontal: spacing.lg
-  },
-  offlinePlaceholder: { 
-    alignItems: 'center', 
-    paddingVertical: spacing.xl, 
-    opacity: 0.6 
-  },
-  offlineTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: colors.textSecondary 
-  },
-  offlineSubtitle: { 
-    fontSize: 14, 
-    color: colors.textLight, 
-    textAlign: 'center', 
-    marginTop: 6, 
-    paddingHorizontal: spacing.lg 
-  },
-  sectionHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
     marginBottom: spacing.md,
-    marginTop: spacing.lg
   },
-  sectionTitle: { 
-    fontSize: 18, 
-    fontWeight: '700', 
-    color: colors.text 
+  statValue: {
+    ...typography.number,
+    color: colors.text,
+    fontSize: 22,
+  },
+  statLabel: {
+    ...typography.label,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: spacing.xs,
+  },
+  shiftCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  shiftHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  shiftTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontSize: 16,
+  },
+  shiftSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  shiftAmount: {
+    ...typography.number,
+    color: colors.primary,
+    fontSize: 20,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
+  shiftFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  shiftMeta: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  requestAlert: {
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  requestHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  requestIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  requestCopy: {
+    flex: 1,
+  },
+  requestTitle: {
+    ...typography.title,
+    color: colors.text,
+    fontSize: 18,
+  },
+  requestDesc: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  countBadge: {
+    minWidth: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.warning,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  countText: {
+    ...typography.label,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  emptyIconBox: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.xl,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    ...typography.title,
+    color: colors.text,
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    ...typography.title,
+    color: colors.text,
+    fontSize: 18,
   },
   seeAllText: {
-    fontSize: 14,
+    ...typography.label,
     color: colors.primary,
-    fontWeight: '600'
+    fontSize: 14,
   },
-  activityItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: spacing.md, 
-    backgroundColor: colors.surface, 
-    borderRadius: 16, 
-    marginBottom: spacing.sm,
+  zoneList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  zoneItem: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.borderLight
+    borderColor: colors.borderLight,
+    padding: spacing.md,
   },
-  activityIcon: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 12, 
-    backgroundColor: colors.primaryLight, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: spacing.md 
+  zoneMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
   },
-  activityInfo: { flex: 1 },
-  activityTitle: { 
-    fontSize: 15, 
-    fontWeight: '700', 
-    color: colors.text 
+  zoneDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  activityTime: { 
-    fontSize: 12, 
-    color: colors.textLight,
-    marginTop: 2
+  zoneCopy: {
+    flex: 1,
   },
-  activityAmount: { 
-    fontSize: 15, 
-    fontWeight: '800', 
-    color: colors.success 
+  zoneArea: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontSize: 14,
+  },
+  zoneMeta: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  activityItem: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  activityIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.successLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  activityInfo: {
+    flex: 1,
+  },
+  activityTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontSize: 15,
+  },
+  activityTime: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  activityAmount: {
+    ...typography.number,
+    color: colors.success,
+    fontSize: 15,
   },
   performanceCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight
-  },
-  performanceGradient: {
-    padding: spacing.lg
-  },
-  performanceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center'
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  performanceItem: {
+    flex: 1,
+    alignItems: 'center',
   },
   performanceLabel: {
+    ...typography.label,
+    color: colors.textSecondary,
     fontSize: 12,
-    color: colors.textLight,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center'
+    marginBottom: spacing.xs,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4
-  },
-  ratingValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text
+    gap: spacing.xs,
   },
   performanceValue: {
-    fontSize: 18,
-    fontWeight: '800',
+    ...typography.number,
     color: colors.text,
-    textAlign: 'center'
+    fontSize: 18,
   },
   performanceDivider: {
     width: 1,
-    height: 40,
-    backgroundColor: colors.border
-  }
+    height: 42,
+    backgroundColor: colors.borderLight,
+  },
 });

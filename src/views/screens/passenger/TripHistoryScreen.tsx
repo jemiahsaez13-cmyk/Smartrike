@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector } from '@/controllers/store';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { ExportService } from '@/models/services/ExportService';
 
@@ -29,7 +29,9 @@ export const TripHistoryScreen = () => {
   const loadBookings = async () => {
     try {
       const repo = new BookingRepository();
-      const data = await repo.findByPassenger(user!.id);
+      const data = user?.user_type === 'driver'
+        ? await repo.findByDriver(user!.id)
+        : await repo.findByPassenger(user!.id);
       setBookings(data);
     } catch (error) {
       console.error('Failed to load bookings:', error);
@@ -117,8 +119,8 @@ export const TripHistoryScreen = () => {
             Cancelled
           </Chip>
           <Chip
-            selected={statusFilter === 'in-progress'}
-            onPress={() => setStatusFilter('in-progress')}
+            selected={statusFilter === 'in-transit'}
+            onPress={() => setStatusFilter('in-transit')}
             style={styles.chip}
           >
             In Progress
@@ -127,7 +129,19 @@ export const TripHistoryScreen = () => {
       </ScrollView>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.resultCount}>{filteredBookings.length} trips found</Text>
+        <Surface style={styles.summaryCard} elevation={1}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{filteredBookings.length}</Text>
+            <Text style={styles.summaryLabel}>trips found</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              ₱{filteredBookings.reduce((sum, booking) => sum + booking.total_fare, 0).toFixed(0)}
+            </Text>
+            <Text style={styles.summaryLabel}>total fares</Text>
+          </View>
+        </Surface>
         
         {filteredBookings.length === 0 ? (
           <View style={styles.emptyState}>
@@ -187,17 +201,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: layout.headerTop,
     paddingBottom: spacing.md,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
+  headerTitle: { ...typography.title, fontSize: 24, color: colors.text },
   exportBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radius.md,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center'
@@ -208,13 +222,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     margin: spacing.md,
     marginBottom: spacing.sm,
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     borderWidth: 1,
     borderColor: colors.border
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: {
+    ...typography.body,
     flex: 1,
     paddingVertical: spacing.md,
     fontSize: 15,
@@ -229,15 +244,40 @@ const styles = StyleSheet.create({
   chip: { marginRight: 0 },
   content: { flex: 1 },
   scrollContent: { padding: spacing.md },
-  resultCount: {
-    fontSize: 13,
-    color: colors.textSecondary,
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.md,
     marginBottom: spacing.md,
-    fontWeight: '600'
+    ...shadows.sm,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    ...typography.number,
+    color: colors.text,
+    fontSize: 20,
+  },
+  summaryLabel: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: colors.borderLight,
   },
   tripCard: {
     backgroundColor: colors.surface,
-    borderRadius: 16,
+    borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
@@ -255,13 +295,13 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   statusText: {
+    ...typography.label,
     fontSize: 12,
-    fontWeight: '700',
     textTransform: 'capitalize'
   },
   fareText: {
+    ...typography.number,
     fontSize: 18,
-    fontWeight: '800',
     color: colors.text
   },
   locationRow: {
@@ -271,12 +311,14 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xs
   },
   locationText: {
+    ...typography.body,
     fontSize: 14,
     color: colors.textSecondary,
     marginLeft: spacing.sm,
     flex: 1
   },
   dateText: {
+    ...typography.body,
     fontSize: 12,
     color: colors.textLight,
     marginTop: spacing.xs
@@ -286,12 +328,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl * 2
   },
   emptyText: {
+    ...typography.title,
     fontSize: 18,
-    fontWeight: '700',
     color: colors.textSecondary,
     marginTop: spacing.md
   },
   emptySubtext: {
+    ...typography.body,
     fontSize: 14,
     color: colors.textLight,
     marginTop: spacing.xs

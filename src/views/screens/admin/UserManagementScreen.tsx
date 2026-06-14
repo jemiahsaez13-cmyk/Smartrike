@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     backgroundColor: colors.surface,
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: 0 },
   searchContainer: { 
     flexDirection: 'row', 
     paddingHorizontal: spacing.lg, 

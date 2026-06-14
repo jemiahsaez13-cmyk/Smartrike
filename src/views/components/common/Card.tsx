@@ -1,11 +1,11 @@
 import React from 'react';
 import { Card as PaperCard } from 'react-native-paper';
-import { StyleSheet, ViewStyle } from 'react-native';
-import { shadows } from '@/views/styles/theme';
+import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { colors, radius, shadows } from '@/views/styles/theme';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   elevation?: 0 | 1 | 2 | 3 | 4 | 5;
 }
 
@@ -19,6 +19,9 @@ export const Card: React.FC<CardProps> = ({ children, style, elevation = 2 }) =>
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   }
 });

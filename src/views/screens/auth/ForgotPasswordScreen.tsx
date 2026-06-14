@@ -32,7 +32,7 @@ export const ForgotPasswordScreen = () => {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#1E90FF', '#0DA5C0', '#00C9FF']}
+        colors={[colors.primaryDark, colors.primary, colors.secondary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
@@ -55,7 +55,7 @@ export const ForgotPasswordScreen = () => {
               If an account exists for {email}, you'll receive password reset instructions shortly.
             </Text>
             <TouchableOpacity style={styles.resetBtn} onPress={() => navigation.navigate('Login')} activeOpacity={0.8}>
-              <LinearGradient colors={['#1E90FF', '#0DA5C0']} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 <Text style={styles.resetBtnText}>Back to Sign In</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -92,7 +92,7 @@ export const ForgotPasswordScreen = () => {
               disabled={!email.trim() || loading}
               activeOpacity={0.8}
             >
-              <LinearGradient colors={['#1E90FF', '#0DA5C0']} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.resetGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 <Text style={styles.resetBtnText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
               </LinearGradient>
             </TouchableOpacity>

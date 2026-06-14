@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
+import { colors, radius, spacing } from '@/views/styles/theme';
 
 interface ErrorMessageProps {
   message: string;
@@ -13,6 +14,17 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({ message }) => (
 );
 
 const styles = StyleSheet.create({
-  container: { padding: 15, backgroundColor: '#FFEBEE', borderRadius: 8, marginVertical: 10 },
-  text: { color: '#C62828', textAlign: 'center' }
+  container: {
+    padding: spacing.md,
+    backgroundColor: colors.errorLight,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginVertical: spacing.sm,
+  },
+  text: {
+    color: colors.error,
+    textAlign: 'center',
+    fontWeight: '600',
+  }
 });

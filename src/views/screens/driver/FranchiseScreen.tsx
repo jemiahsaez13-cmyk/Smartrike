@@ -76,7 +76,7 @@ export const FranchiseScreen = () => {
     myApplication.status !== 'rejected';
 
   const Header = ({ subtitle }: { subtitle: string }) => (
-    <LinearGradient colors={['#1E90FF', '#0DA5C0', '#00C9FF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+    <LinearGradient colors={[colors.primaryDark, colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
       <Text style={styles.headerTitle}>Franchise (MTOP)</Text>
       <Text style={styles.headerSubtitle}>{subtitle}</Text>
     </LinearGradient>
@@ -234,7 +234,7 @@ export const FranchiseScreen = () => {
           disabled={!allUploaded || submitting}
           activeOpacity={0.85}
         >
-          <LinearGradient colors={['#1E90FF', '#0DA5C0']} style={styles.submitGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
             <Text style={styles.submitText}>{submitting ? 'Submitting...' : 'Submit Application'}</Text>
           </LinearGradient>
         </TouchableOpacity>

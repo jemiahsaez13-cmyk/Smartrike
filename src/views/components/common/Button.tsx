@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { Button as PaperButton, ButtonProps } from 'react-native-paper';
 import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, gradients, radius, shadows, typography } from '@/views/styles/theme';
 
 interface CustomButtonProps extends Omit<ButtonProps, 'style'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'gradient';
@@ -24,7 +24,9 @@ export const Button: React.FC<CustomButtonProps> = ({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.96,
+      toValue: 0.97,
+      speed: 28,
+      bounciness: 5,
       useNativeDriver: true,
     }).start();
   };
@@ -32,6 +34,8 @@ export const Button: React.FC<CustomButtonProps> = ({
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
+      speed: 28,
+      bounciness: 6,
       useNativeDriver: true,
     }).start();
   };
@@ -52,11 +56,16 @@ export const Button: React.FC<CustomButtonProps> = ({
         styles.button, 
         isGradient && styles.gradientButton,
         variant === 'outline' && styles.outlineButton,
+        variant === 'secondary' && styles.secondaryButton,
+        variant === 'ghost' && styles.ghostButton,
+        (disabled || loading) && styles.disabledButton,
         style
       ]}
       labelStyle={[
         styles.label,
-        variant === 'outline' && { color: colors.primary }
+        variant === 'outline' && styles.outlineLabel,
+        variant === 'ghost' && styles.ghostLabel,
+        (disabled || loading) && styles.disabledLabel,
       ]}
       contentStyle={styles.content}
       onPress={onPress}
@@ -74,10 +83,11 @@ export const Button: React.FC<CustomButtonProps> = ({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={disabled || loading}
+        accessibilityRole="button"
       >
-        {isGradient && !disabled ? (
+        {isGradient && !disabled && !loading ? (
           <LinearGradient
-            colors={[colors.primary, colors.secondary]}
+            colors={gradients.action}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.gradientContainer, style]}
@@ -94,7 +104,7 @@ export const Button: React.FC<CustomButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderWidth: 0,
   },
   gradientButton: {
@@ -103,20 +113,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   gradientContainer: {
-    borderRadius: 16,
+    borderRadius: radius.md,
     ...shadows.md,
+  },
+  secondaryButton: {
+    backgroundColor: colors.secondaryLight,
+  },
+  ghostButton: {
+    backgroundColor: 'transparent',
+  },
+  disabledButton: {
+    opacity: 0.58,
   },
   outlineButton: {
     borderColor: colors.primary,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
   },
   label: {
+    ...typography.label,
     fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
     paddingVertical: 4,
   },
+  outlineLabel: {
+    color: colors.primary,
+  },
+  ghostLabel: {
+    color: colors.textSecondary,
+  },
+  disabledLabel: {
+    color: colors.textLight,
+  },
   content: {
-    height: 54,
+    minHeight: 52,
   }
 });

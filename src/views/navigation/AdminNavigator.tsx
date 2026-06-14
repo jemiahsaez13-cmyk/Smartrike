@@ -8,7 +8,7 @@ import { ActivityLogsScreen } from '@/views/screens/admin/ActivityLogsScreen';
 import { SystemHealthScreen } from '@/views/screens/admin/SystemHealthScreen';
 import { FranchiseManagementScreen } from '@/views/screens/admin/FranchiseManagementScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
-import { colors } from '@/views/styles/theme';
+import { colors, layout, radius, shadows, typography } from '@/views/styles/theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -22,16 +22,21 @@ const AdminTabs = () => (
       tabBarStyle: {
         borderTopWidth: 1,
         borderTopColor: colors.borderLight,
-        elevation: 10,
-        height: 65,
-        paddingBottom: 10,
+        height: layout.tabBarHeight,
+        paddingBottom: 14,
         paddingTop: 8,
         backgroundColor: colors.surface,
+        ...shadows.lg,
+      },
+      tabBarItemStyle: {
+        minHeight: 56,
+        borderRadius: radius.md,
+        marginHorizontal: 4,
       },
       tabBarLabelStyle: {
+        ...typography.label,
         fontSize: 11,
-        fontWeight: '700',
-        letterSpacing: 0.5
+        letterSpacing: 0,
       }
     }}
   >

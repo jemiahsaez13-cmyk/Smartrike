@@ -6,12 +6,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '@/views/styles/theme';
 
-export const EmailLoginScreen = () => {
+export const EmailRegisterScreen = () => {
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [userType, setUserType] = useState<'passenger' | 'driver'>('passenger');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
   const navigation = useNavigation<any>();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -48,17 +55,17 @@ export const EmailLoginScreen = () => {
     ]).start();
   };
 
-  const handleSignIn = () => {
+  const handleCreateAccount = () => {
     Keyboard.dismiss();
     animateButton();
 
-    if (!email.trim()) {
-      Alert.alert('Validation', 'Please enter your email');
+    if (!fullName.trim()) {
+      Alert.alert('Validation', 'Please enter your full name');
       return;
     }
 
-    if (!password.trim()) {
-      Alert.alert('Validation', 'Please enter your password');
+    if (!email.trim()) {
+      Alert.alert('Validation', 'Please enter your email');
       return;
     }
 
@@ -68,11 +75,26 @@ export const EmailLoginScreen = () => {
       return;
     }
 
-    Alert.alert('Success', 'Signing in...', [
+    if (!password.trim() || password.length < 6) {
+      Alert.alert('Validation', 'Password must be at least 6 characters');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Validation', 'Passwords do not match');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      Alert.alert('Validation', 'Please agree to the terms and conditions');
+      return;
+    }
+
+    Alert.alert('Success', 'Account created!', [
       {
         text: 'OK',
         onPress: () => {
-          navigation.navigate('Login');
+          navigation.navigate('EmailLogin');
         }
       }
     ]);
@@ -97,8 +119,8 @@ export const EmailLoginScreen = () => {
           <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.headerContent}>
-          <Text style={styles.title}>Sign in with Email</Text>
-          <Text style={styles.subtitle}>Enter your credentials</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join Smart Trike</Text>
         </View>
       </LinearGradient>
 
@@ -112,7 +134,29 @@ export const EmailLoginScreen = () => {
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
         ]}>
           <View style={styles.card}>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>Full Name</Text>
+            <View style={[
+              styles.inputContainer,
+              nameFocused && styles.inputFocused
+            ]}>
+              <MaterialCommunityIcons 
+                name="account-outline" 
+                size={20} 
+                color={nameFocused ? colors.primary : colors.textLight}
+                style={styles.inputIcon}
+              />
+              <RNTextInput
+                placeholder="John Doe"
+                value={fullName}
+                onChangeText={setFullName}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                style={styles.input}
+                placeholderTextColor={colors.textLight}
+              />
+            </View>
+
+            <Text style={[styles.label, { marginTop: 16 }]}>Email Address</Text>
             <View style={[
               styles.inputContainer,
               emailFocused && styles.inputFocused
@@ -136,7 +180,7 @@ export const EmailLoginScreen = () => {
               />
             </View>
 
-            <Text style={[styles.label, { marginTop: 24 }]}>Password</Text>
+            <Text style={[styles.label, { marginTop: 16 }]}>Password</Text>
             <View style={[
               styles.inputContainer,
               passwordFocused && styles.inputFocused
@@ -148,7 +192,7 @@ export const EmailLoginScreen = () => {
                 style={styles.inputIcon}
               />
               <RNTextInput
-                placeholder="Enter your password"
+                placeholder="Create a password"
                 value={password}
                 onChangeText={setPassword}
                 onFocus={() => setPasswordFocused(true)}
@@ -169,40 +213,112 @@ export const EmailLoginScreen = () => {
               </TouchableOpacity>
             </View>
 
+            <Text style={[styles.label, { marginTop: 16 }]}>Confirm Password</Text>
+            <View style={[
+              styles.inputContainer,
+              confirmPasswordFocused && styles.inputFocused
+            ]}>
+              <MaterialCommunityIcons 
+                name="lock-check-outline" 
+                size={20} 
+                color={confirmPasswordFocused ? colors.primary : colors.textLight}
+                style={styles.inputIcon}
+              />
+              <RNTextInput
+                placeholder="Confirm your password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                onFocus={() => setConfirmPasswordFocused(true)}
+                onBlur={() => setConfirmPasswordFocused(false)}
+                secureTextEntry={!showConfirmPassword}
+                style={styles.input}
+                placeholderTextColor={colors.textLight}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons 
+                  name={showConfirmPassword ? 'eye-off' : 'eye'} 
+                  size={20} 
+                  color={colors.textLight}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 20 }]}>Account Type</Text>
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[styles.typeOption, userType === 'passenger' && styles.typeOptionSelected]}
+                onPress={() => setUserType('passenger')}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons 
+                  name="account" 
+                  size={28} 
+                  color={userType === 'passenger' ? colors.primary : colors.textLight}
+                />
+                <Text style={[styles.typeText, userType === 'passenger' && styles.typeTextSelected]}>
+                  Passenger
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.typeOption, userType === 'driver' && styles.typeOptionSelected]}
+                onPress={() => setUserType('driver')}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons 
+                  name="car" 
+                  size={28} 
+                  color={userType === 'driver' ? colors.primary : colors.textLight}
+                />
+                <Text style={[styles.typeText, userType === 'driver' && styles.typeTextSelected]}>
+                  Driver
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.termsContainer}
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
               activeOpacity={0.7}
-              style={styles.forgotPasswordBtn}
             >
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                {agreedToTerms && (
+                  <MaterialCommunityIcons name="check" size={16} color="#fff" />
+                )}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the <Text style={styles.termsLink}>Terms & Conditions</Text>
+              </Text>
             </TouchableOpacity>
 
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
               <TouchableOpacity 
-                style={styles.signInBtn}
-                onPress={handleSignIn}
+                style={styles.createBtn}
+                onPress={handleCreateAccount}
                 activeOpacity={0.8}
               >
                 <LinearGradient 
                   colors={[colors.primary, colors.primaryDark]} 
-                  style={styles.signInBtnGradient}
+                  style={styles.createBtnGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
-                  <Text style={styles.signInBtnText}>Sign In</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+                  <Text style={styles.createBtnText}>Create Account</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
           </View>
 
           <TouchableOpacity 
-            style={styles.signUpContainer}
-            onPress={() => navigation.navigate('EmailRegister')}
+            style={styles.signInContainer}
+            onPress={() => navigation.navigate('EmailLogin')}
             activeOpacity={0.7}
           >
-            <Text style={styles.signUpText}>
-              Don't have an account? <Text style={styles.signUpLink}>Sign Up</Text>
+            <Text style={styles.signInText}>
+              Already have an account? <Text style={styles.signInLink}>Sign In</Text>
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -302,19 +418,63 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '500'
   },
-  forgotPasswordBtn: {
-    alignSelf: 'flex-end',
-    marginTop: 12,
+  typeSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20
+  },
+  typeOption: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.border
+  },
+  typeOptionSelected: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary
+  },
+  typeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textLight,
+    marginTop: 8
+  },
+  typeTextSelected: {
+    color: colors.primary
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 28
   },
-  forgotPasswordText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-    paddingVertical: 4,
-    paddingHorizontal: 8
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12
   },
-  signInBtn: {
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  termsText: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '500'
+  },
+  termsLink: {
+    color: colors.primary,
+    fontWeight: '700'
+  },
+  createBtn: {
     height: 56,
     borderRadius: 16,
     overflow: 'hidden',
@@ -324,28 +484,26 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8
   },
-  signInBtnGradient: {
+  createBtnGradient: {
     flex: 1,
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8
+    alignItems: 'center'
   },
-  signInBtnText: {
+  createBtnText: {
     fontSize: 17,
     fontWeight: '700',
     color: '#fff',
     letterSpacing: 0.3
   },
-  signUpContainer: {
+  signInContainer: {
     alignItems: 'center'
   },
-  signUpText: {
+  signInText: {
     fontSize: 14,
     color: colors.textSecondary,
     fontWeight: '500'
   },
-  signUpLink: {
+  signInLink: {
     color: colors.primary,
     fontWeight: '700'
   }

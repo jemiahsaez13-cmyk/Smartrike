@@ -1,7 +1,8 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Card, Text, Button } from 'react-native-paper';
 import { Booking } from '@/models/types';
+import { colors, radius, spacing } from '@/views/styles/theme';
 
 interface BookingCardProps {
   booking: Booking;
@@ -10,21 +11,28 @@ interface BookingCardProps {
 
 export const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) => {
   const statusColors: Record<string, string> = {
-    pending: '#FFA500', accepted: '#2196F3', 'in-transit': '#4CAF50',
-    completed: '#757575', cancelled: '#F44336'
+    pending: colors.warning,
+    accepted: colors.info,
+    'in-transit': colors.success,
+    completed: colors.textSecondary,
+    cancelled: colors.error,
   };
 
   return (
     <Card style={styles.card} onPress={onPress}>
       <Card.Content>
-        <Text variant="labelSmall" style={styles.date}>
-          {new Date(booking.created_at).toLocaleDateString()}
-        </Text>
-        <Text variant="labelMedium" style={[styles.status, { color: statusColors[booking.status] }]}>
-          {booking.status.toUpperCase()}
-        </Text>
-        <Text variant="bodyMedium">From: {booking.pickup_location.address}</Text>
-        <Text variant="bodyMedium">To: {booking.dropoff_location.address}</Text>
+        <View style={styles.header}>
+          <Text variant="labelSmall" style={styles.date}>
+            {new Date(booking.created_at).toLocaleDateString()}
+          </Text>
+          <View style={[styles.statusBadge, { backgroundColor: `${statusColors[booking.status]}18` }]}>
+            <Text variant="labelMedium" style={[styles.status, { color: statusColors[booking.status] }]}>
+              {booking.status.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <Text variant="bodyMedium" style={styles.routeText}>From: {booking.pickup_location.address}</Text>
+        <Text variant="bodyMedium" style={styles.routeText}>To: {booking.dropoff_location.address}</Text>
         <Text variant="titleMedium" style={styles.fare}>₱{booking.total_fare.toFixed(2)}</Text>
       </Card.Content>
       {onPress && <Card.Actions><Button onPress={onPress}>View Details</Button></Card.Actions>}
@@ -33,8 +41,38 @@ export const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) =>
 };
 
 const styles = StyleSheet.create({
-  card: { marginBottom: 10 },
-  date: { color: '#999', marginBottom: 5 },
-  status: { fontWeight: 'bold', marginBottom: 10 },
-  fare: { marginTop: 10, fontWeight: 'bold', color: '#4CAF50' }
+  card: {
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  header: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  date: {
+    color: colors.textLight,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  status: {
+    fontWeight: '800',
+  },
+  routeText: {
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  fare: {
+    marginTop: spacing.sm,
+    fontWeight: '800',
+    color: colors.success,
+  }
 });

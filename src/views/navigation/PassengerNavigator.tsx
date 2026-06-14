@@ -8,7 +8,7 @@ import { ConfirmBookingScreen } from '@/views/screens/passenger/ConfirmBookingSc
 import { ActiveTripScreen } from '@/views/screens/passenger/ActiveTripScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
-import { colors } from '@/views/styles/theme';
+import { colors, layout, radius, shadows, typography } from '@/views/styles/theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -22,15 +22,21 @@ const PassengerTabs = () => (
       tabBarStyle: {
         borderTopWidth: 1,
         borderTopColor: colors.borderLight,
-        elevation: 10,
-        height: 65,
-        paddingBottom: 10,
+        height: layout.tabBarHeight,
+        paddingBottom: 14,
         paddingTop: 8,
         backgroundColor: colors.surface,
+        ...shadows.lg,
+      },
+      tabBarItemStyle: {
+        minHeight: 56,
+        borderRadius: radius.md,
+        marginHorizontal: 4,
       },
       tabBarLabelStyle: {
+        ...typography.label,
         fontSize: 12,
-        fontWeight: '600',
+        letterSpacing: 0,
       }
     }}
   >

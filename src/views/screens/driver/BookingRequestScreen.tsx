@@ -6,7 +6,7 @@ import { useAppSelector, useAppDispatch } from '@/controllers/store';
 import { acceptBooking, removeIncomingRequest } from '@/controllers/slices/driverSlice';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export const BookingRequestScreen = () => {
@@ -68,6 +68,21 @@ export const BookingRequestScreen = () => {
 
             <View style={styles.divider} />
 
+            <View style={styles.requestMetaRow}>
+              <View style={styles.requestMeta}>
+                <MaterialCommunityIcons name="clock-outline" size={16} color={colors.secondary} />
+                <Text style={styles.requestMetaText}>Pickup in 4 min</Text>
+              </View>
+              <View style={styles.requestMeta}>
+                <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
+                <Text style={styles.requestMetaText}>{request.distance.toFixed(1)} km route</Text>
+              </View>
+              <View style={styles.requestMeta}>
+                <MaterialCommunityIcons name="cash" size={16} color={colors.success} />
+                <Text style={styles.requestMetaText}>Cash fare</Text>
+              </View>
+            </View>
+
             <View style={styles.tripDetails}>
               <View style={styles.locationItem}>
                 <View style={[styles.dot, { backgroundColor: colors.primary }]} />
@@ -119,17 +134,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingTop: 50, 
+    paddingTop: layout.headerTop - 10, 
     paddingBottom: 10,
     backgroundColor: colors.surface,
     ...shadows.sm
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
+  headerTitle: { ...typography.title, fontSize: 18, color: colors.text },
   placeholder: { width: 48 },
   scrollContent: { padding: spacing.lg },
   requestCard: { 
     backgroundColor: colors.surface, 
-    borderRadius: 24, 
+    borderRadius: radius.lg, 
     padding: spacing.lg, 
     marginBottom: spacing.lg,
     borderWidth: 1,
@@ -146,22 +161,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md
   },
-  passengerLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
-  passengerName: { fontSize: 16, fontWeight: '800', color: colors.text },
-  fareAmount: { fontSize: 22, fontWeight: '900', color: colors.primary },
+  passengerLabel: { ...typography.body, fontSize: 12, color: colors.textSecondary },
+  passengerName: { ...typography.subtitle, fontSize: 16, color: colors.text },
+  fareAmount: { ...typography.number, fontSize: 22, color: colors.primary },
   divider: { height: 1, backgroundColor: colors.borderLight, marginVertical: spacing.md },
+  requestMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  requestMeta: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
+  },
+  requestMetaText: {
+    ...typography.label,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
   tripDetails: { marginVertical: spacing.sm },
   locationItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 4 },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: 14, marginRight: 16 },
   pathLine: { width: 2, height: 20, backgroundColor: colors.borderLight, marginLeft: 4, marginVertical: -4 },
   locationInfo: { flex: 1 },
-  locationLabel: { fontSize: 10, color: colors.textLight, fontWeight: '800', letterSpacing: 1 },
-  locationText: { fontSize: 14, color: colors.text, fontWeight: '500', marginTop: 2 },
+  locationLabel: { ...typography.label, fontSize: 10, color: colors.textLight, letterSpacing: 0 },
+  locationText: { ...typography.body, fontSize: 14, color: colors.text, marginTop: 2 },
   actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   rejectBtn: { borderColor: colors.error },
   acceptBtn: { },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
-  emptyTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
-  emptySubtitle: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
+  emptyTitle: { ...typography.title, fontSize: 22, color: colors.text },
+  emptySubtitle: { ...typography.body, fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 },
   backBtn: { marginTop: spacing.xl, width: '100%' }
 });

@@ -5,6 +5,8 @@ import { RegisterScreen } from '@/views/screens/auth/RegisterScreen';
 import { PhoneLoginScreen } from '@/views/screens/auth/PhoneLoginScreen';
 import { OTPVerificationScreen } from '@/views/screens/auth/OTPVerificationScreen';
 import { ForgotPasswordScreen } from '@/views/screens/auth/ForgotPasswordScreen';
+import { EmailLoginScreen } from '@/views/screens/auth/EmailLoginScreen';
+import { EmailRegisterScreen } from '@/views/screens/auth/EmailRegisterScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -15,5 +17,7 @@ export const AuthNavigator = () => (
     <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
     <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+    <Stack.Screen name="EmailLogin" component={EmailLoginScreen} />
+    <Stack.Screen name="EmailRegister" component={EmailRegisterScreen} />
   </Stack.Navigator>
 );
