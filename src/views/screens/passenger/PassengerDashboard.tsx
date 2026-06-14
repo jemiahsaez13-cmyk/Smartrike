@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,6 +11,8 @@ import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Card } from '@/views/components/common/Card';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { Booking } from '@/models/types';
 
 const POPULAR_DESTINATIONS = [
   { id: 1, title: 'Public Market', sub: 'Boac town center', icon: 'storefront-outline', eta: '4 min', fare: '₱45.00' },
@@ -20,8 +22,10 @@ const POPULAR_DESTINATIONS = [
 
 export const PassengerDashboard = () => {
   const { user } = useAuth();
-  const { currentBooking, loading } = useBooking();
+  const { currentBooking, loading: bookingLoading } = useBooking();
   const navigation = useNavigation<any>();
+  const [recentTrips, setRecentTrips] = useState<Booking[]>([]);
+  const [fetchingActivity, setFetchingActivity] = useState(true);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
@@ -40,9 +44,29 @@ export const PassengerDashboard = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
 
-  if (loading) return <Loading message="Syncing with TODA..." />;
+    if (user?.id) {
+      loadActivity();
+    }
+  }, [user?.id]);
+
+  const loadActivity = async () => {
+    if (!user?.id) return;
+    setFetchingActivity(true);
+    try {
+      const repo = new BookingRepository();
+      const data = await repo.findByPassenger(user.id);
+      if (Array.isArray(data)) {
+        setRecentTrips(data.slice(0, 3));
+      }
+    } catch (error) {
+      console.error('Failed to load activity:', error);
+    } finally {
+      setFetchingActivity(false);
+    }
+  };
+
+  if (bookingLoading && !currentBooking) return <Loading message="Syncing with TODA..." />;
 
   const handleSupport = () => {
     Alert.alert(
@@ -122,18 +146,20 @@ export const PassengerDashboard = () => {
                   <MaterialCommunityIcons name="radar" size={16} color={colors.success} />
                   <Text style={styles.activeBadgeText}>ON THE WAY</Text>
                 </View>
-                <Text style={[styles.activeFare, typography.currency]}>₱{currentBooking.total_fare.toFixed(2)}</Text>
+                <Text style={[styles.activeFare, typography.currency]}>
+                  ₱{(currentBooking.total_fare || 0).toFixed(2)}
+                </Text>
               </View>
 
               <View style={styles.tripLocations}>
                 <View style={styles.locationLine} />
                 <View style={styles.locationRow}>
                   <View style={[styles.locationDot, { backgroundColor: colors.primary }]} />
-                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.pickup_location.address}</Text>
+                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.pickup_location?.address || 'Pickup'}</Text>
                 </View>
                 <View style={styles.locationRow}>
                   <View style={[styles.locationDot, { backgroundColor: colors.accent }]} />
-                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.dropoff_location.address}</Text>
+                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.dropoff_location?.address || 'Dropoff'}</Text>
                 </View>
               </View>
 
@@ -178,6 +204,41 @@ export const PassengerDashboard = () => {
                 Book a Ride Now
               </Button>
             </>
+          )}
+        </Card>
+
+        <Text style={styles.sectionLabel}>RECENT ACTIVITY</Text>
+        <Card variant="elevated" padding="none" style={styles.activityCard}>
+          {fetchingActivity ? (
+            <View style={styles.activityLoading}>
+              <Text style={styles.activityLabel}>Loading activity...</Text>
+            </View>
+          ) : recentTrips.length === 0 ? (
+            <View style={styles.activityEmpty}>
+              <MaterialCommunityIcons name="history" size={24} color={colors.textMuted} />
+              <Text style={styles.activityLabel}>No recent trips yet</Text>
+            </View>
+          ) : (
+            recentTrips.map((trip, idx) => (
+              <View key={trip?.id || idx} style={[styles.activityItem, idx === recentTrips.length - 1 && { borderBottomWidth: 0 }]}>
+                <View style={styles.activityIconBox}>
+                  <MaterialCommunityIcons 
+                    name={trip.status === 'completed' ? 'check-circle' : 'close-circle'} 
+                    size={20} 
+                    color={trip.status === 'completed' ? colors.success : colors.error} 
+                  />
+                </View>
+                <View style={styles.activityText}>
+                  <Text style={styles.activityTitle}>{trip.status === 'completed' ? 'Trip Completed' : 'Trip Cancelled'}</Text>
+                  <Text style={styles.activityTime} numberOfLines={1}>
+                    {trip.created_at ? new Date(trip.created_at).toLocaleDateString() : 'N/A'} • {trip.dropoff_location?.address || 'No address'}
+                  </Text>
+                </View>
+                <Text style={[styles.activityAmt, typography.currency]}>
+                  ₱{(trip.total_fare || 0).toFixed(2)}
+                </Text>
+              </View>
+            ))
           )}
         </Card>
 
@@ -378,7 +439,6 @@ const styles = StyleSheet.create({
     height: 80,
     justifyContent: 'center',
     alignItems: 'center',
-    // NO BACKGROUND NO BORDER
   },
   statsGrid: {
     flexDirection: 'row',
@@ -403,6 +463,60 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
     textTransform: 'uppercase',
+  },
+  activityCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    marginBottom: 32,
+    overflow: 'hidden',
+  },
+  activityLoading: {
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  activityEmpty: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: 8,
+  },
+  activityLabel: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  activityIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityText: {
+    flex: 1,
+    marginRight: 8,
+  },
+  activityTitle: {
+    ...typography.label,
+    color: colors.text,
+    fontSize: 14,
+  },
+  activityTime: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  activityAmt: {
+    ...typography.label,
+    color: colors.text,
   },
   sectionLabel: {
     ...typography.label,
@@ -432,7 +546,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    // NO BACKGROUND NO BORDER
   },
   quickLabel: {
     ...typography.label,
@@ -462,7 +575,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
-    // NO BACKGROUND NO BORDER
   },
   placeInfo: {
     flex: 1,

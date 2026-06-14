@@ -9,7 +9,7 @@ import {
   FranchiseStatus,
   FRANCHISE_STATUS_LABEL,
 } from '@/models/entities/Franchise';
-import { colors, spacing, shadows, typography } from '@/views/styles/theme';
+import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 
 // Maps the current status to the next admin action.
@@ -95,9 +95,9 @@ export const FranchiseManagementScreen = () => {
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
         <View style={styles.filters}>
-          <Chip selected={filter === 'all'} onPress={() => setFilter('all')} style={styles.chip}>All</Chip>
-          <Chip selected={filter === 'pending'} onPress={() => setFilter('pending')} style={styles.chip}>Pending</Chip>
-          <Chip selected={filter === 'issued'} onPress={() => setFilter('issued')} style={styles.chip}>Issued</Chip>
+          <Chip selected={filter === 'all'} onPress={() => setFilter('all')} style={styles.chip} textStyle={styles.chipText} compact>All</Chip>
+          <Chip selected={filter === 'pending'} onPress={() => setFilter('pending')} style={styles.chip} textStyle={styles.chipText} compact>Pending</Chip>
+          <Chip selected={filter === 'issued'} onPress={() => setFilter('issued')} style={styles.chip} textStyle={styles.chipText} compact>Issued</Chip>
         </View>
       </ScrollView>
 
@@ -193,9 +193,21 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
   headerSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2, fontWeight: '600' },
-  filterScroll: { maxHeight: 56, marginVertical: spacing.sm },
-  filters: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm },
-  chip: {},
+  filterScroll: { maxHeight: 44, marginVertical: spacing.sm },
+  filters: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm, alignItems: 'center' },
+  chip: { 
+    height: 32, 
+    backgroundColor: colors.surfaceAlt, 
+    borderRadius: radius.md,
+    borderWidth: 0,
+  },
+  chipText: {
+    ...typography.labelSmall,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginVertical: 0,
+    marginHorizontal: 4,
+  },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.md, paddingBottom: 100 },
   card: {

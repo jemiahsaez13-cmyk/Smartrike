@@ -101,6 +101,8 @@ export const TripHistoryScreen = () => {
             selected={statusFilter === 'all'}
             onPress={() => setStatusFilter('all')}
             style={styles.chip}
+            textStyle={styles.chipText}
+            compact
           >
             All
           </Chip>
@@ -108,6 +110,8 @@ export const TripHistoryScreen = () => {
             selected={statusFilter === 'completed'}
             onPress={() => setStatusFilter('completed')}
             style={styles.chip}
+            textStyle={styles.chipText}
+            compact
           >
             Completed
           </Chip>
@@ -115,6 +119,8 @@ export const TripHistoryScreen = () => {
             selected={statusFilter === 'cancelled'}
             onPress={() => setStatusFilter('cancelled')}
             style={styles.chip}
+            textStyle={styles.chipText}
+            compact
           >
             Cancelled
           </Chip>
@@ -122,6 +128,8 @@ export const TripHistoryScreen = () => {
             selected={statusFilter === 'in-transit'}
             onPress={() => setStatusFilter('in-transit')}
             style={styles.chip}
+            textStyle={styles.chipText}
+            compact
           >
             In Progress
           </Chip>
@@ -137,7 +145,7 @@ export const TripHistoryScreen = () => {
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, typography.currency]}>
-              ₱{filteredBookings.reduce((sum, booking) => sum + booking.total_fare, 0).toFixed(2)}
+              ₱{(filteredBookings.reduce((sum, booking) => sum + (booking.total_fare || 0), 0)).toFixed(2)}
             </Text>
             <Text style={styles.summaryLabel}>total fares</Text>
           </View>
@@ -164,17 +172,17 @@ export const TripHistoryScreen = () => {
                     {booking.status}
                   </Text>
                 </View>
-                <Text style={[styles.fareText, typography.currency]}>₱{booking.total_fare.toFixed(2)}</Text>
+                <Text style={[styles.fareText, typography.currency]}>₱{(booking.total_fare || 0).toFixed(2)}</Text>
               </View>
               
               <View style={styles.locationRow}>
                 <MaterialCommunityIcons name="circle" size={12} color={colors.primary} />
-                <Text style={styles.locationText}>{booking.pickup_location.address}</Text>
+                <Text style={styles.locationText}>{booking.pickup_location?.address || 'Pickup'}</Text>
               </View>
               
               <View style={styles.locationRow}>
                 <MaterialCommunityIcons name="map-marker" size={12} color={colors.accent} />
-                <Text style={styles.locationText}>{booking.dropoff_location.address}</Text>
+                <Text style={styles.locationText}>{booking.dropoff_location?.address || 'Dropoff'}</Text>
               </View>
               
               <Text style={styles.dateText}>
@@ -235,13 +243,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text
   },
-  filterScroll: { maxHeight: 50, marginBottom: spacing.sm },
+  filterScroll: { maxHeight: 44, marginBottom: spacing.md },
   filters: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
-    gap: spacing.sm
+    gap: spacing.sm,
+    alignItems: 'center',
   },
-  chip: { marginRight: 0 },
+  chip: { 
+    height: 32,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 0,
+  },
+  chipText: {
+    ...typography.labelSmall,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginVertical: 0,
+    marginHorizontal: 4,
+  },
   content: { flex: 1 },
   scrollContent: { padding: spacing.md },
   summaryCard: {

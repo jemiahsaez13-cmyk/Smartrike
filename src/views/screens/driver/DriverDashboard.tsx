@@ -132,10 +132,10 @@ export const DriverDashboard = () => {
         <Card variant="elevated" padding="lg" style={styles.goalCard}>
           <View style={styles.goalHeader}>
             <Text style={styles.goalTitle}>Daily Goal</Text>
-            <Text style={[styles.goalValue, typography.currency]}>₱{dailyEarnings.toFixed(2)} / ₱800.00</Text>
+            <Text style={[styles.goalValue, typography.currency]}>₱{(dailyEarnings || 0).toFixed(2)} / ₱800.00</Text>
           </View>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${Math.min(100, (dailyEarnings / 800) * 100)}%` }]} />
+            <View style={[styles.progressFill, { width: `${Math.min(100, ((dailyEarnings || 0) / 800) * 100)}%` }]} />
           </View>
           <Text style={styles.goalSubtitle}>You're almost there! Just a few more rides.</Text>
         </Card>
