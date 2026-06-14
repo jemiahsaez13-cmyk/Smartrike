@@ -67,10 +67,9 @@ export const LoginScreen = () => {
     Keyboard.dismiss();
     animateButton();
     try {
-      const result = await login(email, password);
-      if (result.user.user_type === 'passenger') navigation.replace('Passenger');
-      else if (result.user.user_type === 'driver') navigation.replace('Driver');
-      else navigation.replace('Admin');
+      // AppNavigator swaps to the correct role stack once auth state updates,
+      // so no manual navigation is needed here.
+      await login(email, password);
     } catch (err) {
       Alert.alert('Login Failed', 'Invalid credentials');
     }
@@ -112,11 +111,6 @@ export const LoginScreen = () => {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          <View style={styles.waveContainer}>
-            <View style={styles.waveLine} />
-            <View style={[styles.waveLine, { marginTop: 8 }]} />
-          </View>
-
           <Animated.Text style={[styles.appName, { transform: [{ translateY: slideAnim }] }]}>
             Smart Trike
           </Animated.Text>
@@ -186,9 +180,16 @@ export const LoginScreen = () => {
               </Animated.View>
             </View>
 
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.forgotLink}
+            >
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
             <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-              <TouchableOpacity 
-                style={styles.signInBtn} 
+              <TouchableOpacity
+                style={styles.signInBtn}
                 onPress={handleLogin}
                 activeOpacity={0.8}
               >
@@ -283,23 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-    position: 'relative',
-    overflow: 'hidden'
-  },
-  waveContainer: {
-    position: 'absolute',
-    top: 20,
-    right: -40,
-    width: 200,
-    height: 200,
-    opacity: 0.1
-  },
-  waveLine: {
-    width: 200,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: '#fff',
+    borderBottomRightRadius: 40
   },
   appName: {
     fontSize: 48,
@@ -371,6 +356,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.text,
     fontWeight: '500'
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginTop: -8,
+    marginBottom: 16
+  },
+  forgotText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600'
   },
   signInBtn: {
     height: 56,

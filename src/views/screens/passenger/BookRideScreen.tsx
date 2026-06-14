@@ -27,15 +27,17 @@ export const BookRideScreen = () => {
   const sheetAnim = useRef(new Animated.Value(height * 0.4)).current;
 
   useEffect(() => {
-    getLocation().then(() => {
-      setLoadingLocation(false);
-      Animated.spring(sheetAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    });
+    getLocation()
+      .catch(() => undefined)
+      .finally(() => {
+        setLoadingLocation(false);
+        Animated.spring(sheetAnim, {
+          toValue: 0,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }).start();
+      });
   }, []);
 
   useEffect(() => {

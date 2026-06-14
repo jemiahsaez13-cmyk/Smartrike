@@ -2,17 +2,30 @@ import { supabase } from '@/config/supabase';
 import * as ExpoLocation from 'expo-location';
 import { Location } from '@/models/types';
 
+// Default position (Boac, Marinduque) used when device location is unavailable
+// e.g. on web or when the user denies the permission. Keeps the booking flow
+// usable in the prototype instead of hanging on a missing fix.
+const DEFAULT_LOCATION: Location = {
+  latitude: 13.4452,
+  longitude: 121.8401,
+  address: 'Current Location (Boac)'
+};
+
 export class LocationService {
   async getCurrentPosition(): Promise<Location> {
-    const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-    if (status !== 'granted') throw new Error('Location permission denied');
+    try {
+      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return DEFAULT_LOCATION;
 
-    const location = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      address: ''
-    };
+      const location = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        address: 'Current Location'
+      };
+    } catch {
+      return DEFAULT_LOCATION;
+    }
   }
 
   async updateDriverLocation(driverId: string, location: Location): Promise<void> {

@@ -4,20 +4,26 @@ import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useNavigation } from '@react-navigation/native';
+import { useAppDispatch } from '@/controllers/store';
+import { updateBookingStatus } from '@/controllers/slices/bookingSlice';
+import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
 import { colors, spacing, shadows } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
+const realtimeService = new RealtimeService();
 
 export const ConfirmBookingScreen = () => {
   const { currentBooking } = useBooking();
   const navigation = useNavigation<any>();
-  
+  const dispatch = useAppDispatch();
+
   // Radar Animation
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
 
+  // Subscribe to live booking updates so we react the moment a driver accepts.
   useEffect(() => {
     const radarAnimation = Animated.loop(
       Animated.parallel([
@@ -35,21 +41,27 @@ export const ConfirmBookingScreen = () => {
         }),
       ])
     );
-
     radarAnimation.start();
 
-    // Mock redirection to active trip if booking is accepted
-    const checkStatus = setInterval(() => {
-      if (currentBooking?.status === 'accepted') {
-        navigation.navigate('ActiveTrip');
-      }
-    }, 2000);
+    let channelKey: string | null = null;
+    if (currentBooking?.id) {
+      channelKey = realtimeService.subscribeToBooking(currentBooking.id, (payload) => {
+        if (payload?.new) dispatch(updateBookingStatus(payload.new));
+      });
+    }
 
     return () => {
       radarAnimation.stop();
-      clearInterval(checkStatus);
+      if (channelKey) realtimeService.unsubscribe(channelKey);
     };
-  }, [currentBooking, navigation]);
+  }, [currentBooking?.id, dispatch]);
+
+  // Navigate to the live trip view once a driver is assigned.
+  useEffect(() => {
+    if (currentBooking?.status === 'accepted' || currentBooking?.status === 'in-transit') {
+      navigation.navigate('ActiveTrip');
+    }
+  }, [currentBooking?.status, navigation]);
 
   const handleCancel = () => {
     navigation.navigate('PassengerDashboard');
