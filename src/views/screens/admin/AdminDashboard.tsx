@@ -1,10 +1,11 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Surface, Text } from 'react-native-paper';
+import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView } from 'react-native';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { Card } from '@/views/components/common/Card';
 
 const kpiData = [
   { id: '1', title: 'Total Revenue', value: '₱45,230', trend: '+12.5%', isPositive: true, icon: 'cash-multiple' },
@@ -29,15 +30,15 @@ export const AdminDashboard = () => {
   const navigation = useNavigation<any>();
 
   const KPICard = ({ item }: { item: typeof kpiData[0] }) => (
-    <Surface style={styles.kpiCard} elevation={1}>
+    <Card variant="elevated" padding="md" style={styles.kpiCard}>
       <View style={styles.kpiHeader}>
         <View style={styles.iconBox}>
-          <MaterialCommunityIcons name={item.icon as any} size={22} color={colors.primary} />
+          <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
         </View>
         <View style={[styles.trendBadge, { backgroundColor: item.isPositive ? colors.successLight : colors.errorLight }]}>
           <MaterialCommunityIcons
             name={item.isPositive ? 'arrow-up-right' : 'arrow-down-right'}
-            size={13}
+            size={12}
             color={item.isPositive ? colors.success : colors.error}
           />
           <Text style={[styles.trendText, { color: item.isPositive ? colors.success : colors.error }]}>
@@ -47,123 +48,122 @@ export const AdminDashboard = () => {
       </View>
       <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
       <Text style={styles.kpiTitle}>{item.title}</Text>
-    </Surface>
+    </Card>
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      <LinearGradient colors={gradients.admin} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Command Center</Text>
-          <View style={styles.liveIndicatorRow}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>Live data syncing</Text>
+        <LinearGradient colors={gradients.admin} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerTitle}>Command Center</Text>
+            <View style={styles.liveIndicatorRow}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>Live data syncing</Text>
+            </View>
           </View>
-        </View>
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => navigation.navigate('UserManagement')}
-          activeOpacity={0.76}
-          accessibilityLabel="Open user management"
-        >
-          <MaterialCommunityIcons name="account-group-outline" size={21} color="#FFFFFF" />
-        </TouchableOpacity>
-      </LinearGradient>
-
-      <View style={styles.body}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Key Metrics</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={styles.seeAllText}>Reports</Text>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('UserManagement')}
+            activeOpacity={0.76}
+          >
+            <MaterialCommunityIcons name="account-group-outline" size={21} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
-        <View style={styles.grid}>
-          {kpiData.map(item => <KPICard key={item.id} item={item} />)}
-        </View>
+        </LinearGradient>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Trips Today</Text>
-        </View>
-        <Surface style={styles.chartCard} elevation={1}>
-          <View style={styles.chartHeader}>
-            <View>
-              <Text style={styles.chartTotal}>342</Text>
-              <Text style={styles.chartSubtitle}>Total rides completed</Text>
-            </View>
-            <View style={styles.chartBadge}>
-              <MaterialCommunityIcons name="trending-up" size={16} color={colors.success} />
-              <Text style={styles.chartBadgeText}>Healthy</Text>
-            </View>
+        <View style={styles.body}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>PLATFORM PERFORMANCE</Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.seeAllText}>Reports</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.chartBars} accessibilityLabel="Trips by time of day">
-            {[40, 60, 45, 80, 50, 70, 90].map((barHeight, idx) => (
-              <View key={idx} style={styles.barColumn}>
-                <View style={[styles.barTrack, { height: 112 }]}>
-                  <View style={[styles.bar, { height: `${barHeight}%` }]} />
+          <View style={styles.grid}>
+            {kpiData.map(item => <KPICard key={item.id} item={item} />)}
+          </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>VOLUME OVERVIEW</Text>
+          </View>
+          <Card variant="elevated" padding="lg" style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <View>
+                <Text style={[styles.chartTotal, typography.number]}>342</Text>
+                <Text style={styles.chartSubtitle}>Total rides completed today</Text>
+              </View>
+              <View style={styles.chartBadge}>
+                <MaterialCommunityIcons name="trending-up" size={14} color={colors.success} />
+                <Text style={styles.chartBadgeText}>HEALTHY</Text>
+              </View>
+            </View>
+            <View style={styles.chartBars}>
+              {[40, 60, 45, 80, 50, 70, 90].map((barHeight, idx) => (
+                <View key={idx} style={styles.barColumn}>
+                  <View style={[styles.barTrack, { height: 100 }]}>
+                    <View style={[styles.bar, { height: `${barHeight}%` }]} />
+                  </View>
+                  <Text style={styles.barLabel}>{idx * 2 + 8}h</Text>
                 </View>
-                <Text style={styles.barLabel}>{idx * 2 + 8}h</Text>
+              ))}
+            </View>
+          </Card>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>OPERATIONS QUEUE</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('UserManagement')}>
+              <Text style={styles.seeAllText}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+          <Card variant="elevated" padding="none" style={styles.queueCard}>
+            {operationalQueue.map((item, index) => (
+              <View key={item.id}>
+                <TouchableOpacity style={styles.queueItem} activeOpacity={0.76}>
+                  <View style={[styles.queueIcon, { backgroundColor: `${item.color}12` }]}>
+                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
+                  </View>
+                  <View style={styles.queueCopy}>
+                    <Text style={styles.queueTitle}>{item.title}</Text>
+                    <Text style={styles.queueLevel}>{item.level}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+                </TouchableOpacity>
+                {index < operationalQueue.length - 1 && <View style={styles.divider} />}
               </View>
             ))}
+          </Card>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>RECENT SYSTEM ACTIVITY</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('ActivityLogs')}>
+              <Text style={styles.seeAllText}>View All</Text>
+            </TouchableOpacity>
           </View>
-        </Surface>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Operations Queue</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('UserManagement')}>
-            <Text style={styles.seeAllText}>Manage</Text>
-          </TouchableOpacity>
-        </View>
-        <Surface style={styles.queueCard} elevation={1}>
-          {operationalQueue.map((item, index) => (
-            <View key={item.id}>
-              <TouchableOpacity style={styles.queueItem} activeOpacity={0.76}>
-                <View style={[styles.queueIcon, { backgroundColor: `${item.color}18` }]}>
-                  <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
-                </View>
-                <View style={styles.queueCopy}>
-                  <Text style={styles.queueTitle}>{item.title}</Text>
-                  <Text style={styles.queueLevel}>{item.level}</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textLight} />
-              </TouchableOpacity>
-              {index < operationalQueue.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
-        </Surface>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Activity Log</Text>
-          <TouchableOpacity activeOpacity={0.7}>
-            <Text style={styles.seeAllText}>View All</Text>
-          </TouchableOpacity>
-        </View>
-        <Surface style={styles.logCard} elevation={1}>
-          {recentActivity.map((log, index) => {
-            const statusColor = log.type === 'success' ? colors.success : log.type === 'alert' ? colors.warning : colors.error;
-            const statusBg = log.type === 'success' ? colors.successLight : log.type === 'alert' ? colors.warningLight : colors.errorLight;
-            return (
-              <View key={log.id}>
-                <View style={styles.logItem}>
-                  <View style={[styles.logIndicator, { backgroundColor: statusBg }]}>
-                    <View style={[styles.logDot, { backgroundColor: statusColor }]} />
-                  </View>
-                  <View style={styles.logContent}>
-                    <View style={styles.logTitleRow}>
-                      <Text style={styles.logAction}>{log.action}</Text>
-                      <Text style={styles.logTime}>{log.time}</Text>
+          <Card variant="elevated" padding="none" style={styles.logCard}>
+            {recentActivity.map((log, index) => {
+              const statusColor = log.type === 'success' ? colors.success : log.type === 'alert' ? colors.warning : colors.error;
+              const statusBg = log.type === 'success' ? colors.successLight : log.type === 'alert' ? colors.warningLight : colors.errorLight;
+              return (
+                <View key={log.id}>
+                  <View style={styles.logItem}>
+                    <View style={[styles.logIndicator, { backgroundColor: statusBg }]}>
+                      <View style={[styles.logDot, { backgroundColor: statusColor }]} />
                     </View>
-                    <Text style={styles.logDetails}>{log.details}</Text>
+                    <View style={styles.logContent}>
+                      <View style={styles.logTitleRow}>
+                        <Text style={styles.logAction}>{log.action}</Text>
+                        <Text style={styles.logTime}>{log.time}</Text>
+                      </View>
+                      <Text style={styles.logDetails}>{log.details}</Text>
+                    </View>
                   </View>
+                  {index < recentActivity.length - 1 && <View style={styles.divider} />}
                 </View>
-                {index < recentActivity.length - 1 && <View style={styles.divider} />}
-              </View>
-            );
-          })}
-        </Surface>
-      </View>
+              );
+            })}
+          </Card>
+        </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -173,39 +173,38 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
+    paddingHorizontal: spacing.screen,
+    paddingTop: 40,
+    paddingBottom: spacing.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: layout.headerTop,
-    paddingBottom: spacing.lg,
   },
   headerCopy: {
     flex: 1,
-    paddingRight: spacing.md,
   },
   headerTitle: {
-    ...typography.display,
+    ...typography.h1,
     color: '#FFFFFF',
-    fontSize: 25,
-    letterSpacing: 0,
+    fontSize: 28,
   },
   liveIndicatorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xs,
+    marginTop: 4,
   },
   liveDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.success,
-    marginRight: spacing.sm,
+    marginRight: 8,
   },
   liveText: {
-    ...typography.label,
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 12,
+    ...typography.labelSmall,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 10,
+    letterSpacing: 1,
   },
   actionBtn: {
     width: 44,
@@ -215,51 +214,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 0,
+    paddingBottom: 100,
   },
   body: {
-    padding: spacing.lg,
-    paddingBottom: 130,
+    marginTop: -20,
+    paddingHorizontal: spacing.screen,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-    marginTop: spacing.sm,
+    marginBottom: 12,
+    marginTop: spacing.xl,
   },
-  sectionTitle: {
-    ...typography.title,
-    color: colors.text,
-    fontSize: 17,
-    letterSpacing: 0,
+  sectionLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    fontSize: 10,
+    letterSpacing: 1.5,
   },
   seeAllText: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.primary,
-    fontSize: 13,
+    fontWeight: '700',
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
-    marginBottom: spacing.xl,
   },
   kpiCard: {
-    width: '47.8%',
-    minHeight: 142,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    ...shadows.sm,
+    width: '47.5%',
+    minHeight: 130,
   },
   kpiHeader: {
     flexDirection: 'row',
@@ -268,87 +260,83 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
   },
   trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: radius.pill,
   },
   trendText: {
-    fontSize: 11,
+    ...typography.labelSmall,
+    fontSize: 10,
     fontWeight: '800',
     marginLeft: 2,
   },
   kpiValue: {
-    ...typography.number,
+    ...typography.h2,
     color: colors.text,
     fontSize: 24,
-    letterSpacing: 0,
   },
   kpiTitle: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: spacing.xs,
+    marginTop: 2,
   },
   chartCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    marginBottom: spacing.sm,
   },
   chartHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   chartTotal: {
-    ...typography.number,
+    ...typography.h1,
     color: colors.text,
     fontSize: 34,
-    letterSpacing: 0,
   },
   chartSubtitle: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textSecondary,
-    fontSize: 13,
+    marginTop: 2,
   },
   chartBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
     backgroundColor: colors.successLight,
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   chartBadgeText: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.success,
-    fontSize: 12,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   chartBars: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+    height: 120,
   },
   barColumn: {
     alignItems: 'center',
-    width: 32,
+    width: 30,
   },
   barTrack: {
-    width: 14,
+    width: 12,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'flex-end',
@@ -360,28 +348,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   barLabel: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.textLight,
-    fontSize: 10,
-    marginTop: spacing.sm,
+    fontSize: 9,
+    marginTop: 8,
   },
   queueCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   queueItem: {
     minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   queueIcon: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -396,27 +380,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   queueLevel: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
   },
   logCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    marginBottom: spacing.sm,
   },
   logItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   logIndicator: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.pill,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -434,29 +415,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
-    gap: spacing.sm,
+    marginBottom: 2,
   },
   logAction: {
-    ...typography.subtitle,
-    flex: 1,
+    ...typography.label,
     color: colors.text,
     fontSize: 14,
   },
   logTime: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textLight,
     fontSize: 11,
   },
   logDetails: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 18,
   },
   divider: {
     height: 1,
     backgroundColor: colors.borderLight,
-    marginLeft: 42,
   },
 });

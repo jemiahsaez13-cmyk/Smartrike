@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity } from 'react-native';
 import { Text, Surface, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
+import { Card } from '@/views/components/common/Card';
 
 const mockUsers = [
   { id: '1', name: 'Juan Dela Cruz', type: 'Driver', status: 'Active', email: 'juan@toda.com' },
@@ -12,76 +13,96 @@ const mockUsers = [
 
 export const UserManagementScreen = () => {
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>User Operations</Text>
+        <Text style={styles.headerSubtitle}>Manage platform access and roles</Text>
       </View>
 
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <MaterialCommunityIcons name="magnify" size={20} color={colors.textLight} style={styles.searchIcon} />
+          <MaterialCommunityIcons name="magnify" size={20} color={colors.textMuted} style={styles.searchIcon} />
           <TextInput 
-            placeholder="Search by name, email, or ID..."
-            placeholderTextColor={colors.textLight}
+            placeholder="Search name, email, or ID..."
+            placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
             mode="flat"
             underlineColor="transparent"
             activeUnderlineColor="transparent"
+            dense
           />
         </View>
-        <Surface style={styles.filterBtn} elevation={1}>
-          <MaterialCommunityIcons name="filter-variant" size={20} color={colors.text} />
-        </Surface>
+        <TouchableOpacity style={styles.filterBtn}>
+          <MaterialCommunityIcons name="filter-variant" size={20} color={colors.primary} />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.tableCount}>Showing 3 records</Text>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.resultCount}>SHOWING {mockUsers.length} RECORDS</Text>
 
         {mockUsers.map((user) => (
-          <Surface key={user.id} style={styles.userRow} elevation={0}>
+          <Card key={user.id} variant="elevated" padding="md" style={styles.userCard}>
             <View style={styles.userInfo}>
               <View style={styles.avatarBox}>
                 <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
               </View>
-              <View>
+              <View style={styles.details}>
                 <Text style={styles.userName}>{user.name}</Text>
                 <Text style={styles.userEmail}>{user.email}</Text>
               </View>
             </View>
             
-            <View style={styles.metaInfo}>
+            <View style={styles.metaRow}>
               <View style={[
                 styles.roleBadge, 
-                { backgroundColor: user.type === 'Driver' ? colors.primaryLight : '#F1F5F9' }
+                { backgroundColor: user.type === 'Driver' ? colors.primaryLight : colors.surfaceAlt }
               ]}>
                 <Text style={[
                   styles.roleText, 
-                  { color: user.type === 'Driver' ? colors.primaryDark : colors.textSecondary }
+                  { color: user.type === 'Driver' ? colors.primary : colors.textSecondary }
                 ]}>{user.type}</Text>
               </View>
-              <MaterialCommunityIcons name="dots-horizontal" size={20} color={colors.textLight} style={{ marginLeft: 12 }} />
+              <View style={styles.statusRow}>
+                <View style={[styles.statusDot, { backgroundColor: user.status === 'Active' ? colors.success : colors.warning }]} />
+                <Text style={styles.statusText}>{user.status}</Text>
+              </View>
+              <TouchableOpacity style={styles.moreBtn}>
+                <MaterialCommunityIcons name="dots-horizontal" size={20} color={colors.textLight} />
+              </TouchableOpacity>
             </View>
-          </Surface>
+          </Card>
         ))}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { 
-    paddingHorizontal: spacing.lg, 
-    paddingTop: 60, 
-    paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text, letterSpacing: 0 },
+  header: { 
+    paddingHorizontal: spacing.screen, 
+    paddingTop: spacing.lg, 
+    paddingBottom: spacing.md,
+  },
+  headerTitle: { 
+    ...typography.h1,
+    fontSize: 28,
+  },
+  headerSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2,
+  },
   searchContainer: { 
     flexDirection: 'row', 
-    paddingHorizontal: spacing.lg, 
+    paddingHorizontal: spacing.screen, 
     paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
+    gap: spacing.sm,
+    alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight
   },
@@ -89,35 +110,115 @@ const styles = StyleSheet.create({
     flex: 1, 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#F1F5F9', 
-    borderRadius: 8, 
-    marginRight: spacing.sm,
+    backgroundColor: colors.surfaceAlt, 
+    borderRadius: radius.md, 
     paddingHorizontal: spacing.md,
-    height: 44
+    height: 48
   },
-  searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, backgroundColor: 'transparent', height: 44, fontSize: 14 },
-  filterBtn: { width: 44, height: 44, borderRadius: 8, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderLight },
-  scroll: { flex: 1 },
-  scrollContent: { padding: spacing.lg },
-  tableCount: { fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.md },
-  userRow: { 
+  searchIcon: { 
+    marginRight: spacing.sm 
+  },
+  searchInput: { 
+    flex: 1, 
+    backgroundColor: 'transparent', 
+    height: 48, 
+    fontSize: 14,
+    ...typography.body,
+  },
+  filterBtn: { 
+    width: 48, 
+    height: 48, 
+    borderRadius: radius.md, 
+    backgroundColor: colors.surfaceAlt, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  scroll: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
+    paddingBottom: 100 
+  },
+  resultCount: { 
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 1.5,
+    marginBottom: spacing.md,
+    fontSize: 10,
+  },
+  userCard: { 
+    marginBottom: spacing.md,
+  },
+  userInfo: { 
     flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    padding: spacing.md, 
-    backgroundColor: colors.surface, 
-    borderRadius: 12, 
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderLight
+    alignItems: 'center' 
   },
-  userInfo: { flexDirection: 'row', alignItems: 'center' },
-  avatarBox: { width: 40, height: 40, borderRadius: 8, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
-  avatarInitial: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  userName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  userEmail: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  metaInfo: { flexDirection: 'row', alignItems: 'center' },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  roleText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' }
+  avatarBox: { 
+    width: 48, 
+    height: 48, 
+    borderRadius: 24, 
+    backgroundColor: colors.primary, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: spacing.md 
+  },
+  avatarInitial: { 
+    color: '#fff', 
+    fontSize: 18, 
+    ...typography.h3,
+  },
+  details: {
+    flex: 1,
+  },
+  userName: { 
+    ...typography.label,
+    fontSize: 16,
+    color: colors.text 
+  },
+  userEmail: { 
+    ...typography.bodySmall,
+    color: colors.textSecondary, 
+    marginTop: 2 
+  },
+  metaRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    gap: spacing.md,
+  },
+  roleBadge: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 4, 
+    borderRadius: radius.sm 
+  },
+  roleText: { 
+    ...typography.labelSmall,
+    fontSize: 10, 
+    fontWeight: '800', 
+    textTransform: 'uppercase' 
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  statusText: {
+    ...typography.bodySmall,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  moreBtn: {
+    padding: 4,
+  }
 });

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, SafeAreaView, TouchableOpacity } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing } from '@/views/styles/theme';
+import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
+import { Card } from '@/views/components/common/Card';
 
 interface HealthMetric {
   name: string;
@@ -25,7 +26,6 @@ export const SystemHealthScreen = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate API call
     setTimeout(() => setRefreshing(false), 1000);
   };
 
@@ -39,65 +39,104 @@ export const SystemHealthScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>System Health</Text>
+        <Text style={styles.headerTitle}>Platform Health</Text>
         <View style={styles.statusIndicator}>
           <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
-          <Text style={styles.statusText}>All Systems Operational</Text>
+          <Text style={styles.statusText}>ALL SYSTEMS OPERATIONAL</Text>
         </View>
       </View>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
+        <Text style={styles.sectionLabel}>REAL-TIME METRICS</Text>
         <View style={styles.grid}>
           {metrics.map((metric, index) => (
-            <Surface key={index} style={styles.metricCard} elevation={1}>
-              <View style={[styles.iconBox, { backgroundColor: getStatusColor(metric.status) + '20' }]}>
+            <Card key={index} variant="elevated" padding="md" style={styles.metricCard}>
+              <View style={[styles.iconBox, { backgroundColor: getStatusColor(metric.status) + '10' }]}>
                 <MaterialCommunityIcons
                   name={metric.icon as any}
-                  size={24}
+                  size={22}
                   color={getStatusColor(metric.status)}
                 />
               </View>
-              <Text style={styles.metricValue}>{metric.value}</Text>
+              <Text style={[styles.metricValue, typography.number]}>{metric.value}</Text>
               <Text style={styles.metricName}>{metric.name}</Text>
               <Text style={styles.metricDesc}>{metric.description}</Text>
               <View style={[styles.statusBar, { backgroundColor: getStatusColor(metric.status) }]} />
-            </Surface>
+            </Card>
           ))}
         </View>
 
-        <Surface style={styles.infoCard} elevation={1}>
+        <Card variant="outlined" padding="md" style={styles.infoCard}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.info} />
           <Text style={styles.infoText}>
             Metrics are updated every 60 seconds. Pull down to refresh manually.
           </Text>
-        </Surface>
+        </Card>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
-  statusIndicator: { flexDirection: 'row', alignItems: 'center' },
-  statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: spacing.sm },
-  statusText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
-  content: { flex: 1 },
-  scrollContent: { padding: spacing.lg },
+  headerTitle: { 
+    ...typography.h1,
+    fontSize: 28,
+    marginBottom: spacing.xs,
+  },
+  statusIndicator: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+  },
+  statusDot: { 
+    width: 6, 
+    height: 6, 
+    borderRadius: 3, 
+    marginRight: 8 
+  },
+  statusText: { 
+    ...typography.labelSmall,
+    fontSize: 10, 
+    color: colors.success,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  content: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
+    paddingBottom: 100,
+  },
+  sectionLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 1.5,
+    marginBottom: spacing.md,
+    fontSize: 10,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -106,35 +145,32 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '47%',
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     position: 'relative',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    minHeight: 140,
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.md
   },
   metricValue: {
+    ...typography.h2,
     fontSize: 22,
-    fontWeight: '800',
     color: colors.text,
-    marginBottom: spacing.xs
+    marginBottom: 2
   },
   metricName: {
+    ...typography.label,
     fontSize: 13,
-    fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs
+    marginBottom: 4
   },
   metricDesc: {
+    ...typography.bodySmall,
     fontSize: 11,
     color: colors.textLight,
     lineHeight: 14
@@ -147,19 +183,17 @@ const styles = StyleSheet.create({
     height: 3
   },
   infoCard: {
-    backgroundColor: colors.info + '10',
-    borderRadius: 12,
-    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.info + '30'
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.borderLight,
   },
   infoText: {
     flex: 1,
+    ...typography.bodySmall,
+    color: colors.textSecondary,
     fontSize: 13,
-    color: colors.text,
     lineHeight: 18
   }
 });

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Text, Surface, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { ExportService } from '@/models/services/ExportService';
-import { colors, spacing } from '@/views/styles/theme';
+import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
+import { Card } from '@/views/components/common/Card';
 
 export const ActivityLogsScreen = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -72,41 +73,43 @@ export const ActivityLogsScreen = () => {
   if (loading) return <Loading message="Loading activity logs..." />;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Activity Logs</Text>
+        <View>
+          <Text style={styles.headerTitle}>System Logs</Text>
+          <Text style={styles.headerSubtitle}>Monitor real-time platform activity</Text>
+        </View>
         <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
-          <MaterialCommunityIcons name="download" size={20} color={colors.primary} />
+          <MaterialCommunityIcons name="download" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-        <View style={styles.filters}>
-          <Chip selected={severityFilter === 'all'} onPress={() => setSeverityFilter('all')}>
-            All
-          </Chip>
-          <Chip selected={severityFilter === 'info'} onPress={() => setSeverityFilter('info')}>
-            Info
-          </Chip>
-          <Chip selected={severityFilter === 'success'} onPress={() => setSeverityFilter('success')}>
-            Success
-          </Chip>
-          <Chip selected={severityFilter === 'warning'} onPress={() => setSeverityFilter('warning')}>
-            Warning
-          </Chip>
-          <Chip selected={severityFilter === 'error'} onPress={() => setSeverityFilter('error')}>
-            Error
-          </Chip>
-        </View>
-      </ScrollView>
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+          <View style={styles.filters}>
+            {['all', 'info', 'success', 'warning', 'error'].map((s) => (
+              <Chip 
+                key={s}
+                selected={severityFilter === s} 
+                onPress={() => setSeverityFilter(s)}
+                style={styles.chip}
+                textStyle={styles.chipText}
+                compact
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </Chip>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.resultCount}>{filteredLogs.length} log entries</Text>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.resultCount}>SHOWING {filteredLogs.length} EVENTS</Text>
 
         {filteredLogs.map((log, index) => (
-          <Surface key={log.id || index} style={styles.logCard} elevation={1}>
+          <Card key={log.id || index} variant="elevated" padding="md" style={styles.logCard}>
             <View style={styles.logHeader}>
-              <View style={[styles.iconBox, { backgroundColor: getSeverityColor(log.severity) + '20' }]}>
+              <View style={[styles.iconBox, { backgroundColor: getSeverityColor(log.severity) + '10' }]}>
                 <MaterialCommunityIcons
                   name={getActionIcon(log.action_type) as any}
                   size={20}
@@ -124,96 +127,157 @@ export const ActivityLogsScreen = () => {
                   })}
                 </Text>
               </View>
-              <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(log.severity) + '20' }]}>
+              <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(log.severity) + '15' }]}>
                 <Text style={[styles.severityText, { color: getSeverityColor(log.severity) }]}>
                   {log.severity}
                 </Text>
               </View>
             </View>
-            <Text style={styles.logDesc}>{log.description}</Text>
-          </Surface>
+            <View style={styles.logBody}>
+              <View style={styles.logLine} />
+              <Text style={styles.logDesc}>{log.description}</Text>
+            </View>
+          </Card>
         ))}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
-  exportBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center'
+  headerTitle: { 
+    ...typography.h1,
+    fontSize: 28,
   },
-  filterScroll: { maxHeight: 50, marginVertical: spacing.sm },
-  filters: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: spacing.sm },
-  content: { flex: 1 },
-  scrollContent: { padding: spacing.md },
-  resultCount: {
-    fontSize: 13,
+  headerSubtitle: {
+    ...typography.body,
     color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 2,
+  },
+  exportBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  filterContainer: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    backgroundColor: colors.surface,
+  },
+  filterScroll: { 
+    maxHeight: 52, 
+    marginVertical: spacing.sm 
+  },
+  filters: { 
+    flexDirection: 'row', 
+    paddingHorizontal: spacing.screen, 
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  chip: { 
+    height: 32,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 0,
+  },
+  chipText: {
+    ...typography.labelSmall,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginVertical: 0,
+    marginHorizontal: 4,
+  },
+  content: { 
+    flex: 1 
+  },
+  scrollContent: { 
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.lg,
+    paddingBottom: 100 
+  },
+  resultCount: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 1.5,
     marginBottom: spacing.md,
-    fontWeight: '600'
+    fontSize: 10,
   },
   logCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: spacing.md,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight
   },
   logHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md
   },
-  logInfo: { flex: 1 },
+  logInfo: { 
+    flex: 1 
+  },
   logAction: {
-    fontSize: 15,
-    fontWeight: '700',
+    ...typography.label,
     color: colors.text,
     textTransform: 'capitalize',
-    marginBottom: 2
+    fontSize: 15,
   },
-  logTime: { fontSize: 12, color: colors.textLight },
+  logTime: { 
+    ...typography.bodySmall,
+    color: colors.textLight,
+    fontSize: 11,
+    marginTop: 2,
+  },
   severityBadge: {
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8
+    borderRadius: radius.sm,
   },
   severityText: {
-    fontSize: 11,
-    fontWeight: '700',
+    ...typography.labelSmall,
+    fontSize: 9,
+    fontWeight: '800',
     textTransform: 'uppercase'
   },
+  logBody: {
+    flexDirection: 'row',
+    marginTop: spacing.sm,
+    paddingLeft: 4,
+  },
+  logLine: {
+    width: 2,
+    backgroundColor: colors.borderLight,
+    borderRadius: 1,
+    marginRight: spacing.md,
+    marginLeft: 18,
+  },
   logDesc: {
-    fontSize: 14,
+    flex: 1,
+    ...typography.body,
     color: colors.textSecondary,
-    lineHeight: 20,
-    marginLeft: 48
+    fontSize: 13,
+    lineHeight: 18,
   }
 });
