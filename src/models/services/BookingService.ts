@@ -2,7 +2,7 @@ import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { FareCalculationService } from './FareCalculationService';
 import { NotificationService } from './NotificationService';
-import { Booking, Location } from '@/models/types';
+import { Booking, Location, Rating } from '@/models/types';
 
 export class BookingService {
   bookingRepo = new BookingRepository();
@@ -60,6 +60,10 @@ export class BookingService {
     const booking = await this.bookingRepo.updateStatus(bookingId, 'completed');
     if (booking.driver_id) await this.userRepo.updateDriverStatus(booking.driver_id, 'online');
     return booking;
+  }
+
+  async rateTrip(bookingId: string, rating: Rating): Promise<Booking> {
+    return await this.bookingRepo.submitRating(bookingId, rating);
   }
 
   async cancelBooking(bookingId: string): Promise<Booking> {

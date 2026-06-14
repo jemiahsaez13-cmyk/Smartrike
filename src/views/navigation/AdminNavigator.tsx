@@ -4,9 +4,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AdminDashboard } from '@/views/screens/admin/AdminDashboard';
 import { UserManagementScreen } from '@/views/screens/admin/UserManagementScreen';
-import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
 import { ActivityLogsScreen } from '@/views/screens/admin/ActivityLogsScreen';
 import { SystemHealthScreen } from '@/views/screens/admin/SystemHealthScreen';
+import { FranchiseManagementScreen } from '@/views/screens/admin/FranchiseManagementScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
 import { colors } from '@/views/styles/theme';
 
@@ -42,15 +42,15 @@ const AdminTabs = () => (
         tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="view-dashboard-outline" size={size + 4} color={color} />
       }}
     />
-    <Tab.Screen 
-      name="Analytics" 
-      component={AnalyticsScreen} 
+    <Tab.Screen
+      name="MTOP"
+      component={FranchiseManagementScreen}
       options={{
-        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="chart-box-outline" size={size + 4} color={color} />
+        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="card-account-details-outline" size={size + 4} color={color} />
       }}
     />
-    <Tab.Screen 
-      name="Logs" 
+    <Tab.Screen
+      name="Logs"
       component={ActivityLogsScreen} 
       options={{
         tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="text-box-outline" size={size + 4} color={color} />

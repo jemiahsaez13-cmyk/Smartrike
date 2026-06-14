@@ -378,6 +378,69 @@ export const seedNotifications = () => [
   },
 ];
 
+const docs = (uploaded: boolean) =>
+  [
+    'Barangay Clearance',
+    'Community Tax Certificate (Cedula)',
+    'OR/CR of Tricycle Unit',
+    'Proof of Ownership',
+    'TODA Membership Certificate',
+  ].map((name) => ({ name, uploaded }));
+
+export const seedFranchiseApplications = () => [
+  {
+    id: 'fr-1',
+    driver_id: 'demo-driver',
+    driver_name: 'Kuya Jojo',
+    toda: 'FEDTODAB',
+    plate_number: 'ABC-1234',
+    type: 'new',
+    status: 'issued',
+    documents: docs(true),
+    inspection_result: 'passed',
+    payment_status: 'paid',
+    fees: 1500,
+    mtop_number: 'MTOP-2024-0147',
+    remarks: 'Franchise active and in good standing.',
+    created_at: iso(180 * DAY),
+    updated_at: iso(150 * DAY),
+  },
+  {
+    id: 'fr-2',
+    driver_id: 'drv-2',
+    driver_name: 'Juan Dela Cruz',
+    toda: 'FEDTODAB',
+    plate_number: 'XYZ-5678',
+    type: 'new',
+    status: 'document_verification',
+    documents: docs(true),
+    inspection_result: 'pending',
+    payment_status: 'pending',
+    fees: 1500,
+    mtop_number: null,
+    remarks: null,
+    created_at: iso(4 * DAY),
+    updated_at: iso(2 * DAY),
+  },
+  {
+    id: 'fr-3',
+    driver_id: 'drv-3',
+    driver_name: 'Pedro Penduko',
+    toda: 'FEDTODAB',
+    plate_number: 'LMN-9012',
+    type: 'renewal',
+    status: 'inspection',
+    documents: docs(true),
+    inspection_result: 'pending',
+    payment_status: 'pending',
+    fees: 1000,
+    mtop_number: null,
+    remarks: 'Renewal of expired MTOP.',
+    created_at: iso(6 * DAY),
+    updated_at: iso(1 * DAY),
+  },
+];
+
 export const seedDriverLocations = () => [
   { driver_id: 'demo-driver', latitude: 13.4452, longitude: 121.8401, timestamp: iso(2 * MIN) },
   { driver_id: 'drv-2', latitude: 13.4477, longitude: 121.8389, timestamp: iso(5 * MIN) },
@@ -391,4 +454,5 @@ export const buildSeedDatabase = (): Record<string, any[]> => ({
   activity_logs: seedActivityLogs(),
   notifications: seedNotifications(),
   driver_locations: seedDriverLocations(),
+  franchise_applications: seedFranchiseApplications(),
 });

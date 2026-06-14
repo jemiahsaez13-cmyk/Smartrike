@@ -8,6 +8,7 @@ import { useAppDispatch } from '@/controllers/store';
 import { updateBookingStatus } from '@/controllers/slices/bookingSlice';
 import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
+import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, spacing, shadows } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -90,7 +91,7 @@ export const ConfirmBookingScreen = () => {
             ]} 
           />
           <Surface style={styles.centerIcon} elevation={4}>
-            <MaterialCommunityIcons name="bike" size={40} color="#fff" />
+            <TricycleIcon size={64} color="#fff" />
           </Surface>
         </View>
 

@@ -6,6 +6,7 @@ import locationReducer from '../slices/locationSlice';
 import driverReducer from '../slices/driverSlice';
 import notificationReducer from '../slices/notificationSlice';
 import paymentReducer from '../slices/paymentSlice';
+import franchiseReducer from '../slices/franchiseSlice';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -14,7 +15,8 @@ const rootReducer = combineReducers({
   location: locationReducer,
   driver: driverReducer,
   notification: notificationReducer,
-  payment: paymentReducer
+  payment: paymentReducer,
+  franchise: franchiseReducer
 });
 
 export default rootReducer;
