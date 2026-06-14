@@ -168,7 +168,9 @@ export const ActiveTripScreen = () => {
             <MaterialCommunityIcons name="cash" size={24} color={colors.success} style={styles.detailIcon} />
             <View style={styles.detailTextContainer}>
               <Text style={styles.detailLabel}>Estimated Fare</Text>
-              <Text style={styles.detailValue}>₱{currentBooking?.total_fare || '45.00'}</Text>
+              <Text style={[styles.detailValue, typography.currency]}>
+                ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '45.00'}
+              </Text>
             </View>
           </View>
         </View>

@@ -125,14 +125,14 @@ export const DriverDashboard = () => {
 
       <View style={styles.body}>
         <View style={styles.statsRow}>
-          <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(0)}`} icon="cash" color={colors.success} />
+          <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(2)}`} icon="cash" color={colors.success} />
           <StatBox label="Rating" value="4.8" icon="star" color={colors.warning} />
         </View>
 
         <Card variant="elevated" padding="lg" style={styles.goalCard}>
           <View style={styles.goalHeader}>
             <Text style={styles.goalTitle}>Daily Goal</Text>
-            <Text style={styles.goalValue}>₱{dailyEarnings.toFixed(0)} / ₱800</Text>
+            <Text style={[styles.goalValue, typography.currency]}>₱{dailyEarnings.toFixed(2)} / ₱800.00</Text>
           </View>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${Math.min(100, (dailyEarnings / 800) * 100)}%` }]} />
@@ -180,7 +180,7 @@ export const DriverDashboard = () => {
                 <Text style={styles.activityTitle}>Trip Completed</Text>
                 <Text style={styles.activityTime}>10:30 AM • Market to Plaza</Text>
               </View>
-              <Text style={styles.activityAmt}>+₱45.00</Text>
+              <Text style={[styles.activityAmt, typography.currency]}>+₱45.00</Text>
             </View>
           ))}
         </Card>

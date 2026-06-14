@@ -171,4 +171,5 @@ export const typography = {
   labelSmall: { ...fonts.poppins.medium, fontSize: 12, lineHeight: 16, color: colors.textMuted },
   button: { ...fonts.poppins.semibold, fontSize: 16, lineHeight: 24, letterSpacing: 0 },
   number: { ...fonts.poppins.bold, letterSpacing: -0.5, color: colors.text },
+  currency: { ...fonts.poppins.bold, letterSpacing: 0, color: colors.text },
 };

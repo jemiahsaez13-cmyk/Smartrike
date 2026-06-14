@@ -63,7 +63,7 @@ export const BookingRequestScreen = () => {
                   <Text style={styles.passengerName}>New Ride Request</Text>
                 </View>
               </View>
-              <Text style={styles.fareAmount}>₱{request.total_fare}</Text>
+              <Text style={[styles.fareAmount, typography.currency]}>₱{request.total_fare.toFixed(2)}</Text>
             </View>
 
             <View style={styles.divider} />

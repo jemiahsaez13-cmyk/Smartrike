@@ -13,9 +13,9 @@ import { Card } from '@/views/components/common/Card';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 const POPULAR_DESTINATIONS = [
-  { id: 1, title: 'Public Market', sub: 'Boac town center', icon: 'storefront-outline', eta: '4 min', fare: '₱45' },
-  { id: 2, title: 'Marinduque State College', sub: 'Tanza, Boac', icon: 'school-outline', eta: '9 min', fare: '₱68' },
-  { id: 3, title: 'Provincial Hospital', sub: 'Emergency and outpatient', icon: 'hospital-building', eta: '7 min', fare: '₱60' },
+  { id: 1, title: 'Public Market', sub: 'Boac town center', icon: 'storefront-outline', eta: '4 min', fare: '₱45.00' },
+  { id: 2, title: 'Marinduque State College', sub: 'Tanza, Boac', icon: 'school-outline', eta: '9 min', fare: '₱68.00' },
+  { id: 3, title: 'Provincial Hospital', sub: 'Emergency and outpatient', icon: 'hospital-building', eta: '7 min', fare: '₱60.00' },
 ];
 
 export const PassengerDashboard = () => {
@@ -122,7 +122,7 @@ export const PassengerDashboard = () => {
                   <MaterialCommunityIcons name="radar" size={16} color={colors.success} />
                   <Text style={styles.activeBadgeText}>ON THE WAY</Text>
                 </View>
-                <Text style={styles.activeFare}>₱{currentBooking.total_fare}</Text>
+                <Text style={[styles.activeFare, typography.currency]}>₱{currentBooking.total_fare.toFixed(2)}</Text>
               </View>
 
               <View style={styles.tripLocations}>
@@ -205,7 +205,7 @@ export const PassengerDashboard = () => {
               <View style={styles.placeInfo}>
                 <Text style={styles.placeTitle}>{item.title}</Text>
                 <Text style={styles.placeSub}>{item.sub}</Text>
-                <Text style={styles.placeMeta}>{item.eta} • {item.fare}</Text>
+                <Text style={[styles.placeMeta, typography.currency, { color: colors.secondary }]}>{item.eta} • {item.fare}</Text>
               </View>
               <Button variant="secondary" compact style={styles.bookMiniBtn}>Book</Button>
             </Card>

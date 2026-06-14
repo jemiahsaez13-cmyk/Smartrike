@@ -248,7 +248,7 @@ export const FranchiseScreen = () => {
 
         <View style={styles.feeRow}>
           <Text style={styles.feeLabel}>Filing & Franchise Fees</Text>
-          <Text style={styles.feeValue}>₱1,500.00</Text>
+          <Text style={[styles.feeValue, typography.currency]}>₱1,500.00</Text>
         </View>
 
         <Button

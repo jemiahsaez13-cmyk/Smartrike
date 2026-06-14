@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Card, Text, Button } from 'react-native-paper';
 import { Booking } from '@/models/types';
-import { colors, radius, spacing } from '@/views/styles/theme';
+import { colors, radius, spacing, typography } from '@/views/styles/theme';
 
 interface BookingCardProps {
   booking: Booking;
@@ -33,7 +33,7 @@ export const BookingCard: React.FC<BookingCardProps> = ({ booking, onPress }) =>
         </View>
         <Text variant="bodyMedium" style={styles.routeText}>From: {booking.pickup_location.address}</Text>
         <Text variant="bodyMedium" style={styles.routeText}>To: {booking.dropoff_location.address}</Text>
-        <Text variant="titleMedium" style={styles.fare}>₱{booking.total_fare.toFixed(2)}</Text>
+        <Text style={[styles.fare, typography.currency]}>₱{booking.total_fare.toFixed(2)}</Text>
       </Card.Content>
       {onPress && <Card.Actions><Button onPress={onPress}>View Details</Button></Card.Actions>}
     </Card>

@@ -45,7 +45,7 @@ export const AdminDashboard = () => {
           </Text>
         </View>
       </View>
-      <Text style={styles.kpiValue}>{item.value}</Text>
+      <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
       <Text style={styles.kpiTitle}>{item.title}</Text>
     </Surface>
   );

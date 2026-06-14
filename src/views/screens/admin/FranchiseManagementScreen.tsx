@@ -9,7 +9,7 @@ import {
   FranchiseStatus,
   FRANCHISE_STATUS_LABEL,
 } from '@/models/entities/Franchise';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, spacing, shadows, typography } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 
 // Maps the current status to the next admin action.
@@ -138,8 +138,8 @@ export const FranchiseManagementScreen = () => {
                 </View>
                 <View style={styles.metaItem}>
                   <MaterialCommunityIcons name="cash" size={16} color={colors.textLight} />
-                  <Text style={styles.metaText}>
-                    {app.payment_status === 'paid' ? `₱${app.fees} paid` : `₱${app.fees} due`}
+                  <Text style={[styles.metaText, typography.currency, { fontSize: 12 }]}>
+                    {app.payment_status === 'paid' ? `₱${app.fees.toFixed(2)} paid` : `₱${app.fees.toFixed(2)} due`}
                   </Text>
                 </View>
               </View>

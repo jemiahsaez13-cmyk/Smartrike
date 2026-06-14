@@ -136,8 +136,8 @@ export const TripHistoryScreen = () => {
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryValue}>
-              ₱{filteredBookings.reduce((sum, booking) => sum + booking.total_fare, 0).toFixed(0)}
+            <Text style={[styles.summaryValue, typography.currency]}>
+              ₱{filteredBookings.reduce((sum, booking) => sum + booking.total_fare, 0).toFixed(2)}
             </Text>
             <Text style={styles.summaryLabel}>total fares</Text>
           </View>
@@ -164,7 +164,7 @@ export const TripHistoryScreen = () => {
                     {booking.status}
                   </Text>
                 </View>
-                <Text style={styles.fareText}>₱{booking.total_fare}</Text>
+                <Text style={[styles.fareText, typography.currency]}>₱{booking.total_fare.toFixed(2)}</Text>
               </View>
               
               <View style={styles.locationRow}>

@@ -156,7 +156,9 @@ export const ConfirmBookingScreen = () => {
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Estimated Fare</Text>
-            <Text style={styles.summaryFare}>₱{currentBooking?.total_fare || '45.00'}</Text>
+            <Text style={[styles.summaryFare, typography.currency]}>
+              ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '45.00'}
+            </Text>
           </View>
         </Surface>
 

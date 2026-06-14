@@ -382,7 +382,7 @@ export const BookRideScreen = () => {
                 </Text>
               </View>
             </View>
-            <Text style={styles.farePrice}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
+            <Text style={[styles.farePrice, typography.currency]}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
           </Surface>
 
           <Button
