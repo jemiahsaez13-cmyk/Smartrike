@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Alert, Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Text, Surface } from 'react-native-paper';
+import { Alert, Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,7 @@ import { useBooking } from '@/controllers/hooks/useBooking';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
+import { Card } from '@/views/components/common/Card';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 const POPULAR_DESTINATIONS = [
@@ -29,16 +30,16 @@ export const PassengerDashboard = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 320,
+        duration: 800,
         useNativeDriver: true,
       }),
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 320,
+        duration: 800,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+  }, []);
 
   if (loading) return <Loading message="Syncing with TODA..." />;
 
@@ -57,13 +58,18 @@ export const PassengerDashboard = () => {
     navigation.navigate('BookRide', { destination });
   };
 
-  const QuickAction = ({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) => (
-    <TouchableOpacity style={styles.quickAction} onPress={onPress} activeOpacity={0.78}>
-      <View style={styles.quickIcon}>
-        <MaterialCommunityIcons name={icon} size={24} color={colors.primary} />
-      </View>
-      <Text style={styles.quickLabel}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+  const QuickAction = ({ icon, label, onPress, color = colors.primary }: any) => (
+    <TouchableOpacity 
+      style={styles.quickAction} 
+      onPress={onPress} 
+      activeOpacity={0.8}
+    >
+      <Card variant="elevated" padding="md" style={styles.quickActionCard}>
+        <View style={styles.quickIcon}>
+          <MaterialCommunityIcons name={icon} size={24} color={color} />
+        </View>
+        <Text style={styles.quickLabel}>{label}</Text>
+      </Card>
     </TouchableOpacity>
   );
 
@@ -76,29 +82,27 @@ export const PassengerDashboard = () => {
         style={styles.header}
       >
         <View style={styles.headerTop}>
-          <View style={styles.headerText}>
-            <Text style={styles.greeting}>Good day</Text>
-            <Text style={styles.name} numberOfLines={1}>{user?.name || 'Passenger'}</Text>
+          <View>
+            <Text style={styles.greeting}>GOOD DAY,</Text>
+            <Text style={styles.name}>{user?.name?.split(' ')[0] || 'Passenger'}</Text>
           </View>
           <TouchableOpacity
             style={styles.profileBtn}
             onPress={() => navigation.navigate('Profile')}
-            activeOpacity={0.8}
-            accessibilityLabel="Open profile"
           >
-            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
+            <LinearGradient
+              colors={['#fff', '#f0f0f0']}
+              style={styles.avatarGradient}
+            >
+              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.headerSummary}>
-          <View style={styles.summaryPill}>
-            <View style={[styles.summaryDot, { backgroundColor: currentBooking ? colors.success : colors.accent }]} />
-            <Text style={styles.summaryText}>
-              {currentBooking ? 'Trip active' : 'Drivers nearby'}
-            </Text>
-          </View>
-          <Text style={styles.summaryCopy}>
-            {currentBooking ? 'Track your ride and trip fare in real time.' : 'Book a verified tricycle around Boac.'}
+        <View style={styles.bookingStatusPill}>
+          <View style={[styles.statusDot, { backgroundColor: currentBooking ? colors.success : colors.accent }]} />
+          <Text style={styles.statusText}>
+            {currentBooking ? 'TRIP ACTIVE' : 'DRIVERS NEARBY'}
           </Text>
         </View>
       </LinearGradient>
@@ -108,132 +112,103 @@ export const PassengerDashboard = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Surface style={styles.primaryCard} elevation={2}>
+        <Card variant="elevated" padding="lg" style={styles.primaryCard}>
           {currentBooking ? (
             <>
-              <View style={styles.cardHeader}>
-                <View style={styles.statusBadge}>
-                  <MaterialCommunityIcons name="map-marker-path" size={16} color={colors.success} />
-                  <Text style={styles.statusText}>Trip in progress</Text>
+              <View style={styles.activeTripHeader}>
+                <View style={styles.activeBadge}>
+                  <MaterialCommunityIcons name="radar" size={16} color={colors.success} />
+                  <Text style={styles.activeBadgeText}>ON THE WAY</Text>
                 </View>
-                <Text style={styles.fareAmount}>₱{currentBooking.total_fare}</Text>
+                <Text style={styles.activeFare}>₱{currentBooking.total_fare}</Text>
               </View>
 
-              <View style={styles.tripPath}>
-                <View style={styles.pathLine} />
+              <View style={styles.tripLocations}>
+                <View style={styles.locationLine} />
                 <View style={styles.locationRow}>
-                  <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {currentBooking.pickup_location.address}
-                  </Text>
+                  <View style={[styles.locationDot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.pickup_location.address}</Text>
                 </View>
                 <View style={styles.locationRow}>
-                  <View style={[styles.dot, { backgroundColor: colors.accent }]} />
-                  <Text style={styles.locationText} numberOfLines={1}>
-                    {currentBooking.dropoff_location.address}
-                  </Text>
+                  <View style={[styles.locationDot, { backgroundColor: colors.accent }]} />
+                  <Text style={styles.locationName} numberOfLines={1}>{currentBooking.dropoff_location.address}</Text>
                 </View>
               </View>
 
               <Button
                 variant="primary"
-                icon="map-marker"
                 onPress={() => navigation.navigate('ActiveTrip')}
               >
-                Track Ride
+                Track Active Ride
               </Button>
             </>
           ) : (
             <>
-              <View style={styles.bookContent}>
-                <View style={styles.bookCopy}>
-                  <Text style={styles.bookEyebrow}>Passenger booking</Text>
-                  <Text style={styles.bookTitle}>Where to next?</Text>
-                  <Text style={styles.bookSubtitle}>Choose a destination and see your TODA fare before confirming.</Text>
+              <View style={styles.bookHeader}>
+                <View style={styles.bookText}>
+                  <Text style={styles.bookTitle}>Where to?</Text>
+                  <Text style={styles.bookSub}>Safe & affordable rides in Boac.</Text>
                 </View>
                 <View style={styles.bookIconBox}>
-                  <TricycleIcon size={70} color={colors.primary} />
+                  <TricycleIcon size={80} color={colors.primary} />
                 </View>
               </View>
-              <View style={styles.readinessRow}>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.readinessValue}>42</Text>
-                  <Text style={styles.readinessLabel}>drivers</Text>
+              
+              <View style={styles.statsGrid}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>42</Text>
+                  <Text style={styles.statLabel}>Drivers</Text>
                 </View>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.readinessValue}>4 min</Text>
-                  <Text style={styles.readinessLabel}>pickup</Text>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>4m</Text>
+                  <Text style={styles.statLabel}>ETA</Text>
                 </View>
-                <View style={styles.readinessItem}>
-                  <Text style={styles.readinessValue}>Cash</Text>
-                  <Text style={styles.readinessLabel}>payment</Text>
+                <View style={styles.statBox}>
+                  <Text style={styles.statNum}>Fixed</Text>
+                  <Text style={styles.statLabel}>Rates</Text>
                 </View>
               </View>
+
               <Button
                 variant="primary"
-                icon="arrow-right"
-                contentStyle={styles.primaryButtonContent}
                 onPress={() => navigation.navigate('BookRide')}
               >
-                Book a Ride
+                Book a Ride Now
               </Button>
             </>
           )}
-        </Surface>
+        </Card>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-        </View>
-        <View style={styles.quickActionsGrid}>
-          <QuickAction icon="history" label="Trip History" onPress={() => navigation.navigate('History')} />
-          <QuickAction icon="bookmark-outline" label="Saved Places" onPress={handleSavedPlaces} />
-          <QuickAction icon="message-text-outline" label="Support" onPress={handleSupport} />
-          <QuickAction icon="account-cog-outline" label="Profile Settings" onPress={() => navigation.navigate('Profile')} />
+        <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+        <View style={styles.actionsGrid}>
+          <QuickAction icon="history" label="History" onPress={() => navigation.navigate('History')} />
+          <QuickAction icon="bookmark-outline" label="Saved" onPress={handleSavedPlaces} color={colors.secondary} />
+          <QuickAction icon="message-text-outline" label="Support" onPress={handleSupport} color={colors.info} />
+          <QuickAction icon="account-cog-outline" label="Profile" onPress={() => navigation.navigate('Profile')} color={colors.primary500} />
         </View>
 
-        <Surface style={styles.serviceCard} elevation={1}>
-          <View style={styles.serviceHeader}>
-            <View style={styles.serviceIcon}>
-              <MaterialCommunityIcons name="radar" size={22} color={colors.secondary} />
-            </View>
-            <View style={styles.serviceCopy}>
-              <Text style={styles.serviceTitle}>Live service window</Text>
-              <Text style={styles.serviceSubtitle}>Market and terminal zones are moving normally.</Text>
-            </View>
-          </View>
-          <View style={styles.serviceMeter}>
-            <View style={styles.serviceMeterFill} />
-          </View>
-          <View style={styles.serviceFooter}>
-            <Text style={styles.serviceMeta}>Demand: moderate</Text>
-            <Text style={styles.serviceMeta}>Queue: 3 requests</Text>
-          </View>
-        </Surface>
-
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Popular Destinations</Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleSavedPlaces}>
+          <Text style={styles.sectionLabel}>POPULAR PLACES</Text>
+          <TouchableOpacity onPress={handleSavedPlaces}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.recentList}>
-          {POPULAR_DESTINATIONS.map(item => (
-            <TouchableOpacity key={item.id} style={styles.recentItem} activeOpacity={0.76} onPress={() => bookDestination(item.title)}>
-              <View style={styles.recentIconBox}>
-                <MaterialCommunityIcons name={item.icon as any} size={22} color={colors.primary} />
+        {POPULAR_DESTINATIONS.map(item => (
+          <TouchableOpacity key={item.id} onPress={() => bookDestination(item.title)} activeOpacity={0.8}>
+            <Card variant="elevated" padding="md" style={styles.placeCard}>
+              <View style={styles.placeIconBox}>
+                <MaterialCommunityIcons name={item.icon as any} size={24} color={colors.primary} />
               </View>
-              <View style={styles.recentInfo}>
-                <Text style={styles.recentTitle}>{item.title}</Text>
-                <Text style={styles.recentSub}>{item.sub}</Text>
-                <Text style={styles.recentMeta}>{item.eta} pickup • {item.fare} estimate</Text>
+              <View style={styles.placeInfo}>
+                <Text style={styles.placeTitle}>{item.title}</Text>
+                <Text style={styles.placeSub}>{item.sub}</Text>
+                <Text style={styles.placeMeta}>{item.eta} • {item.fare}</Text>
               </View>
-              <View style={styles.bookMiniBtn}>
-                <Text style={styles.bookMiniText}>Book</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <Button variant="secondary" compact style={styles.bookMiniBtn}>Book</Button>
+            </Card>
+          </TouchableOpacity>
+        ))}
       </Animated.ScrollView>
     </View>
   );
@@ -245,378 +220,264 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    minHeight: 230,
-    paddingTop: layout.headerTop,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    height: 280,
+    paddingTop: 60,
+    paddingHorizontal: spacing.screen,
   },
   headerTop: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  headerText: {
-    flex: 1,
-    paddingRight: spacing.md,
+    alignItems: 'center',
   },
   greeting: {
-    ...typography.body,
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 14,
+    ...typography.label,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    letterSpacing: 1.5,
   },
   name: {
-    ...typography.display,
-    color: '#FFFFFF',
-    fontSize: 28,
-    marginTop: spacing.xs,
-    letterSpacing: 0,
+    ...typography.h1,
+    color: '#fff',
+    fontSize: 32,
+    marginTop: -4,
   },
   profileBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    ...shadows.md,
+  },
+  avatarGradient: {
+    flex: 1,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    ...typography.title,
-    color: '#FFFFFF',
-    fontSize: 22,
+    ...typography.h2,
+    color: colors.primary,
   },
-  headerSummary: {
-    marginTop: spacing.xl,
-  },
-  summaryPill: {
-    alignSelf: 'flex-start',
+  bookingStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 24,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  summaryDot: {
+  statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: spacing.sm,
-  },
-  summaryText: {
-    ...typography.label,
-    color: '#FFFFFF',
-    fontSize: 13,
-  },
-  summaryCopy: {
-    ...typography.body,
-    color: 'rgba(255,255,255,0.86)',
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: spacing.md,
-    maxWidth: 310,
-  },
-  scroll: {
-    flex: 1,
-    marginTop: -28,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: layout.contentBottom,
-  },
-  primaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.lg,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    gap: spacing.xs,
+    marginRight: 8,
   },
   statusText: {
     ...typography.label,
+    color: '#fff',
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  scroll: {
+    flex: 1,
+    marginTop: -80,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.screen,
+    paddingBottom: 40,
+  },
+  primaryCard: {
+    ...shadows.xl,
+    marginBottom: 32,
+  },
+  activeTripHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  activeBadgeText: {
+    ...typography.label,
     color: colors.success,
-    fontSize: 12,
+    fontSize: 10,
   },
-  fareAmount: {
-    ...typography.number,
+  activeFare: {
+    ...typography.h2,
     color: colors.text,
-    fontSize: 24,
   },
-  tripPath: {
-    marginBottom: spacing.lg,
-    paddingLeft: 22,
+  tripLocations: {
+    marginBottom: 24,
+    paddingLeft: 24,
     position: 'relative',
   },
-  pathLine: {
+  locationLine: {
     position: 'absolute',
-    left: 5,
-    top: 12,
-    bottom: 12,
+    left: 7,
+    top: 10,
+    bottom: 10,
     width: 2,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderLight,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 36,
+    height: 40,
   },
-  dot: {
+  locationDot: {
     position: 'absolute',
-    left: -22,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
+    left: -24,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
     borderColor: colors.surface,
+    ...shadows.sm,
   },
-  locationText: {
+  locationName: {
     ...typography.subtitle,
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: 15,
+    color: colors.text,
   },
-  bookContent: {
+  bookHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: 24,
   },
-  bookCopy: {
+  bookText: {
     flex: 1,
-    paddingRight: spacing.md,
-  },
-  bookEyebrow: {
-    ...typography.label,
-    color: colors.primary,
-    fontSize: 12,
-    marginBottom: spacing.xs,
   },
   bookTitle: {
-    ...typography.display,
+    ...typography.h1,
     color: colors.text,
-    fontSize: 28,
-    letterSpacing: 0,
   },
-  bookSubtitle: {
+  bookSub: {
     ...typography.body,
     color: colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: spacing.xs,
+    marginTop: 4,
   },
   bookIconBox: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.xl,
-    backgroundColor: colors.primaryLight,
+    width: 80,
+    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
+    // NO BACKGROUND NO BORDER
   },
-  readinessRow: {
+  statsGrid: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: 12,
+    marginBottom: 24,
   },
-  readinessItem: {
+  statBox: {
     flex: 1,
-    minHeight: 66,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderLight,
-    padding: spacing.sm,
+  },
+  statNum: {
+    ...typography.h3,
+    color: colors.primary,
+  },
+  statLabel: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 10,
+    textTransform: 'uppercase',
+  },
+  sectionLabel: {
+    ...typography.label,
+    color: colors.textMuted,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 32,
+  },
+  quickAction: {
+    width: '48%',
+  },
+  quickActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  quickIcon: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    // NO BACKGROUND NO BORDER
   },
-  readinessValue: {
-    ...typography.number,
+  quickLabel: {
+    ...typography.label,
     color: colors.text,
-    fontSize: 17,
-  },
-  readinessLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  primaryButtonContent: {
-    minHeight: 52,
+    fontSize: 13,
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.title,
-    color: colors.text,
-    fontSize: 18,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   seeAll: {
     ...typography.label,
     color: colors.primary,
-    fontSize: 14,
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  quickAction: {
-    width: '48.5%',
-    minHeight: 86,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.md,
-  },
-  quickIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  quickLabel: {
-    ...typography.label,
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-  },
-  serviceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-  },
-  serviceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  serviceIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  serviceCopy: {
-    flex: 1,
-  },
-  serviceTitle: {
-    ...typography.subtitle,
-    color: colors.text,
-    fontSize: 15,
-  },
-  serviceSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  serviceMeter: {
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-    marginTop: spacing.md,
-  },
-  serviceMeterFill: {
-    width: '68%',
-    height: '100%',
-    backgroundColor: colors.success,
-    borderRadius: radius.pill,
-  },
-  serviceFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
-  },
-  serviceMeta: {
-    ...typography.body,
-    color: colors.textSecondary,
     fontSize: 12,
   },
-  recentList: {
-    gap: spacing.sm,
-  },
-  recentItem: {
+  placeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 68,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    marginBottom: 12,
+    backgroundColor: '#fff',
   },
-  recentIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.secondaryLight,
+  placeIconBox: {
+    width: 48,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
+    marginRight: 16,
+    // NO BACKGROUND NO BORDER
   },
-  recentInfo: {
+  placeInfo: {
     flex: 1,
   },
-  recentTitle: {
+  placeTitle: {
     ...typography.subtitle,
     color: colors.text,
-    fontSize: 16,
   },
-  recentSub: {
-    ...typography.body,
+  placeSub: {
+    ...typography.bodySmall,
     color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
   },
-  recentMeta: {
+  placeMeta: {
     ...typography.label,
     color: colors.secondary,
-    fontSize: 12,
-    marginTop: 3,
+    fontSize: 11,
+    marginTop: 2,
   },
   bookMiniBtn: {
-    minWidth: 54,
-    minHeight: 36,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  bookMiniText: {
-    ...typography.label,
-    color: '#FFFFFF',
-    fontSize: 12,
-  },
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: 18,
+  }
 });

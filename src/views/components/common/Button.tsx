@@ -1,11 +1,10 @@
 import React, { useRef } from 'react';
 import { Button as PaperButton, ButtonProps } from 'react-native-paper';
-import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients, radius, shadows, typography } from '@/views/styles/theme';
+import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp, View } from 'react-native';
+import { colors, radius, shadows, typography, spacing } from '@/views/styles/theme';
 
 interface CustomButtonProps extends Omit<ButtonProps, 'style'> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'gradient';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   style?: StyleProp<ViewStyle>;
   containerStyle?: StyleProp<ViewStyle>;
 }
@@ -24,9 +23,7 @@ export const Button: React.FC<CustomButtonProps> = ({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      speed: 28,
-      bounciness: 5,
+      toValue: 0.98,
       useNativeDriver: true,
     }).start();
   };
@@ -34,118 +31,116 @@ export const Button: React.FC<CustomButtonProps> = ({
   const handlePressOut = () => {
     Animated.spring(scaleAnim, {
       toValue: 1,
-      speed: 28,
-      bounciness: 6,
+      friction: 4,
+      tension: 40,
       useNativeDriver: true,
     }).start();
   };
 
-  const getMode = () => {
-    if (variant === 'outline') return 'outlined';
-    if (variant === 'ghost') return 'text';
-    if (variant === 'secondary') return 'contained-tonal';
-    return 'contained';
-  };
-
-  const isGradient = variant === 'gradient' || variant === 'primary';
-
-  const content = (
-    <PaperButton
-      mode={getMode()}
-      style={[
-        styles.button, 
-        isGradient && styles.gradientButton,
-        variant === 'outline' && styles.outlineButton,
-        variant === 'secondary' && styles.secondaryButton,
-        variant === 'ghost' && styles.ghostButton,
-        (disabled || loading) && styles.disabledButton,
-        style
-      ]}
-      labelStyle={[
-        styles.label,
-        variant === 'outline' && styles.outlineLabel,
-        variant === 'ghost' && styles.ghostLabel,
-        (disabled || loading) && styles.disabledLabel,
-      ]}
-      contentStyle={styles.content}
-      onPress={onPress}
-      disabled={disabled || loading}
-      loading={loading}
-      {...props}
-    >
-      {children}
-    </PaperButton>
-  );
-
+  const isOutlineOrGhost = variant === 'outline' || variant === 'ghost';
+  
   return (
     <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, containerStyle]}>
       <Pressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        onPress={onPress}
         disabled={disabled || loading}
-        accessibilityRole="button"
+        style={({ pressed }) => [
+          styles.pressable,
+          disabled && styles.disabled,
+          style
+        ]}
       >
-        {isGradient && !disabled && !loading ? (
-          <LinearGradient
-            colors={gradients.action}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.gradientContainer, style]}
-          >
-            {content}
-          </LinearGradient>
-        ) : (
-          content
-        )}
+        <View style={[
+          styles.buttonContainer,
+          variant === 'primary' && styles.primaryBtn,
+          variant === 'secondary' && styles.secondaryBtn,
+          variant === 'outline' && styles.outlineBtn,
+          variant === 'ghost' && styles.ghostBtn,
+          variant === 'danger' && styles.dangerBtn,
+        ]}>
+          {loading ? (
+            <PaperButton loading={true} children="" labelStyle={styles.hiddenLabel} />
+          ) : (
+            <PaperButton
+              mode="text"
+              style={styles.innerPaperButton}
+              labelStyle={[
+                styles.label,
+                (variant === 'primary' || variant === 'danger') && styles.textWhite,
+                variant === 'secondary' && styles.textPrimary,
+                variant === 'outline' && styles.textPrimary,
+                variant === 'ghost' && styles.textSecondary,
+              ]}
+              {...props}
+            >
+              {children}
+            </PaperButton>
+          )}
+        </View>
       </Pressable>
     </Animated.View>
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
+const styles = StyleSheet.create<any>({
+  pressable: {
     borderRadius: radius.md,
-    borderWidth: 0,
+    overflow: 'hidden',
   },
-  gradientButton: {
+  buttonContainer: {
+    minHeight: 48,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+  },
+  primaryBtn: {
+    backgroundColor: colors.primary,
+    ...shadows.sm,
+  },
+  secondaryBtn: {
+    backgroundColor: colors.surfaceHover,
+  },
+  outlineBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ghostBtn: {
+    backgroundColor: 'transparent',
+  },
+  dangerBtn: {
+    backgroundColor: colors.error,
+  },
+  innerPaperButton: {
+    margin: 0,
     backgroundColor: 'transparent',
     elevation: 0,
-    shadowOpacity: 0,
-  },
-  gradientContainer: {
-    borderRadius: radius.md,
-    ...shadows.md,
-  },
-  secondaryButton: {
-    backgroundColor: colors.secondaryLight,
-  },
-  ghostButton: {
-    backgroundColor: 'transparent',
-  },
-  disabledButton: {
-    opacity: 0.58,
-  },
-  outlineButton: {
-    borderColor: colors.primary,
-    borderWidth: 1,
-    backgroundColor: colors.surface,
   },
   label: {
-    ...typography.label,
-    fontSize: 16,
+    ...typography.button,
+    marginVertical: 0,
+    marginHorizontal: 0,
     letterSpacing: 0,
-    paddingVertical: 4,
   },
-  outlineLabel: {
+  textWhite: {
+    color: '#FFFFFF',
+  },
+  textPrimary: {
     color: colors.primary,
   },
-  ghostLabel: {
+  textSecondary: {
     color: colors.textSecondary,
   },
-  disabledLabel: {
-    color: colors.textLight,
+  hiddenLabel: {
+    fontSize: 0,
   },
-  content: {
-    minHeight: 52,
+  disabled: {
+    opacity: 0.5,
   }
 });
+
+

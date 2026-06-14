@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Animated } from 'react-native';
 import { TextInput, TextInputProps, Text } from 'react-native-paper';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
 
@@ -12,18 +12,41 @@ export const Input: React.FC<CustomInputProps> = ({
   errorText, 
   containerStyle, 
   mode = 'outlined',
+  onFocus,
+  onBlur,
   ...props 
 }) => {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const handleFocus = (args: any) => {
+    setIsFocused(true);
+    onFocus?.(args);
+  };
+
+  const handleBlur = (args: any) => {
+    setIsFocused(false);
+    onBlur?.(args);
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       <TextInput
         mode={mode}
         outlineColor={colors.border}
         activeOutlineColor={colors.primary}
+        cursorColor={colors.primary}
+        selectionColor={colors.primary + '30'}
         textColor={colors.text}
-        placeholderTextColor={colors.textLight}
-        outlineStyle={styles.outline}
+        placeholderTextColor={colors.textMuted}
+        style={styles.inputContainer}
+        outlineStyle={[
+          styles.outline,
+          isFocused && styles.outlineFocused,
+          !!errorText && styles.outlineError
+        ]}
         contentStyle={styles.content}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         error={!!errorText}
         {...props}
       />
@@ -39,21 +62,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     width: '100%',
   },
+  inputContainer: {
+    backgroundColor: colors.surface,
+  },
   outline: {
     borderRadius: radius.md,
     borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  outlineFocused: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  outlineError: {
+    borderColor: colors.error,
   },
   content: {
     ...typography.body,
     paddingHorizontal: spacing.md,
-    fontSize: 16,
-    minHeight: 52,
+    fontSize: 15,
+    minHeight: 48,
   },
   error: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.error,
-    fontSize: 13,
     marginTop: spacing.xs,
-    marginLeft: spacing.xs,
+    marginLeft: 2,
   },
 });
+
+

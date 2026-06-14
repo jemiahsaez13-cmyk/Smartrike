@@ -1,26 +1,26 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
-  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
-  TextInput as RNTextInput,
   TouchableOpacity,
   View,
+  SafeAreaView,
 } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
-import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { Input } from '@/views/components/common/Input';
+import { Button } from '@/views/components/common/Button';
+import { colors, spacing, typography } from '@/views/styles/theme';
 
 export const LoginScreen = () => {
   const navigation = useNavigation<any>();
@@ -29,535 +29,300 @@ export const LoginScreen = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(24)).current;
-  const signInScale = useRef(new Animated.Value(1)).current;
-  const passengerScale = useRef(new Animated.Value(1)).current;
-  const driverScale = useRef(new Animated.Value(1)).current;
-  const adminScale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 360,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 360,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [fadeAnim, slideAnim]);
-
-  const animateButton = (scale: Animated.Value) => {
-    Animated.sequence([
-      Animated.timing(scale, {
-        toValue: 0.97,
-        duration: 90,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
 
   const handleLogin = async () => {
     Keyboard.dismiss();
-    animateButton(signInScale);
-
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Sign In', 'Enter your email and password to continue.');
+      Alert.alert('Missing Credentials', 'Please enter your email and password.');
       return;
     }
 
     try {
       await login(email.trim(), password);
     } catch {
-      Alert.alert('Login Failed', 'Check your credentials and try again.');
+      Alert.alert('Access Denied', 'Invalid email or password. Please try again.');
     }
   };
 
-  const handleDemoMode = (userType: 'passenger' | 'driver' | 'admin', scale: Animated.Value) => {
-    animateButton(scale);
-    const roleLabel = userType.charAt(0).toUpperCase() + userType.slice(1);
+  const handleDemoMode = (userType: 'passenger' | 'driver' | 'admin') => {
     const demoUser: any = {
       id: `demo-${userType}`,
       auth_id: 'demo-auth',
       user_type: userType,
       email: `demo@${userType}.com`,
       phone: '09123456789',
-      name: `Demo ${roleLabel}`,
+      name: `Demo ${userType.charAt(0).toUpperCase() + userType.slice(1)}`,
       profile_photo_url: null,
       created_at: new Date(),
       status: 'active',
-      rating: userType === 'admin' ? 5 : 4.8,
-      total_trips: userType === 'admin' ? 1284 : 42,
+      rating: 5.0,
+      total_trips: 150,
     };
     dispatch(setDemoUserReducer(demoUser));
   };
 
-  if (loading) return <Loading message="Signing you in..." />;
+  if (loading) return <Loading message="Authenticating..." />;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <LinearGradient
-          colors={gradients.brand}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.brandRow}>
-            <TricycleIcon size={56} color="#FFFFFF" />
-            <View style={styles.brandCopy}>
-              <Text style={styles.brandKicker}>FEDTODAB transport</Text>
-              <Text style={styles.appName}>Smart Trike</Text>
+          {/* Top Brand Branding */}
+          <View style={styles.header}>
+            <TricycleIcon size={56} color={colors.primary} />
+            <View style={styles.headerText}>
+              <Text style={styles.brandKicker}>FEDTODAB</Text>
+              <Text style={styles.brandName}>Smart Trike</Text>
             </View>
           </View>
-          <Text style={styles.tagline}>Real-time TODA booking, driver dispatch, MTOP tracking, and operator oversight for Boac trips.</Text>
-          <View style={styles.heroStats}>
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>4 min</Text>
-              <Text style={styles.heroStatLabel}>avg wait</Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>42</Text>
-              <Text style={styles.heroStatLabel}>active drivers</Text>
-            </View>
-            <View style={styles.heroStatDivider} />
-            <View style={styles.heroStat}>
-              <Text style={styles.heroStatValue}>24/7</Text>
-              <Text style={styles.heroStatLabel}>trip logs</Text>
-            </View>
+
+          {/* Intro Section */}
+          <View style={styles.intro}>
+            <Text style={styles.title}>Sign in to platform</Text>
+            <Text style={styles.subtitle}>Enter your details below to access your account.</Text>
           </View>
-        </LinearGradient>
 
-        <Animated.View
-          style={[
-            styles.content,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-          ]}
-        >
-          <View style={styles.formCard}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.welcomeTitle}>Welcome back</Text>
-              <Text style={styles.welcomeSubtitle}>Sign in to manage rides, requests, and trips.</Text>
-            </View>
+          {/* Form */}
+          <View style={styles.form}>
+            <Input
+              label="Email address"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
+            />
 
-            <Text style={styles.label}>Email address</Text>
-            <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
-              <MaterialCommunityIcons
-                name="email-outline"
-                size={20}
-                color={emailFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
-                onFocus={() => setEmailFocused(true)}
-                onBlur={() => setEmailFocused(false)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-            </View>
-
-            <View style={styles.passwordLabelRow}>
-              <Text style={styles.label}>Password</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} activeOpacity={0.7}>
-                <Text style={styles.forgotText}>Forgot?</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={[styles.inputWrapper, passwordFocused && styles.inputFocused]}>
-              <MaterialCommunityIcons
-                name="lock-outline"
-                size={20}
-                color={passwordFocused ? colors.primary : colors.textLight}
-                style={styles.inputIcon}
-              />
-              <RNTextInput
-                placeholder="Enter password"
-                value={password}
-                onChangeText={setPassword}
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => setPasswordFocused(false)}
-                secureTextEntry={!showPassword}
-                autoComplete="password"
-                style={styles.input}
-                placeholderTextColor={colors.textLight}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-                style={styles.iconButton}
-                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <MaterialCommunityIcons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
+            <Input
+              label="Password"
+              placeholder="••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
+              right={
+                <TextInput.Icon 
+                  icon={showPassword ? "eye-off-outline" : "eye-outline"} 
+                  onPress={() => setShowPassword(!showPassword)}
                   color={colors.textSecondary}
                 />
-              </TouchableOpacity>
-            </View>
+              }
+            />
 
-            <Animated.View style={{ transform: [{ scale: signInScale }] }}>
-              <TouchableOpacity style={styles.signInBtn} onPress={handleLogin} activeOpacity={0.86}>
-                <LinearGradient
-                  colors={gradients.action}
-                  style={styles.signInGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.signInText}>Sign In</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color="#FFFFFF" />
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.forgotBtn}
+            >
+              <Text style={styles.forgotLabel}>Forgot password?</Text>
+            </TouchableOpacity>
 
-            <View style={styles.secondaryActions}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('PhoneLogin')}>
-                <MaterialCommunityIcons name="phone-outline" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>Phone</Text>
+            <Button 
+              variant="primary" 
+              onPress={handleLogin}
+              style={styles.submitBtn}
+            >
+              Sign in
+            </Button>
+          </View>
+
+          {/* Dividers & Alternates */}
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+            <View style={styles.line} />
+          </View>
+
+          <View style={styles.alternateRow}>
+            <Button 
+              variant="outline" 
+              style={styles.altBtn}
+              onPress={() => navigation.navigate('PhoneLogin')}
+            >
+              <MaterialCommunityIcons name="phone-outline" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              Phone
+            </Button>
+            <Button 
+              variant="outline" 
+              style={styles.altBtn}
+            >
+              <MaterialCommunityIcons name="google" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              Google
+            </Button>
+          </View>
+
+          {/* Demo/Dev Tools */}
+          <View style={styles.demoBox}>
+            <Text style={styles.demoTitle}>QUICK ACCESS MODES</Text>
+            <View style={styles.demoGrid}>
+              <TouchableOpacity style={styles.demoItem} onPress={() => handleDemoMode('passenger')}>
+                <Text style={styles.demoText}>PASSENGER</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.navigate('EmailLogin')}>
-                <MaterialCommunityIcons name="email-fast-outline" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>Email</Text>
+              <TouchableOpacity style={styles.demoItem} onPress={() => handleDemoMode('driver')}>
+                <Text style={styles.demoText}>DRIVER</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => Alert.alert('Google Sign In', 'Google sign in is not configured yet.')}
-              >
-                <MaterialCommunityIcons name="google" size={20} color={colors.primary} />
-                <Text style={styles.secondaryButtonText}>Google</Text>
+              <TouchableOpacity style={[styles.demoItem, { backgroundColor: colors.accent }]} onPress={() => handleDemoMode('admin')}>
+                <Text style={[styles.demoText, { color: '#fff' }]}>ADMIN</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.demoCard}>
-            <View>
-              <Text style={styles.demoTitle}>Quick demo</Text>
-              <Text style={styles.demoSubtitle}>Open a realistic workflow instantly.</Text>
-            </View>
-            <View style={styles.demoButtons}>
-              <Animated.View style={[styles.demoButtonWrap, { transform: [{ scale: passengerScale }] }]}>
-                <TouchableOpacity
-                  style={styles.demoButton}
-                  onPress={() => handleDemoMode('passenger', passengerScale)}
-                  activeOpacity={0.82}
-                >
-                  <MaterialCommunityIcons name="account-outline" size={22} color={colors.primary} />
-                  <Text style={styles.demoButtonText}>Passenger</Text>
-                </TouchableOpacity>
-              </Animated.View>
-              <Animated.View style={[styles.demoButtonWrap, { transform: [{ scale: driverScale }] }]}>
-                <TouchableOpacity
-                  style={styles.demoButton}
-                  onPress={() => handleDemoMode('driver', driverScale)}
-                  activeOpacity={0.82}
-                >
-                  <MaterialCommunityIcons name="car-hatchback" size={22} color={colors.primary} />
-                  <Text style={styles.demoButtonText}>Driver</Text>
-                </TouchableOpacity>
-              </Animated.View>
-              <Animated.View style={[styles.demoButtonWrap, { transform: [{ scale: adminScale }] }]}>
-                <TouchableOpacity
-                  style={styles.demoButton}
-                  onPress={() => handleDemoMode('admin', adminScale)}
-                  activeOpacity={0.82}
-                >
-                  <MaterialCommunityIcons name="view-dashboard-outline" size={22} color={colors.violet} />
-                  <Text style={styles.demoButtonText}>Admin</Text>
-                </TouchableOpacity>
-              </Animated.View>
-            </View>
+          {/* Register Footer */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>New to Smart Trike?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.footerLink}>Create an account</Text>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.signUpContainer}
-            onPress={() => navigation.navigate('Register')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.signUpText}>
-              New to Smart Trike? <Text style={styles.signUpLink}>Create an account</Text>
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
+  },
+  keyboardView: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxl,
   },
-  hero: {
-    minHeight: 268,
-    paddingTop: layout.headerTop,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 42,
-    justifyContent: 'flex-end',
-  },
-  brandRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
-    gap: spacing.md,
+    marginBottom: spacing.xxl,
   },
-  brandCopy: {
-    flex: 1,
+  headerText: {
+    marginLeft: spacing.md,
   },
   brandKicker: {
-    ...typography.label,
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 12,
-    textTransform: 'uppercase',
+    ...typography.labelSmall,
+    letterSpacing: 2,
+    color: colors.textMuted,
   },
-  appName: {
-    ...typography.display,
-    fontSize: 40,
-    color: '#FFFFFF',
-    letterSpacing: 0,
+  brandName: {
+    ...typography.h2,
+    fontSize: 24,
+    marginTop: -2,
   },
-  tagline: {
-    ...typography.body,
-    color: 'rgba(255,255,255,0.88)',
-    fontSize: 16,
-    lineHeight: 24,
-    marginTop: spacing.sm,
-    maxWidth: 360,
+  intro: {
+    marginBottom: spacing.xl,
   },
-  heroStats: {
-    minHeight: 72,
-    marginTop: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
+  title: {
+    ...typography.h1,
+    fontSize: 32,
+    marginBottom: spacing.xs,
   },
-  heroStat: {
-    flex: 1,
-  },
-  heroStatValue: {
-    ...typography.number,
-    color: '#FFFFFF',
-    fontSize: 18,
-  },
-  heroStatLabel: {
-    ...typography.body,
-    color: 'rgba(255,255,255,0.76)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  heroStatDivider: {
-    width: 1,
-    height: 34,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    marginHorizontal: spacing.sm,
-  },
-  content: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    marginTop: -28,
-  },
-  formCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.lg,
-    ...shadows.lg,
-  },
-  cardHeader: {
-    marginBottom: spacing.lg,
-  },
-  welcomeTitle: {
-    ...typography.title,
-    fontSize: 26,
-    color: colors.text,
-  },
-  welcomeSubtitle: {
+  subtitle: {
     ...typography.body,
     color: colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: spacing.xs,
   },
-  label: {
-    ...typography.label,
-    fontSize: 13,
-    color: colors.text,
-    marginBottom: spacing.sm,
+  form: {
+    marginBottom: spacing.xl,
   },
-  passwordLabelRow: {
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: spacing.lg,
+    marginTop: -spacing.sm,
+  },
+  forgotLabel: {
+    ...typography.labelSmall,
+    color: colors.accent,
+    fontWeight: '600',
+  },
+  submitBtn: {
+    height: 52,
+  },
+  divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
+    marginVertical: spacing.xl,
   },
-  forgotText: {
-    ...typography.label,
-    color: colors.primary,
-    fontSize: 13,
-    paddingVertical: spacing.xs,
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
   },
-  inputWrapper: {
-    minHeight: 54,
-    borderRadius: radius.md,
+  dividerText: {
+    ...typography.labelSmall,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    marginHorizontal: spacing.md,
+    color: colors.textMuted,
+  },
+  alternateRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
+  },
+  altBtn: {
+    flex: 1,
+    minHeight: 48,
+  },
+  demoBox: {
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xl,
   },
-  inputFocused: {
+  demoTitle: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    letterSpacing: 2,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+    color: colors.textMuted,
+  },
+  demoGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  demoItem: {
+    flex: 1,
+    height: 32,
+    borderRadius: 6,
     backgroundColor: colors.surface,
-    borderColor: colors.primary,
-  },
-  inputIcon: {
-    marginRight: spacing.sm,
-  },
-  input: {
-    ...typography.body,
-    flex: 1,
-    minHeight: 52,
-    color: colors.text,
-    fontSize: 16,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  signInBtn: {
-    height: 54,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    marginTop: spacing.lg,
-    ...shadows.md,
-  },
-  signInGradient: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  signInText: {
-    ...typography.label,
-    color: '#FFFFFF',
-    fontSize: 16,
-    letterSpacing: 0,
-  },
-  secondaryActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.primaryLight,
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  demoText: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    color: colors.textSecondary,
+  },
+  footer: {
+    marginTop: 'auto',
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+    flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing.xs,
   },
-  secondaryButtonText: {
-    ...typography.label,
-    color: colors.primary,
-    fontSize: 13,
+  footerText: {
+    ...typography.bodySmall,
   },
-  demoCard: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.md,
-  },
-  demoTitle: {
-    ...typography.subtitle,
-    color: colors.text,
-    fontSize: 16,
-  },
-  demoSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  demoButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  demoButtonWrap: {
-    flex: 1,
-  },
-  demoButton: {
-    minHeight: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  demoButtonText: {
-    ...typography.label,
-    color: colors.text,
-    fontSize: 14,
-  },
-  signUpContainer: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.lg,
-  },
-  signUpText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  signUpLink: {
-    ...typography.label,
-    color: colors.primary,
+  footerLink: {
+    ...typography.labelSmall,
+    color: colors.accent,
+    fontWeight: '700',
   },
 });

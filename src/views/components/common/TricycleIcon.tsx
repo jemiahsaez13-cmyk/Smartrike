@@ -23,6 +23,16 @@ export const TricycleIcon: React.FC<TricycleIconProps> = ({
   <Image
     source={require('../../../../assets/tricycle.png')}
     resizeMode="contain"
-    style={[{ width: size, height: Math.round(size / ASPECT), tintColor: color }, style]}
+    style={[
+      { 
+        width: size, 
+        height: Math.round(size / ASPECT), 
+        tintColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+      }, 
+      style
+    ]}
   />
 );
+

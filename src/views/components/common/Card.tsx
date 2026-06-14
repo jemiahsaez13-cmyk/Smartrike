@@ -1,27 +1,46 @@
 import React from 'react';
-import { Card as PaperCard } from 'react-native-paper';
-import { StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { colors, radius, shadows } from '@/views/styles/theme';
+import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { colors, radius, shadows, spacing } from '@/views/styles/theme';
 
 interface CardProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  elevation?: 0 | 1 | 2 | 3 | 4 | 5;
+  variant?: 'elevated' | 'outlined';
+  padding?: keyof typeof spacing | 'none';
 }
 
-export const Card: React.FC<CardProps> = ({ children, style, elevation = 2 }) => {
+export const Card: React.FC<CardProps> = ({ 
+  children, 
+  style, 
+  variant = 'elevated',
+  padding = 'md'
+}) => {
   return (
-    <PaperCard style={[styles.card, shadows.md, style]} elevation={elevation}>
+    <View style={[
+      styles.card, 
+      styles[variant],
+      padding !== 'none' && { padding: spacing[padding] },
+      variant === 'elevated' && shadows.md,
+      style
+    ]}>
       {children}
-    </PaperCard>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<any>({
   card: {
+    borderRadius: radius.xl,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+  },
+  elevated: {
+    backgroundColor: colors.surface,
+  },
+  outlined: {
+    borderWidth: 1.5,
     borderColor: colors.borderLight,
+    backgroundColor: 'transparent',
   }
 });
+
+
