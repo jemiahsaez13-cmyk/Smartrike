@@ -7,12 +7,23 @@ import { useBooking } from '@/controllers/hooks/useBooking';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
-import { Input } from '@/views/components/common/Input';
 import { Loading } from '@/views/components/common/Loading';
+import { FareCalculationService } from '@/models/services/FareCalculationService';
+import { Location } from '@/models/types';
 import { colors, spacing, shadows } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height } = Dimensions.get('window');
+const fareService = new FareCalculationService();
+
+// Common Boac destinations with real coordinates for accurate fare estimates.
+const DESTINATIONS: Location[] = [
+  { latitude: 13.4452, longitude: 121.8401, address: 'Boac Public Market' },
+  { latitude: 13.4101, longitude: 121.8456, address: 'Marinduque State College' },
+  { latitude: 13.4477, longitude: 121.8389, address: 'Boac Cathedral' },
+  { latitude: 13.4419, longitude: 121.8442, address: 'Provincial Hospital' },
+  { latitude: 13.5247, longitude: 121.8665, address: 'Cawit Port' },
+];
 
 export const BookRideScreen = () => {
   const { user } = useAuth();
@@ -21,36 +32,67 @@ export const BookRideScreen = () => {
   const navigation = useNavigation<any>();
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoffAddress, setDropoffAddress] = useState('');
+  const [dropoff, setDropoff] = useState<Location | null>(null);
+  const [estimate, setEstimate] = useState<{ fare: number; distance: number; eta: number } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
 
   // Animations
   const sheetAnim = useRef(new Animated.Value(height * 0.4)).current;
 
   useEffect(() => {
-    getLocation().then(() => {
-      setLoadingLocation(false);
-      Animated.spring(sheetAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    });
+    getLocation()
+      .catch(() => undefined)
+      .finally(() => {
+        setLoadingLocation(false);
+        Animated.spring(sheetAnim, {
+          toValue: 0,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }).start();
+      });
   }, []);
 
   useEffect(() => {
     if (currentLocation) setPickupAddress(currentLocation.address || 'Current Location');
   }, [currentLocation]);
 
+  // Recompute the fare estimate whenever a destination is chosen.
+  useEffect(() => {
+    let active = true;
+    const compute = async () => {
+      if (!currentLocation || !dropoff) {
+        setEstimate(null);
+        return;
+      }
+      try {
+        const distance = await fareService.calculateDistance(currentLocation, dropoff);
+        const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
+        const fare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
+        const eta = Math.max(3, Math.ceil((distance / 25) * 60));
+        if (active) setEstimate({ fare, distance, eta });
+      } catch {
+        if (active) setEstimate(null);
+      }
+    };
+    compute();
+    return () => {
+      active = false;
+    };
+  }, [currentLocation, dropoff]);
+
+  const selectDestination = (dest: Location) => {
+    setDropoff(dest);
+    setDropoffAddress(dest.address);
+  };
+
   const handleBooking = async () => {
-    if (!currentLocation || !dropoffAddress) {
-      Alert.alert('Error', 'Please enter destination');
+    if (!currentLocation || !dropoff) {
+      Alert.alert('Error', 'Please choose a destination');
       return;
     }
     try {
-      await bookRide(user!.id, currentLocation, {
-        latitude: 13.45, longitude: 121.85, address: dropoffAddress
-      });
+      await bookRide(user!.id, currentLocation, dropoff);
       navigation.navigate('ConfirmBooking');
     } catch (error) {
       Alert.alert('Failed', 'Unable to create booking');
@@ -110,18 +152,33 @@ export const BookRideScreen = () => {
 
             <View style={styles.inputWrapper}>
               <Text style={styles.inputLabel}>DROP OFF TO</Text>
-              <Input
-                value={dropoffAddress}
-                onChangeText={setDropoffAddress}
-                placeholder="Search destination..."
-                mode="flat"
-                style={styles.actualInput}
-                containerStyle={styles.inputContainerStyle}
-                placeholderTextColor={colors.textLight}
-              />
+              <Text style={[styles.inputValue, !dropoffAddress && { color: colors.textLight }]} numberOfLines={1}>
+                {dropoffAddress || 'Choose a destination below'}
+              </Text>
             </View>
           </View>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destScroll} contentContainerStyle={styles.destRow}>
+          {DESTINATIONS.map((dest) => {
+            const selected = dropoff?.address === dest.address;
+            return (
+              <TouchableOpacity
+                key={dest.address}
+                style={[styles.destChip, selected && styles.destChipSelected]}
+                onPress={() => selectDestination(dest)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name="map-marker-outline"
+                  size={16}
+                  color={selected ? '#fff' : colors.primary}
+                />
+                <Text style={[styles.destChipText, selected && { color: '#fff' }]}>{dest.address}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <Surface style={styles.fareCard} elevation={1}>
           <View style={styles.fareInfo}>
@@ -130,16 +187,18 @@ export const BookRideScreen = () => {
             </View>
             <View>
               <Text style={styles.fareType}>Standard Tricycle</Text>
-              <Text style={styles.fareEta}>~8 min away</Text>
+              <Text style={styles.fareEta}>
+                {estimate ? `${estimate.distance.toFixed(1)} km • ~${estimate.eta} min` : 'Select a destination'}
+              </Text>
             </View>
           </View>
-          <Text style={styles.farePrice}>₱45.00</Text>
+          <Text style={styles.farePrice}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
         </Surface>
 
         <Button
           variant="primary"
           onPress={handleBooking}
-          disabled={!dropoffAddress || loading}
+          disabled={!dropoff || loading}
           loading={loading}
           style={styles.bookBtn}
         >
@@ -195,6 +254,21 @@ const styles = StyleSheet.create({
   inputDivider: { height: 1, backgroundColor: colors.borderLight, marginVertical: 8 },
   actualInput: { backgroundColor: 'transparent', height: 40, paddingHorizontal: 0, margin: 0, fontSize: 15, fontWeight: '600' },
   inputContainerStyle: { marginBottom: 0 },
+  destScroll: { marginBottom: spacing.lg },
+  destRow: { gap: spacing.sm, paddingRight: spacing.md },
+  destChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+  },
+  destChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  destChipText: { fontSize: 13, fontWeight: '600', color: colors.text },
   fareCard: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 

@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import { Booking, BookingStatus } from '@/models/types';
+import { Booking, BookingStatus, Rating } from '@/models/types';
 
 export class BookingRepository {
   async create(booking: Omit<Booking, 'id' | 'created_at'>): Promise<Booking> {
@@ -71,6 +71,17 @@ export class BookingRepository {
       .eq('driver_id', driverId)
       .order('created_at', { ascending: false })
       .limit(limit);
+    if (error) throw error;
+    return data;
+  }
+
+  async submitRating(id: string, rating: Rating): Promise<Booking> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ passenger_rating: rating })
+      .eq('id', id)
+      .select()
+      .single();
     if (error) throw error;
     return data;
   }

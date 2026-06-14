@@ -7,6 +7,7 @@ import { useBooking } from '@/controllers/hooks/useBooking';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
+import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, spacing, shadows } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -154,7 +155,7 @@ export const PassengerDashboard = () => {
                     colors={[colors.primaryLight, '#E3F2FD']}
                     style={styles.bookIconBox}
                   >
-                    <MaterialCommunityIcons name="bike" size={48} color={colors.primary} />
+                    <TricycleIcon size={72} color={colors.primary} />
                   </LinearGradient>
                 </View>
               </View>

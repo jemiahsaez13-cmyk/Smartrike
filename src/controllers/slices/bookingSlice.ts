@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { BookingService } from '@/models/services/BookingService';
-import { Booking, Location } from '@/models/types';
+import { Booking, Location, Rating } from '@/models/types';
 
 const bookingService = new BookingService();
 
@@ -59,6 +59,17 @@ export const completeTrip = createAsyncThunk('booking/completeTrip', async (book
     return rejectWithValue(error.message);
   }
 });
+
+export const submitRating = createAsyncThunk(
+  'booking/rate',
+  async (payload: { bookingId: string; rating: Rating }, { rejectWithValue }) => {
+    try {
+      return await bookingService.rateTrip(payload.bookingId, payload.rating);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 export const cancelBooking = createAsyncThunk('booking/cancel', async (bookingId: string, { rejectWithValue }) => {
   try {

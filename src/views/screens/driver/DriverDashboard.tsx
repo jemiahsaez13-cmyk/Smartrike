@@ -3,7 +3,8 @@ import { View, StyleSheet, ScrollView, Animated, Dimensions, TouchableOpacity } 
 import { Text, Surface, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector, useAppDispatch } from '@/controllers/store';
-import { updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { updateDriverStatus, fetchCompletedTrips, addIncomingRequest } from '@/controllers/slices/driverSlice';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
@@ -35,7 +36,28 @@ export const DriverDashboard = () => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Populate today's earnings / completed trips from history.
+    if (user?.id) dispatch(fetchCompletedTrips(user.id));
   }, []);
+
+  // While online, surface nearby pending bookings as incoming requests.
+  useEffect(() => {
+    if (!isOnline) return;
+    let cancelled = false;
+    new BookingRepository()
+      .findActiveBookings()
+      .then((bookings) => {
+        if (cancelled) return;
+        bookings
+          .filter((b) => b.status === 'pending')
+          .forEach((b) => dispatch(addIncomingRequest(b)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, dispatch]);
 
   const toggleStatus = async () => {
     const newStatus = isOnline ? 'offline' : 'online';
