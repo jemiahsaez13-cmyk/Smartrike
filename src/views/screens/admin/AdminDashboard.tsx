@@ -52,6 +52,7 @@ export const AdminDashboard = () => {
 
   return (
     <View style={styles.container}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <LinearGradient colors={gradients.admin} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>Command Center</Text>
@@ -70,7 +71,7 @@ export const AdminDashboard = () => {
         </TouchableOpacity>
       </LinearGradient>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.body}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Key Metrics</Text>
           <TouchableOpacity activeOpacity={0.7}>
@@ -160,6 +161,7 @@ export const AdminDashboard = () => {
             );
           })}
         </Surface>
+      </View>
       </ScrollView>
     </View>
   );
@@ -219,8 +221,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingBottom: 0,
+  },
+  body: {
     padding: spacing.lg,
-    paddingBottom: 96,
+    paddingBottom: 130,
   },
   sectionHeader: {
     flexDirection: 'row',

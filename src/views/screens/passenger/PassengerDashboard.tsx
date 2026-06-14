@@ -76,6 +76,11 @@ export const PassengerDashboard = () => {
 
   return (
     <View style={styles.container}>
+      <Animated.ScrollView
+        style={[styles.scroll, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       <LinearGradient
         colors={gradients.brand}
         start={{ x: 0, y: 0 }}
@@ -108,11 +113,7 @@ export const PassengerDashboard = () => {
         </View>
       </LinearGradient>
 
-      <Animated.ScrollView
-        style={[styles.scroll, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.body}>
         <Card variant="elevated" padding="lg" style={styles.primaryCard}>
           {currentBooking ? (
             <>
@@ -210,6 +211,7 @@ export const PassengerDashboard = () => {
             </Card>
           </TouchableOpacity>
         ))}
+      </View>
       </Animated.ScrollView>
     </View>
   );
@@ -284,11 +286,14 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
-    marginTop: -80,
   },
   scrollContent: {
+    paddingBottom: 0,
+  },
+  body: {
+    marginTop: -80,
     paddingHorizontal: spacing.screen,
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
   primaryCard: {
     ...shadows.xl,

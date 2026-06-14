@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
-import { IconButton, Surface, Text } from 'react-native-paper';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Dimensions, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -13,8 +13,41 @@ import { FareCalculationService } from '@/models/services/FareCalculationService
 import { Location } from '@/models/types';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
+// react-native-maps has no web implementation — load it only on native so
+// the web bundle keeps working with the faux-map fallback below.
+let MapView: any, Marker: any, Polyline: any, PROVIDER_GOOGLE: any;
+if (Platform.OS !== 'web') {
+  try {
+    const Maps = require('react-native-maps');
+    MapView = Maps.default;
+    Marker = Maps.Marker;
+    Polyline = Maps.Polyline;
+    PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+  } catch {
+    // native maps unavailable (e.g. Expo Go without dev client) — fall back
+  }
+}
+
+// Desaturated "silver" Google Maps style — the clean, low-contrast look Uber uses.
+const UBER_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
+];
+
 const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
+const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
 const DESTINATIONS: Location[] = [
   { latitude: 13.4452, longitude: 121.8401, address: 'Boac Public Market' },
@@ -46,6 +79,27 @@ export const BookRideScreen = () => {
   const [tripNote, setTripNote] = useState('');
 
   const sheetAnim = useRef(new Animated.Value(height * 0.42)).current;
+  const mapRef = useRef<any>(null);
+
+  const pickupCoord = currentLocation
+    ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
+    : null;
+  const dropCoord = dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null;
+
+  // Region that frames pickup + dropoff (or just the pickup) with breathing room.
+  const region = useMemo(() => {
+    if (pickupCoord && dropCoord) {
+      return {
+        latitude: (pickupCoord.latitude + dropCoord.latitude) / 2,
+        longitude: (pickupCoord.longitude + dropCoord.longitude) / 2,
+        latitudeDelta: Math.max(0.02, Math.abs(pickupCoord.latitude - dropCoord.latitude) * 1.8),
+        longitudeDelta: Math.max(0.02, Math.abs(pickupCoord.longitude - dropCoord.longitude) * 1.8),
+      };
+    }
+    const base = pickupCoord || BOAC_CENTER;
+    return { ...base, latitudeDelta: 0.03, longitudeDelta: 0.03 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]);
 
   useEffect(() => {
     getLocation()
@@ -64,6 +118,11 @@ export const BookRideScreen = () => {
   useEffect(() => {
     if (currentLocation) setPickupAddress(currentLocation.address || 'Current Location');
   }, [currentLocation]);
+
+  // Keep the native map framed on the active pickup/dropoff pair.
+  useEffect(() => {
+    if (mapRef.current?.animateToRegion) mapRef.current.animateToRegion(region, 650);
+  }, [region]);
 
   useEffect(() => {
     let active = true;
@@ -101,6 +160,12 @@ export const BookRideScreen = () => {
     setDropoffAddress(dest.address);
   }
 
+  const recenter = () => {
+    if (mapRef.current?.animateToRegion) {
+      mapRef.current.animateToRegion({ ...(pickupCoord || BOAC_CENTER), latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500);
+    }
+  };
+
   const handleBooking = async () => {
     if (!currentLocation || !dropoff) {
       Alert.alert('Choose Destination', 'Select a drop-off location before confirming your trip.');
@@ -119,33 +184,73 @@ export const BookRideScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.mapContainer}>
-        <LinearGradient colors={['rgba(15,23,42,0.22)', 'transparent']} style={styles.mapTopGradient} />
-        <View style={styles.mapPlaceholder}>
-          <View style={styles.mapGrid} />
-          <View style={styles.mapRoute} />
-          <View style={styles.mapNodeStart} />
-          <View style={styles.mapNodeEnd} />
-          <MaterialCommunityIcons name="map-outline" size={54} color={colors.textSecondary} />
-          <Text style={styles.mapHint}>Map preview</Text>
-        </View>
+        {MapView ? (
+          <MapView
+            ref={mapRef}
+            style={StyleSheet.absoluteFill}
+            provider={PROVIDER_GOOGLE}
+            customMapStyle={UBER_MAP_STYLE}
+            initialRegion={region}
+            showsUserLocation
+            showsMyLocationButton={false}
+            showsCompass={false}
+            toolbarEnabled={false}
+            rotateEnabled={false}
+            pitchEnabled={false}
+          >
+            {pickupCoord && (
+              <Marker coordinate={pickupCoord} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+                <View style={styles.pickupMarker}>
+                  <View style={styles.pickupMarkerCore} />
+                </View>
+              </Marker>
+            )}
+            {dropCoord && (
+              <Marker coordinate={dropCoord} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+                <View style={styles.dropMarker}>
+                  <MaterialCommunityIcons name="map-marker" size={18} color="#FFFFFF" />
+                </View>
+              </Marker>
+            )}
+            {pickupCoord && dropCoord && (
+              <Polyline coordinates={[pickupCoord, dropCoord]} strokeColor={colors.primary} strokeWidth={4} lineCap="round" />
+            )}
+          </MapView>
+        ) : (
+          // Web / no-native-maps fallback: a clean monochrome faux map.
+          <View style={styles.mapPlaceholder}>
+            <View style={styles.mapGrid} />
+            <View style={styles.mapRoute} />
+            <View style={styles.mapNodeStart} />
+            <View style={styles.mapNodeEnd} />
+            <MaterialCommunityIcons name="map-outline" size={54} color={colors.textMuted} />
+            <Text style={styles.mapHint}>Map preview</Text>
+            <View style={styles.centerPinContainer}>
+              <View style={styles.pinShadow} />
+              <View style={styles.pinCircle}>
+                <View style={styles.pinInner} />
+              </View>
+              <View style={styles.pinTail} />
+            </View>
+          </View>
+        )}
 
-        <IconButton
-          icon="chevron-left"
-          mode="contained"
-          containerColor={colors.surface}
-          iconColor={colors.text}
+        <LinearGradient colors={['rgba(0,0,0,0.16)', 'transparent']} style={styles.mapTopGradient} pointerEvents="none" />
+
+        <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
+          activeOpacity={0.85}
           accessibilityLabel="Go back"
-        />
+        >
+          <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
+        </TouchableOpacity>
 
-        <View style={styles.centerPinContainer}>
-          <View style={styles.pinShadow} />
-          <View style={styles.pinCircle}>
-            <View style={styles.pinInner} />
-          </View>
-          <View style={styles.pinTail} />
-        </View>
+        {MapView && (
+          <TouchableOpacity style={styles.recenterBtn} onPress={recenter} activeOpacity={0.85} accessibilityLabel="Recenter map">
+            <MaterialCommunityIcons name="crosshairs-gps" size={20} color={colors.text} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
@@ -158,7 +263,7 @@ export const BookRideScreen = () => {
             <View style={styles.pathGraphic}>
               <View style={[styles.pathDot, { backgroundColor: colors.primary }]} />
               <View style={styles.pathLine} />
-              <View style={[styles.pathDot, { backgroundColor: colors.accent }]} />
+              <View style={[styles.pathSquare, { backgroundColor: colors.primary }]} />
             </View>
 
             <View style={styles.inputs}>
@@ -224,84 +329,83 @@ export const BookRideScreen = () => {
             })}
           </ScrollView>
 
-        <View style={styles.tripControls}>
-          <View style={styles.passengerStepper}>
-            <Text style={styles.controlLabel}>Passengers</Text>
-            <View style={styles.stepperRow}>
-              <TouchableOpacity
-                style={styles.stepperBtn}
-                onPress={() => setPassengers(Math.max(1, passengers - 1))}
-                activeOpacity={0.76}
-              >
-                <MaterialCommunityIcons name="minus" size={18} color={colors.text} />
-              </TouchableOpacity>
-              <Text style={styles.passengerCount}>{passengers}</Text>
-              <TouchableOpacity
-                style={styles.stepperBtn}
-                onPress={() => setPassengers(Math.min(4, passengers + 1))}
-                activeOpacity={0.76}
-              >
-                <MaterialCommunityIcons name="plus" size={18} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.paymentGroup}>
-            <Text style={styles.controlLabel}>Payment</Text>
-            <View style={styles.paymentRow}>
-              {(['cash', 'gcash'] as const).map((method) => (
+          <View style={styles.tripControls}>
+            <View style={styles.passengerStepper}>
+              <Text style={styles.controlLabel}>Passengers</Text>
+              <View style={styles.stepperRow}>
                 <TouchableOpacity
-                  key={method}
-                  style={[styles.paymentPill, paymentMethod === method && styles.paymentPillActive]}
-                  onPress={() => setPaymentMethod(method)}
-                  activeOpacity={0.8}
+                  style={styles.stepperBtn}
+                  onPress={() => setPassengers(Math.max(1, passengers - 1))}
+                  activeOpacity={0.76}
                 >
-                  <Text style={[styles.paymentText, paymentMethod === method && styles.paymentTextActive]}>
-                    {method === 'cash' ? 'Cash' : 'GCash'}
-                  </Text>
+                  <MaterialCommunityIcons name="minus" size={18} color={colors.text} />
                 </TouchableOpacity>
-              ))}
+                <Text style={styles.passengerCount}>{passengers}</Text>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={() => setPassengers(Math.min(4, passengers + 1))}
+                  activeOpacity={0.76}
+                >
+                  <MaterialCommunityIcons name="plus" size={18} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.paymentGroup}>
+              <Text style={styles.controlLabel}>Payment</Text>
+              <View style={styles.paymentRow}>
+                {(['cash', 'gcash'] as const).map((method) => (
+                  <TouchableOpacity
+                    key={method}
+                    style={[styles.paymentPill, paymentMethod === method && styles.paymentPillActive]}
+                    onPress={() => setPaymentMethod(method)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.paymentText, paymentMethod === method && styles.paymentTextActive]}>
+                      {method === 'cash' ? 'Cash' : 'GCash'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.noteBox}>
-          <MaterialCommunityIcons name="text-box-edit-outline" size={18} color={colors.textLight} />
-          <RNTextInput
-            value={tripNote}
-            onChangeText={setTripNote}
-            placeholder="Pickup note, landmark, or gate number"
-            placeholderTextColor={colors.textLight}
-            style={styles.noteInput}
-          />
-        </View>
-
-        <Surface style={styles.fareCard} elevation={1}>
-          <View style={styles.fareInfo}>
-            <View style={styles.fareIconBox}>
-              <MaterialCommunityIcons name="motorbike" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.fareCopy}>
-              <Text style={styles.fareType}>Standard Tricycle</Text>
-              <Text style={styles.fareEta}>
-                {estimate
-                  ? `${estimate.distance.toFixed(1)} km • ${estimate.eta} min • ${passengers} passenger${passengers > 1 ? 's' : ''}`
-                  : 'Destination required'}
-              </Text>
-            </View>
+          <View style={styles.noteBox}>
+            <MaterialCommunityIcons name="text-box-edit-outline" size={18} color={colors.textMuted} />
+            <RNTextInput
+              value={tripNote}
+              onChangeText={setTripNote}
+              placeholder="Pickup note, landmark, or gate number"
+              placeholderTextColor={colors.textMuted}
+              style={styles.noteInput}
+            />
           </View>
-          <Text style={styles.farePrice}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
-        </Surface>
 
-        <Button
-          variant="primary"
-          icon="check-circle-outline"
-          onPress={handleBooking}
-          disabled={!dropoff || loading}
-          loading={loading}
-        >
-          Confirm Trip
-        </Button>
+          <Surface style={styles.fareCard} elevation={0}>
+            <View style={styles.fareInfo}>
+              <View style={styles.fareIconBox}>
+                <MaterialCommunityIcons name="rickshaw" size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.fareCopy}>
+                <Text style={styles.fareType}>{rideType === 'priority' ? 'Priority Tricycle' : 'Standard Tricycle'}</Text>
+                <Text style={styles.fareEta}>
+                  {estimate
+                    ? `${estimate.distance.toFixed(1)} km • ${estimate.eta} min • ${passengers} passenger${passengers > 1 ? 's' : ''}`
+                    : 'Destination required'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.farePrice}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
+          </Surface>
+
+          <Button
+            variant="primary"
+            onPress={handleBooking}
+            disabled={!dropoff || loading}
+            loading={loading}
+          >
+            {dropoff ? `Confirm ${rideType === 'priority' ? 'Priority' : 'Standard'} Trip` : 'Choose a destination'}
+          </Button>
         </ScrollView>
       </Animated.View>
     </View>
@@ -327,7 +431,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   mapPlaceholder: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -336,8 +440,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '130%',
     height: '130%',
-    backgroundColor: colors.secondaryLight,
-    opacity: 0.42,
+    backgroundColor: colors.surfaceHover,
+    opacity: 0.6,
     transform: [{ rotate: '-8deg' }],
   },
   mapRoute: {
@@ -348,7 +452,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 5,
     borderColor: colors.primary,
     borderBottomLeftRadius: 42,
-    opacity: 0.38,
+    opacity: 0.3,
     transform: [{ rotate: '-14deg' }],
   },
   mapNodeStart: {
@@ -365,28 +469,73 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     bottom: '36%',
     right: '28%',
   },
   mapHint: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '800',
+    ...typography.label,
+    color: colors.textMuted,
     marginTop: spacing.sm,
+  },
+  // Native map markers
+  pickupMarker: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 4,
+    borderColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  pickupMarkerCore: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  dropMarker: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...shadows.md,
   },
   backBtn: {
     position: 'absolute',
     top: layout.headerTop - 10,
     left: 20,
     zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  recenterBtn: {
+    position: 'absolute',
+    right: 20,
+    bottom: '4%',
+    zIndex: 2,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
     ...shadows.md,
   },
   centerPinContainer: {
     position: 'absolute',
     top: '43%',
-    left: '50%',
-    marginLeft: -16,
     alignItems: 'center',
   },
   pinCircle: {
@@ -417,7 +566,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 6,
     borderRadius: 9,
-    backgroundColor: 'rgba(15,23,42,0.22)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
     marginBottom: -2,
   },
   sheet: {
@@ -428,17 +577,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     ...shadows.xl,
   },
   sheetContent: {
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xl,
   },
   handle: {
-    width: 44,
+    width: 40,
     height: 5,
     backgroundColor: colors.border,
     borderRadius: radius.pill,
@@ -446,9 +593,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   sheetTitle: {
-    ...typography.title,
+    ...typography.h2,
     color: colors.text,
-    fontSize: 24,
   },
   sheetSubtitle: {
     ...typography.body,
@@ -464,8 +610,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
   },
   pathGraphic: {
     alignItems: 'center',
@@ -477,6 +621,11 @@ const styles = StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 6,
+  },
+  pathSquare: {
+    width: 11,
+    height: 11,
+    borderRadius: 3,
   },
   pathLine: {
     flex: 1,
@@ -492,9 +641,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inputLabel: {
-    ...typography.label,
-    color: colors.textLight,
+    ...typography.labelSmall,
+    color: colors.textMuted,
     fontSize: 11,
+    letterSpacing: 0.5,
     marginBottom: 2,
   },
   inputValue: {
@@ -503,7 +653,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   inputMuted: {
-    color: colors.textLight,
+    color: colors.textMuted,
   },
   inputDivider: {
     height: 1,
@@ -544,10 +694,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
@@ -561,7 +709,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
@@ -611,7 +759,8 @@ const styles = StyleSheet.create({
   },
   rideOptionSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderWidth: 2,
+    backgroundColor: colors.surfaceAlt,
   },
   rideOptionCopy: {
     flex: 1,
@@ -636,21 +785,17 @@ const styles = StyleSheet.create({
   passengerStepper: {
     flex: 1,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     backgroundColor: colors.surfaceAlt,
     padding: spacing.sm,
   },
   paymentGroup: {
     flex: 1.2,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
     backgroundColor: colors.surfaceAlt,
     padding: spacing.sm,
   },
   controlLabel: {
-    ...typography.label,
+    ...typography.labelSmall,
     color: colors.textSecondary,
     fontSize: 11,
     marginBottom: spacing.xs,
@@ -706,9 +851,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },

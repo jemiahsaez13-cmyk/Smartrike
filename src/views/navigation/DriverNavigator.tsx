@@ -1,71 +1,37 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DriverDashboard } from '@/views/screens/driver/DriverDashboard';
 import { BookingRequestScreen } from '@/views/screens/driver/BookingRequestScreen';
 import { FranchiseScreen } from '@/views/screens/driver/FranchiseScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen'; // Reusing for now
-import { colors, layout, radius, shadows, typography } from '@/views/styles/theme';
+import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const DriverTabs = () => (
-  <Tab.Navigator
-    screenOptions={{
-      headerShown: false,
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.textLight,
-      tabBarStyle: {
-        borderTopWidth: 1,
-        borderTopColor: colors.borderLight,
-        height: layout.tabBarHeight,
-        paddingBottom: 14,
-        paddingTop: 8,
-        backgroundColor: colors.surface,
-        ...shadows.lg,
-      },
-      tabBarItemStyle: {
-        minHeight: 56,
-        borderRadius: radius.md,
-        marginHorizontal: 4,
-      },
-      tabBarLabelStyle: {
-        ...typography.label,
-        fontSize: 12,
-        letterSpacing: 0,
-      }
-    }}
-  >
-    <Tab.Screen 
-      name="Dashboard" 
-      component={DriverDashboard} 
-      options={{
-        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="car-hatchback" size={size + 4} color={color} />
-      }}
+  <Tab.Navigator screenOptions={uberTabScreenOptions}>
+    <Tab.Screen
+      name="Dashboard"
+      component={DriverDashboard}
+      options={{ tabBarLabel: 'Home', tabBarIcon: tabIcon('view-dashboard', 'view-dashboard-outline') }}
     />
     <Tab.Screen
       name="Trips"
       component={TripHistoryScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="format-list-bulleted" size={size + 4} color={color} />
-      }}
+      options={{ tabBarLabel: 'Trips', tabBarIcon: tabIcon('clipboard-list', 'clipboard-list-outline') }}
     />
     <Tab.Screen
       name="Franchise"
       component={FranchiseScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="card-account-details-outline" size={size + 4} color={color} />
-      }}
+      options={{ tabBarLabel: 'MTOP', tabBarIcon: tabIcon('card-account-details', 'card-account-details-outline') }}
     />
     <Tab.Screen
       name="Profile"
       component={ProfileScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-outline" size={size + 4} color={color} />
-      }}
+      options={{ tabBarLabel: 'Account', tabBarIcon: tabIcon('account', 'account-outline') }}
     />
   </Tab.Navigator>
 );

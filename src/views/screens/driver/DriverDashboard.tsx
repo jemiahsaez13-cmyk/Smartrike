@@ -85,6 +85,11 @@ export const DriverDashboard = () => {
 
   return (
     <View style={styles.container}>
+      <Animated.ScrollView
+        style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
       <LinearGradient
         colors={isOnline ? gradients.brand : [colors.primary700, colors.primary]}
         start={{ x: 0, y: 0 }}
@@ -118,11 +123,7 @@ export const DriverDashboard = () => {
         </Card>
       </LinearGradient>
 
-      <Animated.ScrollView
-        style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.body}>
         <View style={styles.statsRow}>
           <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(0)}`} icon="cash" color={colors.success} />
           <StatBox label="Rating" value="4.8" icon="star" color={colors.warning} />
@@ -183,6 +184,7 @@ export const DriverDashboard = () => {
             </View>
           ))}
         </Card>
+      </View>
       </Animated.ScrollView>
     </View>
   );
@@ -259,11 +261,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginTop: -40,
   },
   scrollContent: {
+    paddingBottom: 0,
+  },
+  body: {
+    marginTop: -40,
     paddingHorizontal: spacing.screen,
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
   statsRow: {
     flexDirection: 'row',
