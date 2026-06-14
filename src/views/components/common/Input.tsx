@@ -63,16 +63,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   inputContainer: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
   },
   outline: {
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: colors.surfaceAlt,
   },
   outlineFocused: {
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primary,
   },
   outlineError: {

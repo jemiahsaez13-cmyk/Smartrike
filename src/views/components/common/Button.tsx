@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Button as PaperButton, ButtonProps } from 'react-native-paper';
 import { StyleSheet, Animated, Pressable, ViewStyle, StyleProp, View } from 'react-native';
-import { colors, radius, shadows, typography, spacing } from '@/views/styles/theme';
+import { colors, radius, typography, spacing } from '@/views/styles/theme';
 
 interface CustomButtonProps extends Omit<ButtonProps, 'style'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
@@ -90,7 +90,7 @@ const styles = StyleSheet.create<any>({
     overflow: 'hidden',
   },
   buttonContainer: {
-    minHeight: 48,
+    minHeight: 54,
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -99,7 +99,6 @@ const styles = StyleSheet.create<any>({
   },
   primaryBtn: {
     backgroundColor: colors.primary,
-    ...shadows.sm,
   },
   secondaryBtn: {
     backgroundColor: colors.surfaceHover,

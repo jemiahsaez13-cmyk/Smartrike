@@ -93,12 +93,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  text: { 
-    marginTop: spacing.lg, 
-    textAlign: 'center', 
-    color: colors.textSecondary, 
-    fontSize: 16,
+  text: {
     ...typography.subtitle,
+    marginTop: spacing.lg,
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontSize: 16,
     letterSpacing: 0
   },
   progressTrack: {

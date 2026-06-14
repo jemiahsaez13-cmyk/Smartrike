@@ -35,7 +35,8 @@ export const PassengerDashboard = () => {
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 800,
+        friction: 8,
+        tension: 40,
         useNativeDriver: true,
       }),
     ]).start();
