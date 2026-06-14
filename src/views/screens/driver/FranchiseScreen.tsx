@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { fetchMyApplication, submitApplication } from '@/controllers/slices/franchiseSlice';
 import {
@@ -11,8 +10,10 @@ import {
   FRANCHISE_STATUS_LABEL,
   FranchiseType,
 } from '@/models/entities/Franchise';
-import { colors, spacing, shadows } from '@/views/styles/theme';
+import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
+import { Button } from '@/views/components/common/Button';
+import { Card } from '@/views/components/common/Card';
 
 export const FranchiseScreen = () => {
   const dispatch = useAppDispatch();
@@ -76,55 +77,72 @@ export const FranchiseScreen = () => {
     myApplication.status !== 'rejected';
 
   const Header = ({ subtitle }: { subtitle: string }) => (
-    <LinearGradient colors={[colors.primaryDark, colors.primary, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
+    <View style={styles.header}>
       <Text style={styles.headerTitle}>Franchise (MTOP)</Text>
       <Text style={styles.headerSubtitle}>{subtitle}</Text>
-    </LinearGradient>
+    </View>
   );
 
   // --- Active MTOP ---
   if (isActive) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Header subtitle="Your franchise is active" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <Surface style={styles.mtopCard} elevation={3}>
-            <LinearGradient colors={['#0D1B2A', '#1873CC']} style={styles.mtopGradient}>
-              <View style={styles.mtopTop}>
-                <MaterialCommunityIcons name="shield-check" size={28} color="#fff" />
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>ACTIVE</Text>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Surface style={styles.mtopCard} elevation={0}>
+            <View style={styles.mtopHeader}>
+              <View style={styles.mtopBrand}>
+                <View style={styles.mtopLogo}>
+                  <TricycleIcon size={24} color="#fff" />
                 </View>
+                <Text style={styles.mtopBrandText}>FEDTODAB MTOP</Text>
               </View>
+              <View style={styles.activeBadge}>
+                <Text style={styles.activeBadgeText}>ACTIVE</Text>
+              </View>
+            </View>
+
+            <View style={styles.mtopBody}>
               <Text style={styles.mtopLabel}>MTOP NUMBER</Text>
               <Text style={styles.mtopNumber}>{myApplication?.mtop_number}</Text>
-              <View style={styles.mtopRow}>
-                <View>
-                  <Text style={styles.mtopSmallLabel}>OPERATOR</Text>
+
+              <View style={styles.mtopGrid}>
+                <View style={styles.mtopItem}>
+                  <Text style={styles.mtopLabel}>OPERATOR</Text>
                   <Text style={styles.mtopValue}>{myApplication?.driver_name}</Text>
                 </View>
-                <View>
-                  <Text style={styles.mtopSmallLabel}>PLATE</Text>
+                <View style={styles.mtopItem}>
+                  <Text style={styles.mtopLabel}>PLATE</Text>
                   <Text style={styles.mtopValue}>{myApplication?.plate_number}</Text>
                 </View>
+              </View>
+
+              <View style={styles.mtopDivider} />
+
+              <View style={styles.mtopFooter}>
                 <View>
-                  <Text style={styles.mtopSmallLabel}>TODA</Text>
+                  <Text style={styles.mtopLabel}>TODA</Text>
                   <Text style={styles.mtopValue}>{myApplication?.toda}</Text>
                 </View>
+                <MaterialCommunityIcons name="shield-check" size={24} color={colors.secondary} />
               </View>
-            </LinearGradient>
+            </View>
           </Surface>
 
-          <TouchableOpacity style={styles.renewBtn} onPress={handleRenew} activeOpacity={0.85}>
-            <MaterialCommunityIcons name="autorenew" size={20} color={colors.primary} />
-            <Text style={styles.renewText}>Renew Franchise</Text>
-          </TouchableOpacity>
+          <Button 
+            variant="outline" 
+            onPress={handleRenew}
+            style={styles.renewBtn}
+          >
+            <MaterialCommunityIcons name="autorenew" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+            Renew Franchise
+          </Button>
 
           <Text style={styles.note}>
             Keep your OR/CR and TODA membership updated. Renew before expiry to avoid penalties.
           </Text>
         </ScrollView>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -132,13 +150,13 @@ export const FranchiseScreen = () => {
   if (inProgress) {
     const currentIdx = FRANCHISE_FLOW.indexOf(myApplication!.status);
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <Header subtitle={`Application ${myApplication!.type === 'renewal' ? '(Renewal)' : '(New)'} in review`} />
-        <ScrollView contentContainerStyle={styles.content}>
-          <Surface style={styles.statusCard} elevation={2}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Card variant="elevated" padding="lg" style={styles.statusCard}>
             <Text style={styles.statusBig}>{FRANCHISE_STATUS_LABEL[myApplication!.status]}</Text>
             <Text style={styles.statusSub}>Plate {myApplication!.plate_number} • ₱{myApplication!.fees} fees</Text>
-          </Surface>
+          </Card>
 
           <View style={styles.stepper}>
             {FRANCHISE_FLOW.map((step, idx) => {
@@ -176,163 +194,325 @@ export const FranchiseScreen = () => {
           </View>
 
           {myApplication!.remarks ? (
-            <Surface style={styles.remarkCard} elevation={1}>
+            <Card variant="outlined" padding="md" style={styles.remarkCard}>
               <MaterialCommunityIcons name="information-outline" size={18} color={colors.info} />
               <Text style={styles.remarkText}>{myApplication!.remarks}</Text>
-            </Surface>
+            </Card>
           ) : null}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // --- Apply form (no application or rejected) ---
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Header subtitle="Apply for a tricycle franchise" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {myApplication?.status === 'rejected' && (
-          <Surface style={[styles.remarkCard, { borderColor: colors.error }]} elevation={1}>
+          <Card variant="outlined" padding="md" style={[styles.remarkCard, { borderColor: colors.error }]}>
             <MaterialCommunityIcons name="close-circle-outline" size={18} color={colors.error} />
             <Text style={styles.remarkText}>
               Previous application was rejected{myApplication.remarks ? `: ${myApplication.remarks}` : '.'} You may re-apply.
             </Text>
-          </Surface>
+          </Card>
         )}
 
-        <Text style={styles.sectionTitle}>Unit</Text>
-        <Surface style={styles.infoCard} elevation={1}>
-          <MaterialCommunityIcons name="rickshaw" size={22} color={colors.primary} />
-          <Text style={styles.infoText}>Plate Number: {plate}</Text>
-        </Surface>
+        <Text style={styles.sectionTitle}>Unit Details</Text>
+        <Card variant="elevated" padding="md" style={styles.infoCard}>
+          <MaterialCommunityIcons name="rickshaw" size={24} color={colors.primary} />
+          <View>
+            <Text style={styles.infoLabel}>PLATE NUMBER</Text>
+            <Text style={styles.infoValue}>{plate}</Text>
+          </View>
+        </Card>
 
         <Text style={styles.sectionTitle}>Required Documents</Text>
-        <Surface style={styles.docCard} elevation={1}>
+        <Card variant="outlined" padding="none" style={styles.docCard}>
           {docs.map((doc, idx) => (
-            <TouchableOpacity key={doc.name} style={styles.docRow} onPress={() => toggleDoc(idx)} activeOpacity={0.7}>
-              <MaterialCommunityIcons
-                name={doc.uploaded ? 'checkbox-marked-circle' : 'cloud-upload-outline'}
-                size={22}
-                color={doc.uploaded ? colors.success : colors.textLight}
-              />
+            <TouchableOpacity key={doc.name} style={[styles.docRow, idx === docs.length - 1 && { borderBottomWidth: 0 }]} onPress={() => toggleDoc(idx)} activeOpacity={0.7}>
+              <View style={[styles.docIcon, doc.uploaded && { backgroundColor: colors.successLight }]}>
+                <MaterialCommunityIcons
+                  name={doc.uploaded ? 'check' : 'plus'}
+                  size={18}
+                  color={doc.uploaded ? colors.success : colors.textMuted}
+                />
+              </View>
               <Text style={[styles.docName, doc.uploaded && { color: colors.text }]}>{doc.name}</Text>
               <Text style={[styles.docAction, doc.uploaded && { color: colors.success }]}>
-                {doc.uploaded ? 'Uploaded' : 'Upload'}
+                {doc.uploaded ? 'Uploaded' : 'Add'}
               </Text>
             </TouchableOpacity>
           ))}
-        </Surface>
+        </Card>
 
         <View style={styles.feeRow}>
-          <Text style={styles.feeLabel}>Estimated Filing & Franchise Fees</Text>
+          <Text style={styles.feeLabel}>Filing & Franchise Fees</Text>
           <Text style={styles.feeValue}>₱1,500.00</Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.submitBtn, (!allUploaded || submitting) && { opacity: 0.6 }]}
+        <Button
+          variant="primary"
           onPress={() => handleSubmit('new')}
           disabled={!allUploaded || submitting}
-          activeOpacity={0.85}
+          loading={submitting}
         >
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            <Text style={styles.submitText}>{submitting ? 'Submitting...' : 'Submit Application'}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+          Submit Application
+        </Button>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 24,
-    paddingHorizontal: spacing.lg,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.surface 
   },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  headerSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.9)', marginTop: 4, fontWeight: '500' },
-  content: { padding: spacing.lg, paddingBottom: 40 },
-  mtopCard: { borderRadius: 20, overflow: 'hidden', ...shadows.lg },
-  mtopGradient: { padding: spacing.lg },
-  mtopTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  activeBadge: { backgroundColor: colors.success, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  activeBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  mtopLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  mtopNumber: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 1, marginTop: 4, marginBottom: spacing.lg },
-  mtopRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  mtopSmallLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  mtopValue: { color: '#fff', fontSize: 14, fontWeight: '700', marginTop: 2 },
-  renewBtn: {
+  header: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.screen,
+  },
+  headerTitle: { 
+    ...typography.h1,
+    fontSize: 28,
+  },
+  headerSubtitle: { 
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  content: { 
+    paddingHorizontal: spacing.screen, 
+    paddingBottom: spacing.xxl 
+  },
+  mtopCard: { 
+    backgroundColor: colors.primary,
+    borderRadius: radius.xl, 
+    overflow: 'hidden',
+    ...shadows.lg,
+    marginBottom: spacing.xl,
+  },
+  mtopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  mtopBrand: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    paddingVertical: spacing.md,
-    marginTop: spacing.lg,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+    gap: spacing.sm,
   },
-  renewText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
-  note: { fontSize: 13, color: colors.textSecondary, marginTop: spacing.lg, lineHeight: 19, textAlign: 'center' },
-  statusCard: { backgroundColor: colors.surface, borderRadius: 18, padding: spacing.lg, marginBottom: spacing.lg, ...shadows.md, alignItems: 'center' },
-  statusBig: { fontSize: 20, fontWeight: '800', color: colors.primary },
-  statusSub: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  stepper: { backgroundColor: colors.surface, borderRadius: 18, padding: spacing.lg, borderWidth: 1, borderColor: colors.borderLight },
+  mtopLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mtopBrandText: {
+    ...typography.label,
+    color: '#fff',
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  activeBadge: { 
+    backgroundColor: colors.secondary, 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: radius.pill 
+  },
+  activeBadgeText: { 
+    color: '#fff', 
+    fontSize: 10, 
+    fontWeight: '800', 
+    letterSpacing: 1 
+  },
+  mtopBody: {
+    padding: spacing.lg,
+  },
+  mtopLabel: { 
+    ...typography.labelSmall,
+    color: 'rgba(255,255,255,0.5)', 
+    fontSize: 9,
+    letterSpacing: 1.5,
+  },
+  mtopNumber: { 
+    ...typography.h1,
+    color: '#fff', 
+    fontSize: 32, 
+    marginTop: 4, 
+    marginBottom: spacing.xl,
+  },
+  mtopGrid: { 
+    flexDirection: 'row', 
+    gap: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  mtopItem: {
+    flex: 1,
+  },
+  mtopValue: { 
+    ...typography.subtitle,
+    color: '#fff', 
+    fontSize: 15,
+    marginTop: 2,
+  },
+  mtopDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: spacing.md,
+  },
+  mtopFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  renewBtn: {
+    height: 52,
+    marginBottom: spacing.lg,
+  },
+  note: { 
+    ...typography.bodySmall,
+    color: colors.textMuted, 
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  statusCard: { 
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  statusBig: { 
+    ...typography.h2,
+    color: colors.primary 
+  },
+  statusSub: { 
+    ...typography.bodySmall,
+    color: colors.textSecondary, 
+    marginTop: 4 
+  },
+  stepper: { 
+    backgroundColor: colors.surfaceAlt, 
+    borderRadius: radius.lg, 
+    padding: spacing.lg, 
+    marginBottom: spacing.xl,
+  },
   step: { flexDirection: 'row' },
   stepIndicatorCol: { alignItems: 'center', marginRight: spacing.md },
   stepDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.borderLight,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepDotDone: { backgroundColor: colors.success },
+  stepDotDone: { backgroundColor: colors.secondary },
   stepDotActive: { backgroundColor: colors.primary },
-  stepNum: { fontSize: 12, fontWeight: '800', color: colors.textLight },
-  stepLine: { width: 2, flex: 1, minHeight: 24, backgroundColor: colors.borderLight, marginVertical: 2 },
-  stepLineDone: { backgroundColor: colors.success },
+  stepNum: { 
+    ...typography.labelSmall,
+    color: colors.textMuted 
+  },
+  stepLine: { 
+    width: 2, 
+    flex: 1, 
+    minHeight: 24, 
+    backgroundColor: colors.border, 
+    marginVertical: 4 
+  },
+  stepLineDone: { backgroundColor: colors.secondary },
   stepBody: { flex: 1, paddingBottom: spacing.lg },
-  stepLabel: { fontSize: 15, fontWeight: '700', color: colors.textLight },
-  stepHint: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  stepLabel: { 
+    ...typography.label,
+    color: colors.textMuted,
+  },
+  stepHint: { 
+    ...typography.bodySmall,
+    color: colors.textSecondary, 
+    marginTop: 2 
+  },
   remarkCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    gap: 12,
+    marginBottom: spacing.xl,
   },
-  remarkText: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: colors.textSecondary, marginBottom: spacing.sm, marginTop: spacing.md },
+  remarkText: { 
+    flex: 1, 
+    ...typography.bodySmall,
+    color: colors.textSecondary, 
+  },
+  sectionTitle: { 
+    ...typography.label,
+    color: colors.textMuted, 
+    fontSize: 11,
+    letterSpacing: 1.5,
+    marginBottom: spacing.md, 
+    marginTop: spacing.md 
+  },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
-  infoText: { fontSize: 15, fontWeight: '600', color: colors.text },
-  docCard: { backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.borderLight },
-  docRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md, gap: 12 },
-  docName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  docAction: { fontSize: 12, fontWeight: '700', color: colors.textLight },
-  feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.md },
-  feeLabel: { fontSize: 14, color: colors.textSecondary, fontWeight: '600', flex: 1 },
-  feeValue: { fontSize: 18, fontWeight: '800', color: colors.text },
-  submitBtn: { height: 54, borderRadius: 16, overflow: 'hidden', marginTop: spacing.sm },
-  submitGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
+  infoLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  infoValue: { 
+    ...typography.subtitle,
+    fontSize: 16,
+    color: colors.text 
+  },
+  docCard: { 
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+  },
+  docRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: spacing.md, 
+    gap: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  docIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  docName: { 
+    flex: 1, 
+    ...typography.label,
+    color: colors.textSecondary 
+  },
+  docAction: { 
+    ...typography.labelSmall,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  feeRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: spacing.xl,
+  },
+  feeLabel: { 
+    ...typography.body,
+    color: colors.textSecondary,
+  },
+  feeValue: { 
+    ...typography.h2,
+    color: colors.text 
+  },
 });
