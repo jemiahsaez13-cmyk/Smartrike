@@ -26,10 +26,11 @@ export class AuthService {
   async signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    
-    const user = await this.userRepo.findByEmail(email);
-    if (!user) throw new Error('User not found');
-    if (user.status !== 'active') throw new Error('Account is inactive');
+
+    // Look up by auth_id (UUID from the session) — avoids RLS timing issues with email lookup
+    const user = await this.userRepo.findByAuthId(data.user.id);
+    if (!user) throw new Error('Profile not found. Please contact support.');
+    if (user.status !== 'active') throw new Error('Your account is inactive or suspended.');
     return { user, session: data.session };
   }
 
@@ -46,6 +47,7 @@ export class AuthService {
   async getCurrentUser() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
-    return await this.userRepo.findById(user.id);
+    // Look up by auth_id (Supabase auth UUID), not the app's own row id
+    return await this.userRepo.findByAuthId(user.id);
   }
 }

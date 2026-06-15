@@ -47,8 +47,9 @@ export const LoginScreen = () => {
     }
     try {
       await login(email.trim(), password);
-    } catch {
-      Alert.alert('Access Denied', 'Invalid email or password. Please try again.');
+    } catch (err: any) {
+      const msg = err?.message || err?.toString() || 'Unknown error';
+      Alert.alert('Sign In Failed', msg);
     }
   };
 

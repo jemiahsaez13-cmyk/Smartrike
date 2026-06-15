@@ -9,11 +9,11 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
-import { AuthService } from '@/models/services/AuthService';
+import { useAuth } from '@/controllers/hooks/useAuth';
 
 export const DriverRegisterScreen = () => {
   const navigation = useNavigation<any>();
-  const authService = new AuthService();
+  const { register } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -56,7 +56,7 @@ export const DriverRegisterScreen = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await authService.signUp(formData.email, formData.password, {
+      await register(formData.email, formData.password, {
         name: formData.name,
         phone: formData.phone,
         user_type: 'driver',
@@ -68,14 +68,9 @@ export const DriverRegisterScreen = () => {
           model: formData.vehicle_model,
         },
       });
-      Alert.alert(
-        'Application Submitted!',
-        'Our team will verify your documents and activate your account shortly.',
-        [{ text: 'Got it', onPress: () => navigation.navigate('Login') }]
-      );
+      // Redux isAuthenticated becomes true → RootNavigator auto-redirects to app
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
-    } finally {
       setLoading(false);
     }
   };

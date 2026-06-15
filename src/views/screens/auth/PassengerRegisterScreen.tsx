@@ -9,11 +9,11 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
-import { AuthService } from '@/models/services/AuthService';
+import { useAuth } from '@/controllers/hooks/useAuth';
 
 export const PassengerRegisterScreen = () => {
   const navigation = useNavigation<any>();
-  const authService = new AuthService();
+  const { register } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,17 +52,14 @@ export const PassengerRegisterScreen = () => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await authService.signUp(formData.email, formData.password, {
+      await register(formData.email, formData.password, {
         name: formData.name,
         phone: formData.phone,
         user_type: 'passenger',
       });
-      Alert.alert('Account Created!', 'Welcome aboard, passenger!', [
-        { text: 'Sign In', onPress: () => navigation.navigate('Login') },
-      ]);
+      // Redux isAuthenticated becomes true → RootNavigator auto-redirects to app
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
-    } finally {
       setLoading(false);
     }
   };

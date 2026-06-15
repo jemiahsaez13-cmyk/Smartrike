@@ -226,9 +226,11 @@ const auth = {
     if (!user) {
       return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
     }
-    currentAuthUser = { id: user.id, email };
+    // Return auth_id as the identity so findByAuthId() can locate the profile
+    const authId = user.auth_id || user.id;
+    currentAuthUser = { id: authId, email };
     return {
-      data: { user: { id: user.id, email }, session: { access_token: 'mock' } },
+      data: { user: { id: authId, email }, session: { access_token: 'mock' } },
       error: null,
     };
   },

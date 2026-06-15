@@ -1,6 +1,6 @@
 -- Create activity_logs table for audit trails
 CREATE TABLE IF NOT EXISTS activity_logs (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   action_type VARCHAR(50) NOT NULL,
   entity_type VARCHAR(50) NOT NULL,
@@ -19,7 +19,7 @@ CREATE INDEX idx_activity_logs_action_type ON activity_logs(action_type);
 
 -- Create system_health table
 CREATE TABLE IF NOT EXISTS system_health (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   metric_name VARCHAR(100) NOT NULL,
   metric_value DECIMAL(10, 2) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'healthy',

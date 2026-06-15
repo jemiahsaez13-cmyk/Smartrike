@@ -13,6 +13,16 @@ export class UserRepository {
     return data;
   }
 
+  async findByAuthId(authId: string): Promise<User | null> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_id', authId)
+      .single();
+    if (error) return null;
+    return data;
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     const { data, error } = await supabase
       .from('users')
