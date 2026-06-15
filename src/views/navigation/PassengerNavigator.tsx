@@ -22,7 +22,7 @@ const PassengerTabs = () => (
     <Tab.Screen
       name="History"
       component={TripHistoryScreen}
-      options={{ tabBarLabel: 'Activity', tabBarIcon: tabIcon('receipt', 'receipt-outline') }}
+      options={{ tabBarLabel: 'Activity', tabBarIcon: tabIcon('clock-time-four', 'clock-time-four-outline') }}
     />
     <Tab.Screen
       name="Profile"

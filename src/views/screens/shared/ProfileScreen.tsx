@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-nat
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '@/controllers/hooks/useAuth';
-import { colors, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
@@ -36,7 +36,7 @@ export const ProfileScreen = () => {
     </View>
   );
 
-  const MenuItem = ({ icon, label, onPress, danger, last }: any) => (
+  const MenuItem = ({ icon, label, value, onPress, danger, last }: any) => (
     <TouchableOpacity
       style={[styles.menuItem, !last && styles.menuItemBorder]}
       onPress={onPress}
@@ -45,76 +45,107 @@ export const ProfileScreen = () => {
       <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
         <MaterialCommunityIcons name={icon} size={20} color={danger ? colors.error : colors.text} />
       </View>
-      <Text style={[styles.menuLabel, danger && styles.menuLabelDanger]}>{label}</Text>
-      <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textLight} />
+      <View style={styles.menuCopy}>
+        <Text style={[styles.menuLabel, danger && styles.menuLabelDanger]}>{label}</Text>
+        {value ? <Text style={styles.menuValue} numberOfLines={1}>{value}</Text> : null}
+      </View>
+      {!danger && <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textLight} />}
     </TouchableOpacity>
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Hero — scrolls with the page instead of being pinned to the top */}
-      <Text style={styles.pageTitle}>Account</Text>
-
-      <View style={styles.identity}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-        </View>
-        <View style={styles.identityCopy}>
-          <Text style={styles.name} numberOfLines={1}>{user?.name || 'User'}</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{roleLabel}</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.statsCard}>
-        <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
-        <View style={styles.statDivider} />
-        <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
-        <View style={styles.statDivider} />
-        <Stat icon="shield-check" value="Active" label="Status" />
-      </View>
-
-      <Text style={styles.sectionTitle}>Account</Text>
-      <View style={styles.card}>
-        <View style={[styles.infoRow, styles.menuItemBorder]}>
-          <View style={styles.menuIcon}>
-            <MaterialCommunityIcons name="email-outline" size={20} color={colors.text} />
-          </View>
-          <View style={styles.infoCopy}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue} numberOfLines={1}>{user?.email || 'Not set'}</Text>
-          </View>
-        </View>
-        <View style={styles.infoRow}>
-          <View style={styles.menuIcon}>
-            <MaterialCommunityIcons name="phone-outline" size={20} color={colors.text} />
-          </View>
-          <View style={styles.infoCopy}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue} numberOfLines={1}>{user?.phone || 'Not set'}</Text>
-          </View>
+    <View style={styles.container}>
+      {/* Slim app bar — title left, notifications + settings actions top right */}
+      <View style={styles.appBar}>
+        <Text style={styles.appBarTitle}>Account</Text>
+        <View style={styles.appBarActions}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Notifications', 'You have no new notifications')}
+          >
+            <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
+            <View style={styles.badge} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            activeOpacity={0.7}
+            onPress={() => Alert.alert('Settings', 'Coming soon')}
+          >
+            <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Settings</Text>
-      <View style={styles.card}>
-        <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => Alert.alert('Edit Profile', 'Coming soon')} />
-        <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => Alert.alert('Payment Methods', 'Coming soon')} />
-        <MenuItem icon="bell-outline" label="Notifications" onPress={() => Alert.alert('Notifications', 'Coming soon')} />
-        <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => Alert.alert('Help & Support', 'Contact FEDTODAB office')} last />
-      </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Identity */}
+        <TouchableOpacity
+          style={styles.identity}
+          activeOpacity={0.7}
+          onPress={() => Alert.alert('Edit Profile', 'Coming soon')}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+          </View>
+          <View style={styles.identityCopy}>
+            <Text style={styles.name} numberOfLines={1}>{user?.name || 'User'}</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>{roleLabel}</Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textLight} />
+        </TouchableOpacity>
 
-      <View style={styles.card}>
-        <MenuItem icon="logout" label="Log Out" onPress={handleLogout} danger last />
-      </View>
+        {/* Stats */}
+        <View style={styles.statsCard}>
+          <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
+          <View style={styles.statDivider} />
+          <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
+          <View style={styles.statDivider} />
+          <Stat icon="shield-check" value="Active" label="Status" />
+        </View>
 
-      <Text style={styles.version}>Smart Trike • v1.0.0</Text>
-    </ScrollView>
+        {/* Contact details */}
+        <Text style={styles.sectionTitle}>Personal Information</Text>
+        <View style={styles.card}>
+          <MenuItem
+            icon="email-outline"
+            label="Email"
+            value={user?.email || 'Not set'}
+            onPress={() => Alert.alert('Email', user?.email || 'Not set')}
+          />
+          <MenuItem
+            icon="phone-outline"
+            label="Phone"
+            value={user?.phone || 'Not set'}
+            onPress={() => Alert.alert('Phone', user?.phone || 'Not set')}
+            last
+          />
+        </View>
+
+        {/* Account management */}
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.card}>
+          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => Alert.alert('Edit Profile', 'Coming soon')} />
+          <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => Alert.alert('Payment Methods', 'Coming soon')} />
+          <MenuItem icon="shield-account-outline" label="Privacy & Security" onPress={() => Alert.alert('Privacy & Security', 'Coming soon')} last />
+        </View>
+
+        {/* Support */}
+        <Text style={styles.sectionTitle}>Support</Text>
+        <View style={styles.card}>
+          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => Alert.alert('Help & Support', 'Contact FEDTODAB office')} />
+          <MenuItem icon="information-outline" label="About Smart Trike" onPress={() => Alert.alert('About', 'Smart Trike • v1.0.0')} last />
+        </View>
+
+        {/* Sign out */}
+        <View style={styles.card}>
+          <MenuItem icon="logout" label="Log Out" onPress={handleLogout} danger last />
+        </View>
+
+        <Text style={styles.version}>Smart Trike • v1.0.0</Text>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -123,25 +154,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  appBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.screen,
+    paddingTop: layout.headerTop,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  appBarTitle: {
+    ...typography.h2,
+    fontSize: 26,
+  },
+  appBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: 9,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.error,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceAlt,
+  },
   content: {
     paddingHorizontal: spacing.screen,
-    paddingTop: 64,
+    paddingTop: spacing.lg,
     paddingBottom: 120,
-  },
-  pageTitle: {
-    ...typography.display,
-    fontSize: 32,
-    marginBottom: spacing.lg,
   },
   identity: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    padding: spacing.md,
     marginBottom: spacing.lg,
+    ...shadows.sm,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.primary,
@@ -149,22 +220,22 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '800',
   },
   identityCopy: {
     flex: 1,
   },
   name: {
-    ...typography.h2,
-    fontSize: 22,
+    ...typography.h3,
+    fontSize: 19,
   },
   roleBadge: {
-    marginTop: spacing.xs,
+    marginTop: 6,
     alignSelf: 'flex-start',
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
     borderRadius: radius.pill,
   },
   roleText: {
@@ -218,26 +289,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderLight,
   },
-  infoRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  infoCopy: {
-    flex: 1,
-  },
-  infoLabel: {
-    ...typography.labelSmall,
-    color: colors.textLight,
-  },
-  infoValue: {
-    ...typography.label,
-    fontSize: 15,
-    marginTop: 2,
-  },
   menuItem: {
-    minHeight: 56,
+    minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: spacing.sm,
@@ -258,10 +311,17 @@ const styles = StyleSheet.create({
   menuIconDanger: {
     backgroundColor: colors.errorLight,
   },
-  menuLabel: {
+  menuCopy: {
     flex: 1,
+  },
+  menuLabel: {
     ...typography.label,
     fontSize: 15,
+  },
+  menuValue: {
+    ...typography.bodySmall,
+    color: colors.textLight,
+    marginTop: 2,
   },
   menuLabelDanger: {
     color: colors.error,

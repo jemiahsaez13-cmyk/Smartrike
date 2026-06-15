@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput as RNTextInput } from 'react-native';
-import { Text, Surface, Chip, Menu } from 'react-native-paper';
+import { Text, Menu } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector } from '@/controllers/store';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
@@ -8,6 +8,36 @@ import { Booking } from '@/models/types';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { ExportService } from '@/models/services/ExportService';
+
+// Filter options for the status choice chips.
+const FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'in-transit', label: 'In Progress' },
+  { key: 'cancelled', label: 'Cancelled' },
+] as const;
+
+// Per-status presentation — label, accent color, tint background and icon.
+const STATUS_META: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+  completed: { label: 'Completed', color: colors.success, bg: colors.successLight, icon: 'check-circle' },
+  cancelled: { label: 'Cancelled', color: colors.error, bg: colors.errorLight, icon: 'close-circle' },
+  'in-transit': { label: 'In Progress', color: colors.info, bg: colors.infoLight, icon: 'navigation-variant' },
+  pending: { label: 'Pending', color: colors.warning, bg: colors.warningLight, icon: 'clock-outline' },
+  accepted: { label: 'Accepted', color: colors.info, bg: colors.infoLight, icon: 'check' },
+};
+
+const statusMeta = (status: string) =>
+  STATUS_META[status] ?? { label: status, color: colors.textSecondary, bg: colors.surfaceAlt, icon: 'information-outline' };
+
+const FilterChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={[styles.chip, active && styles.chipActive]}
+  >
+    <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export const TripHistoryScreen = () => {
   const { user } = useAppSelector(state => state.auth);
@@ -42,22 +72,23 @@ export const TripHistoryScreen = () => {
 
   const applyFilters = () => {
     let filtered = [...bookings];
-    
+
     if (statusFilter !== 'all') {
       filtered = filtered.filter(b => b.status === statusFilter);
     }
-    
+
     if (searchQuery) {
-      filtered = filtered.filter(b => 
+      filtered = filtered.filter(b =>
         b.pickup_location.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
         b.dropoff_location.address.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
+
     setFilteredBookings(filtered);
   };
 
   const handleExport = async () => {
+    setMenuVisible(false);
     try {
       await ExportService.exportBookingsToCSV(filteredBookings);
     } catch (error) {
@@ -67,6 +98,8 @@ export const TripHistoryScreen = () => {
 
   if (loading) return <Loading message="Loading trip history..." />;
 
+  const totalFares = filteredBookings.reduce((sum, b) => sum + (b.total_fare || 0), 0);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -75,8 +108,8 @@ export const TripHistoryScreen = () => {
           visible={menuVisible}
           onDismiss={() => setMenuVisible(false)}
           anchor={
-            <TouchableOpacity style={styles.exportBtn} onPress={() => setMenuVisible(true)}>
-              <MaterialCommunityIcons name="download-outline" size={20} color={colors.primary} />
+            <TouchableOpacity style={styles.exportBtn} onPress={() => setMenuVisible(true)} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="download-outline" size={20} color={colors.text} />
             </TouchableOpacity>
           }
         >
@@ -93,109 +126,99 @@ export const TripHistoryScreen = () => {
           style={styles.searchInput}
           placeholderTextColor={colors.textLight}
         />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+            <MaterialCommunityIcons name="close-circle" size={18} color={colors.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-        <View style={styles.filters}>
-          <Chip
-            selected={statusFilter === 'all'}
-            onPress={() => setStatusFilter('all')}
-            style={styles.chip}
-            textStyle={styles.chipText}
-            compact
-          >
-            All
-          </Chip>
-          <Chip
-            selected={statusFilter === 'completed'}
-            onPress={() => setStatusFilter('completed')}
-            style={styles.chip}
-            textStyle={styles.chipText}
-            compact
-          >
-            Completed
-          </Chip>
-          <Chip
-            selected={statusFilter === 'cancelled'}
-            onPress={() => setStatusFilter('cancelled')}
-            style={styles.chip}
-            textStyle={styles.chipText}
-            compact
-          >
-            Cancelled
-          </Chip>
-          <Chip
-            selected={statusFilter === 'in-transit'}
-            onPress={() => setStatusFilter('in-transit')}
-            style={styles.chip}
-            textStyle={styles.chipText}
-            compact
-          >
-            In Progress
-          </Chip>
-        </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filters}
+      >
+        {FILTERS.map(f => (
+          <FilterChip
+            key={f.key}
+            label={f.label}
+            active={statusFilter === f.key}
+            onPress={() => setStatusFilter(f.key)}
+          />
+        ))}
       </ScrollView>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Surface style={styles.summaryCard} elevation={1}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.summaryCard}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>{filteredBookings.length}</Text>
-            <Text style={styles.summaryLabel}>trips found</Text>
+            <Text style={styles.summaryLabel}>Trips</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, typography.currency]}>
-              ₱{(filteredBookings.reduce((sum, booking) => sum + (booking.total_fare || 0), 0)).toFixed(2)}
-            </Text>
-            <Text style={styles.summaryLabel}>total fares</Text>
+            <Text style={[styles.summaryValue, typography.currency]}>₱{totalFares.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>Total Fares</Text>
           </View>
-        </Surface>
-        
+        </View>
+
         {filteredBookings.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialCommunityIcons name="map-marker-off" size={64} color={colors.textLight} />
+            <View style={styles.emptyIcon}>
+              <MaterialCommunityIcons name="map-marker-path" size={40} color={colors.textLight} />
+            </View>
             <Text style={styles.emptyText}>No trips found</Text>
-            <Text style={styles.emptySubtext}>Try adjusting your filters</Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery || statusFilter !== 'all'
+                ? 'Try adjusting your search or filters'
+                : 'Your completed trips will appear here'}
+            </Text>
           </View>
         ) : (
-          filteredBookings.map(booking => (
-            <Surface key={booking.id} style={styles.tripCard} elevation={1}>
-              <View style={styles.tripHeader}>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: booking.status === 'completed' ? colors.success + '20' : colors.error + '20' }
-                ]}>
-                  <Text style={[
-                    styles.statusText,
-                    { color: booking.status === 'completed' ? colors.success : colors.error }
-                  ]}>
-                    {booking.status}
+          filteredBookings.map(booking => {
+            const meta = statusMeta(booking.status);
+            return (
+              <View key={booking.id} style={styles.tripCard}>
+                <View style={styles.tripHeader}>
+                  <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+                    <MaterialCommunityIcons name={meta.icon} size={13} color={meta.color} />
+                    <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
+                  </View>
+                  <Text style={[styles.fareText, typography.currency]}>₱{(booking.total_fare || 0).toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.route}>
+                  <View style={styles.routeRail}>
+                    <View style={styles.originDot} />
+                    <View style={styles.routeLine} />
+                    <MaterialCommunityIcons name="map-marker" size={16} color={colors.text} style={styles.destMarker} />
+                  </View>
+                  <View style={styles.routeText}>
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {booking.pickup_location?.address || 'Pickup'}
+                    </Text>
+                    <View style={styles.routeGap} />
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {booking.dropoff_location?.address || 'Dropoff'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.tripFooter}>
+                  <MaterialCommunityIcons name="calendar-blank-outline" size={13} color={colors.textLight} />
+                  <Text style={styles.dateText}>
+                    {new Date(booking.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </Text>
                 </View>
-                <Text style={[styles.fareText, typography.currency]}>₱{(booking.total_fare || 0).toFixed(2)}</Text>
               </View>
-              
-              <View style={styles.locationRow}>
-                <MaterialCommunityIcons name="circle" size={12} color={colors.primary} />
-                <Text style={styles.locationText}>{booking.pickup_location?.address || 'Pickup'}</Text>
-              </View>
-              
-              <View style={styles.locationRow}>
-                <MaterialCommunityIcons name="map-marker" size={12} color={colors.accent} />
-                <Text style={styles.locationText}>{booking.dropoff_location?.address || 'Dropoff'}</Text>
-              </View>
-              
-              <Text style={styles.dateText}>
-                {new Date(booking.created_at).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </Text>
-            </Surface>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -213,58 +236,68 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight
+    borderBottomColor: colors.borderLight,
   },
-  headerTitle: { ...typography.title, fontSize: 24, color: colors.text },
+  headerTitle: { ...typography.h2, fontSize: 24 },
   exportBtn: {
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    margin: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border
+    height: 48,
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: {
     ...typography.body,
     flex: 1,
-    paddingVertical: spacing.md,
+    height: 48,
     fontSize: 15,
-    color: colors.text
+    color: colors.text,
   },
-  filterScroll: { maxHeight: 44, marginBottom: spacing.md },
+  filterScroll: { maxHeight: 56 },
   filters: {
     flexDirection: 'row',
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
     alignItems: 'center',
   },
-  chip: { 
-    height: 32,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    borderWidth: 0,
+  chip: {
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
-    ...typography.labelSmall,
-    fontSize: 12,
+    ...typography.label,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginVertical: 0,
-    marginHorizontal: 4,
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
   },
   content: { flex: 1 },
-  scrollContent: { padding: spacing.md },
+  scrollContent: { padding: spacing.md, paddingBottom: layout.contentBottom },
   summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -276,88 +309,95 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.sm,
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  summaryValue: {
-    ...typography.number,
-    color: colors.text,
-    fontSize: 20,
-  },
-  summaryLabel: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: colors.borderLight,
-  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryValue: { ...typography.number, color: colors.text, fontSize: 22 },
+  summaryLabel: { ...typography.labelSmall, color: colors.textSecondary, marginTop: 2 },
+  summaryDivider: { width: 1, height: 38, backgroundColor: colors.borderLight },
   tripCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.borderLight
+    borderColor: colors.borderLight,
   },
   tripHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md
+    marginBottom: spacing.md,
   },
   statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 12
-  },
-  statusText: {
-    ...typography.label,
-    fontSize: 12,
-    textTransform: 'capitalize'
-  },
-  fareText: {
-    ...typography.number,
-    fontSize: 18,
-    color: colors.text
-  },
-  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
-    paddingLeft: spacing.xs
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
   },
+  statusText: { ...typography.labelSmall, fontWeight: '700' },
+  fareText: { ...typography.number, fontSize: 18, color: colors.text },
+  route: {
+    flexDirection: 'row',
+  },
+  routeRail: {
+    alignItems: 'center',
+    width: 16,
+    marginRight: spacing.sm,
+    paddingTop: 4,
+  },
+  originDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    borderWidth: 2.5,
+    borderColor: colors.text,
+  },
+  routeLine: {
+    flex: 1,
+    width: 2,
+    minHeight: 16,
+    backgroundColor: colors.border,
+    marginVertical: 3,
+  },
+  destMarker: { marginBottom: -2 },
+  routeText: { flex: 1 },
+  routeGap: { height: 14 },
   locationText: {
-    ...typography.body,
+    ...typography.label,
     fontSize: 14,
-    color: colors.textSecondary,
-    marginLeft: spacing.sm,
-    flex: 1
+    color: colors.text,
   },
-  dateText: {
-    ...typography.body,
-    fontSize: 12,
-    color: colors.textLight,
-    marginTop: spacing.xs
+  tripFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
   },
+  dateText: { ...typography.bodySmall, fontSize: 12, color: colors.textLight },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: spacing.xl * 2
+    paddingVertical: spacing.xl * 2,
   },
-  emptyText: {
-    ...typography.title,
-    fontSize: 18,
-    color: colors.textSecondary,
-    marginTop: spacing.md
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
+  emptyText: { ...typography.h3, fontSize: 18, color: colors.text },
   emptySubtext: {
     ...typography.body,
     fontSize: 14,
     color: colors.textLight,
-    marginTop: spacing.xs
-  }
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
 });
