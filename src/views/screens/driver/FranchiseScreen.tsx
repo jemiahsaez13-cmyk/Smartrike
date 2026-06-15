@@ -14,6 +14,7 @@ import { colors, spacing, shadows, typography, radius } from '@/views/styles/the
 import { Loading } from '@/views/components/common/Loading';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
+import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 
 export const FranchiseScreen = () => {
   const dispatch = useAppDispatch();

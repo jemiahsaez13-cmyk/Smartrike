@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { Text, Surface, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { fetchAllApplications, advanceApplication } from '@/controllers/slices/franchiseSlice';
@@ -9,8 +9,9 @@ import {
   FranchiseStatus,
   FRANCHISE_STATUS_LABEL,
 } from '@/models/entities/Franchise';
-import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
+import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
+import { Card } from '@/views/components/common/Card';
 
 // Maps the current status to the next admin action.
 const NEXT: Record<string, { label: string; status: FranchiseStatus; patch?: Partial<FranchiseApplication> }> = {
@@ -274,10 +275,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  avatarText: { 
-    color: '#fff', 
-    fontSize: 16, 
-    ...typography.h3 
+  avatarText: {
+    ...typography.h3,
+    color: '#fff',
+    fontSize: 16,
   },
   driverName: { 
     ...typography.label,

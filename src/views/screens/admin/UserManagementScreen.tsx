@@ -118,12 +118,12 @@ const styles = StyleSheet.create({
   searchIcon: { 
     marginRight: spacing.sm 
   },
-  searchInput: { 
-    flex: 1, 
-    backgroundColor: 'transparent', 
-    height: 48, 
-    fontSize: 14,
+  searchInput: {
     ...typography.body,
+    flex: 1,
+    backgroundColor: 'transparent',
+    height: 48,
+    fontSize: 14,
   },
   filterBtn: { 
     width: 48, 
@@ -164,10 +164,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginRight: spacing.md 
   },
-  avatarInitial: { 
-    color: '#fff', 
-    fontSize: 18, 
+  avatarInitial: {
     ...typography.h3,
+    color: '#fff',
+    fontSize: 18,
   },
   details: {
     flex: 1,
