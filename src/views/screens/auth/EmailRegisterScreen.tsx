@@ -9,6 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
+import { useAuth } from '@/controllers/hooks/useAuth';
+import { Loading } from '@/views/components/common/Loading';
 
 export const EmailRegisterScreen = () => {
   const [fullName, setFullName] = useState('');
@@ -20,6 +22,7 @@ export const EmailRegisterScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigation = useNavigation<any>();
+  const { register, loading } = useAuth();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(32)).current;
@@ -31,16 +34,19 @@ export const EmailRegisterScreen = () => {
     ]).start();
   }, []);
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     Keyboard.dismiss();
 
-    if (!fullName.trim() || !email.trim() || !password.trim()) {
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanName || !cleanEmail || !password) {
       Alert.alert('Validation', 'Please fill in all required fields.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanEmail)) {
       Alert.alert('Validation', 'Please enter a valid email address.');
       return;
     }
@@ -60,10 +66,19 @@ export const EmailRegisterScreen = () => {
       return;
     }
 
-    Alert.alert('Account Created!', 'Welcome to Smart Trike.', [
-      { text: 'Sign In', onPress: () => navigation.navigate('EmailLogin') },
-    ]);
+    try {
+      await register(cleanEmail, password, {
+        name: cleanName,
+        user_type: userType,
+      });
+      // Navigation is handled automatically by AppNavigator when isAuthenticated changes
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Registration failed.';
+      Alert.alert('Registration Error', msg);
+    }
   };
+
+  if (loading) return <Loading message="Creating your account..." />;
 
   const roleOptions: { key: 'passenger' | 'driver'; label: string; icon: string }[] = [
     { key: 'passenger', label: 'Passenger', icon: 'account' },

@@ -217,11 +217,25 @@ let currentAuthUser: { id: string; email: string } | null = null;
 
 const auth = {
   async signUp({ email }: { email: string; password: string }) {
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 800));
+
+    // Check if email already exists in mock DB
+    const existing = db.users.find(u => u.email === email);
+    if (existing) {
+      return { 
+        data: { user: null, session: null }, 
+        error: { message: 'User already registered' } 
+      };
+    }
+
     const authId = `auth-${Math.random().toString(36).slice(2, 10)}`;
     currentAuthUser = { id: authId, email };
-    return { data: { user: { id: authId, email }, session: { access_token: 'mock' } }, error: null };
+    return { data: { user: { id: authId, email }, session: { access_token: 'mock-jwt' } }, error: null };
   },
   async signInWithPassword({ email }: { email: string; password: string }) {
+    await new Promise(r => setTimeout(r, 800));
+
     const user = db.users.find((u) => u.email === email);
     if (!user) {
       return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
@@ -230,7 +244,28 @@ const auth = {
     const authId = user.auth_id || user.id;
     currentAuthUser = { id: authId, email };
     return {
-      data: { user: { id: authId, email }, session: { access_token: 'mock' } },
+      data: { user: { id: authId, email }, session: { access_token: 'mock-jwt' } },
+      error: null,
+    };
+  },
+  async signInWithOtp({ phone }: { phone: string }) {
+    await new Promise(r => setTimeout(r, 600));
+    console.log(`[Mock] OTP '123456' sent to ${phone}`);
+    return { data: {}, error: null };
+  },
+  async verifyOtp({ phone, token }: { phone: string; token: string; type: string }) {
+    await new Promise(r => setTimeout(r, 800));
+    if (token !== '123456') {
+      return { data: { user: null, session: null }, error: { message: 'Invalid OTP' } };
+    }
+    const user = db.users.find((u) => u.phone === phone);
+    if (!user) {
+      return { data: { user: null, session: null }, error: { message: 'No profile found for this phone' } };
+    }
+    const authId = user.auth_id || user.id;
+    currentAuthUser = { id: authId, email: user.email };
+    return {
+      data: { user: { id: authId, email: user.email }, session: { access_token: 'mock-jwt' } },
       error: null,
     };
   },
@@ -243,6 +278,14 @@ const auth = {
   },
   async getUser() {
     return { data: { user: currentAuthUser }, error: null };
+  },
+  async getSession() {
+    return { 
+      data: { 
+        session: currentAuthUser ? { user: currentAuthUser, access_token: 'mock-jwt' } : null 
+      }, 
+      error: null 
+    };
   },
 };
 

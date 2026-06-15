@@ -39,27 +39,51 @@ export const PassengerRegisterScreen = () => {
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.name) newErrors.name = 'Full name is required';
-    if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.password) newErrors.password = 'Password is required';
-    if (formData.password !== formData.confirmPassword)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!formData.name.trim()) newErrors.name = 'Full name is required';
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!emailRegex.test(formData.email.trim())) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else if (formData.phone.trim().length < 10) {
+      newErrors.phone = 'Please enter a valid phone number';
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleRegister = async () => {
+    Keyboard.dismiss();
     if (!validate()) return;
+    
     setLoading(true);
     try {
-      await register(formData.email, formData.password, {
-        name: formData.name,
-        phone: formData.phone,
+      await register(formData.email.trim(), formData.password, {
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
         user_type: 'passenger',
       });
-      // Redux isAuthenticated becomes true → RootNavigator auto-redirects to app
+      // Navigation happens automatically via Redux state change in AppNavigator
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message);
+      const msg = typeof error === 'string' ? error : error?.message || 'Registration failed. Please try again.';
+      Alert.alert('Registration Error', msg);
       setLoading(false);
     }
   };

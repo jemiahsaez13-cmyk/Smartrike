@@ -9,6 +9,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Button } from '@/views/components/common/Button';
+import { useAuth } from '@/controllers/hooks/useAuth';
+import { Loading } from '@/views/components/common/Loading';
 
 export const OTPVerificationScreen = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -16,6 +18,7 @@ export const OTPVerificationScreen = () => {
   const [canResend, setCanResend] = useState(false);
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const { verify, loginWithPhone, loading } = useAuth();
   const inputRefs = useRef<RNTextInput[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -75,25 +78,37 @@ export const OTPVerificationScreen = () => {
     }
   };
 
-  const handleVerifyOTP = () => {
+  const handleVerifyOTP = async () => {
     Keyboard.dismiss();
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
       Alert.alert('Incomplete', 'Please enter all 6 digits.');
       return;
     }
-    Alert.alert('Verified!', 'OTP verified successfully.', [
-      { text: 'Continue', onPress: () => navigation.navigate('Login') },
-    ]);
+
+    try {
+      await verify(route.params?.phone, otpCode);
+      // Navigation is automatic when isAuthenticated changes
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Verification failed.';
+      Alert.alert('Error', msg);
+    }
   };
 
-  const handleResend = () => {
-    setTimeLeft(45);
-    setCanResend(false);
-    setOtp(['', '', '', '', '', '']);
-    inputRefs.current[0]?.focus();
-    Alert.alert('Sent', `A new code has been sent to ${route.params?.phone}`);
+  const handleResend = async () => {
+    try {
+      await loginWithPhone(route.params?.phone);
+      setTimeLeft(45);
+      setCanResend(false);
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+      Alert.alert('Sent', `A new code has been sent to ${route.params?.phone}`);
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to resend code.');
+    }
   };
+
+  if (loading) return <Loading message="Verifying code..." />;
 
   return (
     <SafeAreaView style={styles.container}>

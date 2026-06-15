@@ -9,10 +9,13 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
+import { useAuth } from '@/controllers/hooks/useAuth';
+import { Loading } from '@/views/components/common/Loading';
 
 export const PhoneLoginScreen = () => {
   const [phone, setPhone] = useState('');
   const navigation = useNavigation<any>();
+  const { loginWithPhone, loading } = useAuth();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(32)).current;
@@ -24,14 +27,24 @@ export const PhoneLoginScreen = () => {
     ]).start();
   }, []);
 
-  const handleRequestOTP = () => {
+  const handleRequestOTP = async () => {
     Keyboard.dismiss();
-    if (!phone.trim()) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
       Alert.alert('Validation', 'Please enter your phone number.');
       return;
     }
-    navigation.navigate('OTPVerification', { phone });
+    
+    try {
+      await loginWithPhone(cleanPhone);
+      navigation.navigate('OTPVerification', { phone: cleanPhone });
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Failed to send OTP.';
+      Alert.alert('Error', msg);
+    }
   };
+
+  if (loading) return <Loading message="Sending code..." />;
 
   return (
     <SafeAreaView style={styles.container}>

@@ -22,7 +22,7 @@ export const DriverDashboard = () => {
   const dispatch = useAppDispatch();
   const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
-  const { currentStatus, dailyEarnings, incomingRequests, loading } = useAppSelector(state => state.driver);
+  const { currentStatus, dailyEarnings, incomingRequests, completedTrips, loading } = useAppSelector(state => state.driver);
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -126,7 +126,7 @@ export const DriverDashboard = () => {
       <View style={styles.body}>
         <View style={styles.statsRow}>
           <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(2)}`} icon="cash" color={colors.success} />
-          <StatBox label="Rating" value="4.8" icon="star" color={colors.warning} />
+          <StatBox label="Rating" value={(user?.rating || 5.0).toFixed(1)} icon="star" color={colors.warning} />
         </View>
 
         <Card variant="elevated" padding="lg" style={styles.goalCard}>
@@ -176,18 +176,26 @@ export const DriverDashboard = () => {
           </TouchableOpacity>
         </View>
         <Card variant="elevated" padding="none" style={styles.activityCard}>
-          {[1, 2, 3].map((i, idx) => (
-            <View key={i} style={[styles.activityItem, idx === 2 && { borderBottomWidth: 0 }]}>
-              <View style={styles.activityIconBox}>
-                <MaterialCommunityIcons name="check-circle" size={20} color={colors.success} />
-              </View>
-              <View style={styles.activityText}>
-                <Text style={styles.activityTitle}>Trip Completed</Text>
-                <Text style={styles.activityTime}>10:30 AM • Market to Plaza</Text>
-              </View>
-              <Text style={[styles.activityAmt, typography.currency]}>+₱45.00</Text>
+          {completedTrips.length === 0 ? (
+            <View style={styles.emptyActivity}>
+              <Text style={styles.emptyText}>No trips completed today yet.</Text>
             </View>
-          ))}
+          ) : (
+            completedTrips.slice(0, 3).map((trip, idx) => (
+              <View key={trip.id} style={[styles.activityItem, idx === Math.min(2, completedTrips.length - 1) && { borderBottomWidth: 0 }]}>
+                <View style={styles.activityIconBox}>
+                  <MaterialCommunityIcons name="check-circle" size={20} color={colors.success} />
+                </View>
+                <View style={styles.activityText}>
+                  <Text style={styles.activityTitle}>Trip Completed</Text>
+                  <Text style={styles.activityTime}>
+                    {trip.completed_at ? new Date(trip.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'} • {trip.dropoff_location.address}
+                  </Text>
+                </View>
+                <Text style={[styles.activityAmt, typography.currency]}>+₱{trip.total_fare.toFixed(2)}</Text>
+              </View>
+            ))
+          )}
         </Card>
       </View>
       </Animated.ScrollView>
@@ -446,6 +454,14 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.primary,
     fontSize: 12,
+  },
+  emptyActivity: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
   },
 });
 

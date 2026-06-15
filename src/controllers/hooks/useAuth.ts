@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
-import { signUp, signIn, signOut, checkSession } from '../slices/authSlice';
+import { signUp, signIn, signOut, checkSession, signInWithPhone, verifyOtp } from '../slices/authSlice';
 
 export const useAuth = () => {
   const dispatch = useAppDispatch();
@@ -20,6 +20,20 @@ export const useAuth = () => {
     [dispatch]
   );
 
+  const loginWithPhone = useCallback(
+    async (phone: string) => {
+      return dispatch(signInWithPhone({ phone })).unwrap();
+    },
+    [dispatch]
+  );
+
+  const verify = useCallback(
+    async (phone: string, token: string) => {
+      return dispatch(verifyOtp({ phone, token })).unwrap();
+    },
+    [dispatch]
+  );
+
   const logout = useCallback(async () => {
     return dispatch(signOut()).unwrap();
   }, [dispatch]);
@@ -35,6 +49,8 @@ export const useAuth = () => {
     error,
     register,
     login,
+    loginWithPhone,
+    verify,
     logout,
     checkAuth
   };

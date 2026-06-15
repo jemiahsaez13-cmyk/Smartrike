@@ -9,12 +9,15 @@ import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
+import { useAuth } from '@/controllers/hooks/useAuth';
+import { Loading } from '@/views/components/common/Loading';
 
 export const EmailLoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const navigation = useNavigation<any>();
+  const { login, loading } = useAuth();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(32)).current;
@@ -26,22 +29,30 @@ export const EmailLoginScreen = () => {
     ]).start();
   }, []);
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     Keyboard.dismiss();
 
-    if (!email.trim() || !password.trim()) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
       Alert.alert('Validation', 'Please enter your email and password.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(cleanEmail)) {
       Alert.alert('Validation', 'Please enter a valid email address.');
       return;
     }
 
-    Alert.alert('Info', 'Sign in logic not yet connected.');
+    try {
+      await login(cleanEmail, password);
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Authentication failed.';
+      Alert.alert('Sign In Error', msg);
+    }
   };
+
+  if (loading) return <Loading message="Signing you in..." />;
 
   return (
     <SafeAreaView style={styles.container}>

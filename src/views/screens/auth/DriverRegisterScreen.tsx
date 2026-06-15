@@ -42,35 +42,57 @@ export const DriverRegisterScreen = () => {
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.name) newErrors.name = 'Full name is required';
-    if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.license_number) newErrors.license_number = 'License number is required';
-    if (!formData.plate_number) newErrors.plate_number = 'Plate number is required';
-    if (formData.password !== formData.confirmPassword)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!formData.name.trim()) newErrors.name = 'Full name is required';
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!emailRegex.test(formData.email.trim())) {
+      newErrors.email = 'Valid email is required';
+    }
+
+    if (!formData.license_number.trim()) newErrors.license_number = 'License number is required';
+    if (!formData.plate_number.trim()) newErrors.plate_number = 'Plate number is required';
+    
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleRegister = async () => {
-    if (!validate()) return;
+    Keyboard.dismiss();
+    if (!validate()) {
+      Alert.alert('Validation Error', 'Please check the highlighted fields.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(formData.email, formData.password, {
-        name: formData.name,
-        phone: formData.phone,
+      await register(formData.email.trim(), formData.password, {
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
         user_type: 'driver',
-        license_number: formData.license_number,
-        toda_membership: formData.toda_membership,
+        license_number: formData.license_number.trim(),
+        toda_membership: formData.toda_membership.trim(),
         vehicle_details: {
-          plate_number: formData.plate_number,
-          make: formData.vehicle_make,
-          model: formData.vehicle_model,
+          plate_number: formData.plate_number.trim().toUpperCase(),
+          make: formData.vehicle_make.trim(),
+          model: formData.vehicle_model.trim(),
         },
       });
-      // Redux isAuthenticated becomes true → RootNavigator auto-redirects to app
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message);
+      const msg = typeof error === 'string' ? error : error?.message || 'Application submission failed.';
+      Alert.alert('Registration Failed', msg);
       setLoading(false);
     }
   };

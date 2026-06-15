@@ -11,9 +11,23 @@ import { SplashScreen } from '@/views/screens/auth/SplashScreen';
 const Stack = createNativeStackNavigator();
 
 export const AppNavigator = () => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, checkAuth } = useAuth();
+  const [initializing, setInitializing] = React.useState(true);
 
-  if (loading || (isAuthenticated && !user)) {
+  React.useEffect(() => {
+    const init = async () => {
+      try {
+        await checkAuth();
+      } catch (e) {
+        console.log('No active session');
+      } finally {
+        setInitializing(false);
+      }
+    };
+    init();
+  }, [checkAuth]);
+
+  if (loading || initializing || (isAuthenticated && !user)) {
     return <SplashScreen />;
   }
 

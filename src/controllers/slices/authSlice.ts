@@ -75,6 +75,28 @@ export const checkSession = createAsyncThunk('auth/checkSession', async (_, { re
   }
 });
 
+export const signInWithPhone = createAsyncThunk(
+  'auth/signInWithPhone',
+  async (payload: { phone: string }, { rejectWithValue }) => {
+    try {
+      return await authService.signInWithPhone(payload.phone);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const verifyOtp = createAsyncThunk(
+  'auth/verifyOtp',
+  async (payload: { phone: string; token: string }, { rejectWithValue }) => {
+    try {
+      return await authService.verifyOtp(payload.phone, payload.token);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -122,6 +144,31 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
+      .addCase(signInWithPhone.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(signInWithPhone.fulfilled, (state) => {
+        state.loading = false;
+      })
+      .addCase(signInWithPhone.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(verifyOtp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(verifyOtp.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload.user;
+        state.session = action.payload.session;
+        state.isAuthenticated = true;
+      })
+      .addCase(verifyOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
       .addCase(signOut.fulfilled, (state) => {
         state.user = null;
         state.session = null;
@@ -129,8 +176,11 @@ const authSlice = createSlice({
       })
       .addCase(checkSession.fulfilled, (state, action) => {
         if (action.payload) {
-          state.user = action.payload;
+          state.user = action.payload.user;
+          state.session = action.payload.session;
           state.isAuthenticated = true;
+        } else {
+          state.isAuthenticated = false;
         }
       });
   }

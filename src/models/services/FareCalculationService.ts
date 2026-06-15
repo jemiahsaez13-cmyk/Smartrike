@@ -7,7 +7,7 @@ export class FareCalculationService {
     if (error) throw error;
 
     const now = new Date();
-    const currentHour = now.getHours();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
     const isPeakHour = currentHour >= 6.5 && currentHour < 9;
 
     return {

@@ -41,15 +41,19 @@ export const LoginScreen = () => {
 
   const handleLogin = async () => {
     Keyboard.dismiss();
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing Fields', 'Please enter your email and password.');
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      Alert.alert('Missing Info', 'Please enter both email and password to continue.');
       return;
     }
+
     try {
-      await login(email.trim(), password);
+      await login(cleanEmail, cleanPassword);
     } catch (err: any) {
-      const msg = err?.message || err?.toString() || 'Unknown error';
-      Alert.alert('Sign In Failed', msg);
+      const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
+      Alert.alert('Sign In Failed', msg, [{ text: 'Try Again' }]);
     }
   };
 
