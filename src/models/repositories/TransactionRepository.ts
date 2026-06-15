@@ -79,6 +79,6 @@ export class TransactionRepository {
     if (since) query = query.gte('created_at', since.toISOString());
     const { data, error } = await query;
     if (error) return 0;
-    return (data ?? []).reduce((sum, t) => sum + (t.amount ?? 0), 0);
+    return (data ?? []).reduce((sum: number, t: { amount?: number }) => sum + (t.amount ?? 0), 0);
   }
 }

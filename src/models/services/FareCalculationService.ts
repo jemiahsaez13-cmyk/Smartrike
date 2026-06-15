@@ -3,17 +3,28 @@ import { Location } from '@/models/types';
 
 export class FareCalculationService {
   async getFareConfig() {
-    const { data, error } = await supabase.from('fare_matrix').select('*').single();
-    if (error) throw error;
+    // Tolerate 0 or >1 fare_matrix rows: take the first, fall back to LGU defaults.
+    const { data, error } = await supabase
+      .from('fare_matrix')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+
+    const cfg = (!error && data) ? data : {
+      base_fare: 50.0,
+      per_km_rate: 15.0,
+      peak_hour_multiplier: 1.5,
+      peak_hours_enabled: true,
+    };
 
     const now = new Date();
     const currentHour = now.getHours() + now.getMinutes() / 60;
     const isPeakHour = currentHour >= 6.5 && currentHour < 9;
 
     return {
-      baseFare: data.base_fare,
-      perKmRate: data.per_km_rate,
-      multiplier: isPeakHour && data.peak_hours_enabled ? data.peak_hour_multiplier : 1.0
+      baseFare: Number(cfg.base_fare),
+      perKmRate: Number(cfg.per_km_rate),
+      multiplier: isPeakHour && cfg.peak_hours_enabled ? Number(cfg.peak_hour_multiplier) : 1.0
     };
   }
 

@@ -40,8 +40,15 @@ export class BookingService {
       completed_at: null
     });
 
-    const nearbyDrivers = await this.userRepo.findAvailableDrivers(pickup, 5);
-    await this.notificationService.notifyDrivers(nearbyDrivers, booking);
+    // Best-effort driver notification — the booking is already created, so a
+    // notification/RLS hiccup must not fail the whole request. Drivers also
+    // discover pending requests by polling when they go online.
+    try {
+      const nearbyDrivers = await this.userRepo.findAvailableDrivers(pickup, 5);
+      await this.notificationService.notifyDrivers(nearbyDrivers, booking);
+    } catch (e) {
+      console.warn('notifyDrivers skipped:', e);
+    }
     return booking;
   }
 

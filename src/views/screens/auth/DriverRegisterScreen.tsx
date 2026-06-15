@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, SafeAreaView, Animated,
+  Platform, TouchableOpacity, Alert, SafeAreaView, Animated, Keyboard,
 } from 'react-native';
 import { Text, TextInput, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -78,7 +78,7 @@ export const DriverRegisterScreen = () => {
 
     setLoading(true);
     try {
-      await register(formData.email.trim(), formData.password, {
+      const result: any = await register(formData.email.trim(), formData.password, {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         user_type: 'driver',
@@ -90,6 +90,15 @@ export const DriverRegisterScreen = () => {
           model: formData.vehicle_model.trim(),
         },
       });
+      if (result?.needsEmailConfirmation) {
+        setLoading(false);
+        Alert.alert(
+          'Confirm your email',
+          'Your driver application was submitted. We sent a confirmation link to your email — tap it, then sign in to continue.',
+          [{ text: 'Go to Sign In', onPress: () => navigation.navigate('Login') }]
+        );
+        return;
+      }
     } catch (error: any) {
       const msg = typeof error === 'string' ? error : error?.message || 'Application submission failed.';
       Alert.alert('Registration Failed', msg);

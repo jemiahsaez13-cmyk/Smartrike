@@ -122,9 +122,13 @@ const authSlice = createSlice({
       })
       .addCase(signUp.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.session = action.payload.session;
-        state.isAuthenticated = true;
+        // Email-confirmation flow returns no user/session yet — stay logged out
+        // and let the screen prompt the user to confirm their email.
+        if (action.payload?.user && action.payload?.session) {
+          state.user = action.payload.user;
+          state.session = action.payload.session;
+          state.isAuthenticated = true;
+        }
       })
       .addCase(signUp.rejected, (state, action) => {
         state.loading = false;

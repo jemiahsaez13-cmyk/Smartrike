@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, SafeAreaView, Animated,
+  Platform, TouchableOpacity, Alert, SafeAreaView, Animated, Keyboard,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -75,12 +75,22 @@ export const PassengerRegisterScreen = () => {
     
     setLoading(true);
     try {
-      await register(formData.email.trim(), formData.password, {
+      const result: any = await register(formData.email.trim(), formData.password, {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         user_type: 'passenger',
       });
-      // Navigation happens automatically via Redux state change in AppNavigator
+      // If the project requires email confirmation, no session is returned yet.
+      if (result?.needsEmailConfirmation) {
+        setLoading(false);
+        Alert.alert(
+          'Confirm your email',
+          'We sent a confirmation link to your email. Tap it, then sign in to continue.',
+          [{ text: 'Go to Sign In', onPress: () => navigation.navigate('Login') }]
+        );
+        return;
+      }
+      // Otherwise navigation happens automatically via Redux state change in AppNavigator
     } catch (error: any) {
       const msg = typeof error === 'string' ? error : error?.message || 'Registration failed. Please try again.';
       Alert.alert('Registration Error', msg);

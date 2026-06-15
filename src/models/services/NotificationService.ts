@@ -3,6 +3,7 @@ import { Driver, Booking } from '@/models/types';
 
 export class NotificationService {
   async notifyDrivers(drivers: Driver[], booking: Booking): Promise<void> {
+    if (!drivers || drivers.length === 0) return; // nothing to insert
     const notifications = drivers.map(driver => ({
       user_id: driver.id,
       type: 'booking_request',

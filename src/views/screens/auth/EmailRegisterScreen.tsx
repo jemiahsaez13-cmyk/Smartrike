@@ -67,10 +67,18 @@ export const EmailRegisterScreen = () => {
     }
 
     try {
-      await register(cleanEmail, password, {
+      const result: any = await register(cleanEmail, password, {
         name: cleanName,
         user_type: userType,
       });
+      if (result?.needsEmailConfirmation) {
+        Alert.alert(
+          'Confirm your email',
+          'We sent a confirmation link to your email. Tap it, then sign in to continue.',
+          [{ text: 'Go to Sign In', onPress: () => navigation.navigate('Login') }]
+        );
+        return;
+      }
       // Navigation is handled automatically by AppNavigator when isAuthenticated changes
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Registration failed.';
