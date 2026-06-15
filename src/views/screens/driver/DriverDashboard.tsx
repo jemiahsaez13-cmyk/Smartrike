@@ -169,7 +169,12 @@ export const DriverDashboard = () => {
           </Card>
         ))}
 
-        <Text style={styles.sectionLabel}>RECENT EARNINGS</Text>
+        <View style={styles.earningsSectionHeader}>
+          <Text style={styles.sectionLabel}>RECENT EARNINGS</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Earnings')}>
+            <Text style={styles.seeAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
         <Card variant="elevated" padding="none" style={styles.activityCard}>
           {[1, 2, 3].map((i, idx) => (
             <View key={i} style={[styles.activityItem, idx === 2 && { borderBottomWidth: 0 }]}>
@@ -429,6 +434,18 @@ const styles = StyleSheet.create({
   activityAmt: {
     ...typography.label,
     color: colors.success,
-  }
+  },
+  earningsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  seeAllText: {
+    ...typography.label,
+    color: colors.primary,
+    fontSize: 12,
+  },
 });
 

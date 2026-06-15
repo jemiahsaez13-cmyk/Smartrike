@@ -7,6 +7,9 @@ import { ConfirmBookingScreen } from '@/views/screens/passenger/ConfirmBookingSc
 import { ActiveTripScreen } from '@/views/screens/passenger/ActiveTripScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
+import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
+import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
+import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -38,5 +41,8 @@ export const PassengerNavigator = () => (
     <Stack.Screen name="BookRide" component={BookRideScreen} />
     <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} />
     <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+    <Stack.Screen name="Settings" component={SettingsScreen} />
+    <Stack.Screen name="Payment" component={PaymentScreen} />
   </Stack.Navigator>
 );

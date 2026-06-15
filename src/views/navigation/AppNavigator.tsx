@@ -6,7 +6,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { PassengerNavigator } from './PassengerNavigator';
 import { DriverNavigator } from './DriverNavigator';
 import { AdminNavigator } from './AdminNavigator';
-import { Loading } from '@/views/components/common/Loading';
+import { SplashScreen } from '@/views/screens/auth/SplashScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -14,7 +14,7 @@ export const AppNavigator = () => {
   const { isAuthenticated, user, loading } = useAuth();
 
   if (loading || (isAuthenticated && !user)) {
-    return <Loading message="Preparing your account..." />;
+    return <SplashScreen />;
   }
 
   return (

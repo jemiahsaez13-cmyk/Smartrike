@@ -1,168 +1,228 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import {
+  View, StyleSheet, TouchableOpacity, SafeAreaView, Animated,
+} from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, typography, shadows } from '@/views/styles/theme';
-import { Card } from '@/views/components/common/Card';
+import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 
 export const RegisterScreen = () => {
   const navigation = useNavigation<any>();
 
-  const RoleCard = ({ title, description, icon, type, onPress }: any) => (
-    <TouchableOpacity 
-      activeOpacity={0.7} 
-      onPress={onPress}
-      style={styles.cardWrapper}
-    >
-      <Card style={styles.roleCard} variant="elevated" padding="lg">
-        <View style={styles.iconContainer}>
-          <MaterialCommunityIcons 
-            name={icon} 
-            size={40} 
-            color={type === 'passenger' ? colors.accent : colors.secondary} 
-          />
-        </View>
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardDescription}>{description}</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textMuted} />
-      </Card>
-    </TouchableOpacity>
-  );
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const panelY = useRef(new Animated.Value(80)).current;
+  const panelOpacity = useRef(new Animated.Value(0)).current;
+  const card1Y = useRef(new Animated.Value(40)).current;
+  const card2Y = useRef(new Animated.Value(40)).current;
+  const cardsOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(heroOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.parallel([
+        Animated.spring(panelY, { toValue: 0, tension: 60, friction: 11, useNativeDriver: true }),
+        Animated.timing(panelOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(cardsOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.spring(card1Y, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+        Animated.sequence([
+          Animated.delay(80),
+          Animated.spring(card2Y, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+        ]),
+      ]),
+    ]).start();
+  }, []);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primary} />
-          </TouchableOpacity>
-          <TricycleIcon size={40} color={colors.primary} />
-        </View>
+    <SafeAreaView style={styles.root}>
+      {/* ── Black Hero ── */}
+      <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color="rgba(255,255,255,0.85)" />
+        </TouchableOpacity>
+        <TricycleIcon size={44} color="#fff" />
+        <Text style={styles.heroTitle}>Join Smart Trike</Text>
+        <Text style={styles.heroSub}>Choose how you want to ride with us.</Text>
+      </Animated.View>
 
-        {/* Intro */}
-        <View style={styles.intro}>
-          <Text style={styles.title}>Create your account</Text>
-          <Text style={styles.subtitle}>Select the type of account you want to create to get started.</Text>
-        </View>
+      {/* ── Animated White Panel ── */}
+      <Animated.View
+        style={[
+          styles.panel,
+          { transform: [{ translateY: panelY }], opacity: panelOpacity },
+        ]}
+      >
+        <View style={styles.panelHandle} />
+        <Text style={styles.panelTitle}>Select account type</Text>
 
-        {/* Roles */}
-        <View style={styles.rolesContainer}>
-          <RoleCard 
-            title="Passenger" 
-            description="Book rides and travel across the city safely."
-            icon="account-group-outline"
-            type="passenger"
+        {/* Passenger Card */}
+        <Animated.View
+          style={[
+            styles.cardWrapper,
+            { opacity: cardsOpacity, transform: [{ translateY: card1Y }] },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('PassengerRegister')}
-          />
+            style={styles.roleCard}
+          >
+            <View style={[styles.roleIcon, { backgroundColor: colors.infoLight }]}>
+              <MaterialCommunityIcons name="account-group-outline" size={30} color={colors.accent} />
+            </View>
+            <View style={styles.roleText}>
+              <Text style={styles.roleTitle}>Passenger</Text>
+              <Text style={styles.roleDesc}>Book rides and travel safely across the city.</Text>
+            </View>
+            <View style={styles.roleArrow}>
+              <MaterialCommunityIcons name="arrow-right" size={20} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
-          <RoleCard 
-            title="Driver" 
-            description="Join our team of drivers and start earning today."
-            icon="moped"
-            type="driver"
+        {/* Driver Card */}
+        <Animated.View
+          style={[
+            styles.cardWrapper,
+            { opacity: cardsOpacity, transform: [{ translateY: card2Y }] },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
             onPress={() => navigation.navigate('DriverRegister')}
-          />
-        </View>
+            style={styles.roleCard}
+          >
+            <View style={[styles.roleIcon, { backgroundColor: colors.secondaryLight }]}>
+              <MaterialCommunityIcons name="moped" size={30} color={colors.secondary} />
+            </View>
+            <View style={styles.roleText}>
+              <Text style={styles.roleTitle}>Driver</Text>
+              <Text style={styles.roleDesc}>Join our network and start earning today.</Text>
+            </View>
+            <View style={styles.roleArrow}>
+              <MaterialCommunityIcons name="arrow-right" size={20} color={colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
-        {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
+          <Text style={styles.footerText}>Already have an account?  </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.loginLink}>Sign in</Text>
+            <Text style={styles.footerLink}>Sign in</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
   },
-  scrollContent: {
-    flexGrow: 1,
+  hero: {
     paddingHorizontal: spacing.screen,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xxl,
+    gap: spacing.sm,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceHover,
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  intro: {
-    marginBottom: spacing.xxl,
-  },
-  title: {
+  heroTitle: {
     ...typography.h1,
-    fontSize: 28,
-    marginBottom: spacing.xs,
+    fontSize: 30,
+    color: '#fff',
+    marginTop: spacing.sm,
   },
-  subtitle: {
+  heroSub: {
     ...typography.body,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.6)',
   },
-  rolesContainer: {
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
+  panel: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.screen,
+    paddingBottom: spacing.xxl,
+  },
+  panelHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: spacing.lg,
+  },
+  panelTitle: {
+    ...typography.h3,
+    fontSize: 20,
+    marginBottom: spacing.xl,
   },
   cardWrapper: {
-    width: '100%',
+    marginBottom: spacing.md,
   },
   roleCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 110,
-    borderWidth: 1,
+    padding: spacing.lg,
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
+    ...shadows.sm,
   },
-  iconContainer: {
-    width: 60,
-    height: 60,
+  roleIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surfaceHover,
-    borderRadius: 12,
   },
-  cardContent: {
+  roleText: {
     flex: 1,
-    marginLeft: spacing.md,
-    marginRight: spacing.sm,
   },
-  cardTitle: {
+  roleTitle: {
     ...typography.h3,
     fontSize: 17,
+    marginBottom: 3,
   },
-  cardDescription: {
+  roleDesc: {
     ...typography.bodySmall,
-    marginTop: 2,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  roleArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   footer: {
-    marginTop: 'auto',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.xs,
+    alignItems: 'center',
+    marginTop: spacing.xl,
   },
   footerText: {
     ...typography.bodySmall,
   },
-  loginLink: {
+  footerLink: {
     ...typography.labelSmall,
     color: colors.accent,
     fontWeight: '700',

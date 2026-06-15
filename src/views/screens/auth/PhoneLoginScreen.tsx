@@ -1,19 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Keyboard,
-  ScrollView,
-  SafeAreaView,
-  Alert,
+  View, StyleSheet, TouchableOpacity, KeyboardAvoidingView,
+  Platform, Keyboard, ScrollView, SafeAreaView, Alert, Animated,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, typography } from '@/views/styles/theme';
+import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 
@@ -21,45 +14,53 @@ export const PhoneLoginScreen = () => {
   const [phone, setPhone] = useState('');
   const navigation = useNavigation<any>();
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(32)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 75, friction: 12, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   const handleRequestOTP = () => {
     Keyboard.dismiss();
-
     if (!phone.trim()) {
       Alert.alert('Validation', 'Please enter your phone number.');
       return;
     }
-
-    // OTP logic would go here
     navigation.navigate('OTPVerification', { phone });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={styles.keyboardView} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
+          <Animated.View
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+          >
             <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-              <MaterialCommunityIcons name="arrow-left" size={24} color={colors.primary} />
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Sign in with phone</Text>
-          </View>
 
-          {/* Intro */}
-          <View style={styles.intro}>
-            <Text style={styles.title}>Mobile login</Text>
-            <Text style={styles.subtitle}>Enter your phone number to receive a secure one-time password.</Text>
-          </View>
+            <View style={styles.headerSection}>
+              <View style={styles.iconCircle}>
+                <MaterialCommunityIcons name="phone-outline" size={28} color={colors.primary} />
+              </View>
+              <Text style={styles.title}>Sign in with phone</Text>
+              <Text style={styles.subtitle}>
+                Enter your mobile number and we'll send a one-time code.
+              </Text>
+            </View>
 
-          {/* Form */}
-          <View style={styles.form}>
             <Input
               label="Phone number"
               placeholder="+63 9xx xxx xxxx"
@@ -69,22 +70,17 @@ export const PhoneLoginScreen = () => {
               left={<TextInput.Icon icon="phone-outline" color={colors.textMuted} />}
             />
 
-            <Button 
-              variant="primary" 
-              onPress={handleRequestOTP}
-              style={styles.submitBtn}
-            >
+            <Button variant="primary" onPress={handleRequestOTP} style={styles.cta}>
               Send code
             </Button>
-          </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Prefer email login?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('EmailLogin')}>
-              <Text style={styles.footerLink}>Go to email sign in</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Prefer email?  </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('EmailLogin')}>
+                <Text style={styles.footerLink}>Sign in with email</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -96,35 +92,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
   },
-  keyboardView: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.screen,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
-  },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceHover,
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  headerTitle: {
-    ...typography.h3,
-    fontSize: 16,
-  },
-  intro: {
     marginBottom: spacing.xl,
+  },
+  headerSection: {
+    marginBottom: spacing.xl,
+  },
+  iconCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   title: {
     ...typography.h1,
@@ -134,19 +127,16 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+    lineHeight: 22,
   },
-  form: {
-    marginBottom: spacing.xl,
-  },
-  submitBtn: {
-    height: 52,
+  cta: {
+    height: 54,
     marginTop: spacing.md,
   },
   footer: {
-    marginTop: 'auto',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.xs,
+    alignItems: 'center',
     paddingTop: spacing.xl,
   },
   footerText: {

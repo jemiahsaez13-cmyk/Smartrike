@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, TextInput as RNTextInput, KeyboardAvoidingView, Platform, Keyboard, ScrollView, Alert, SafeAreaView } from 'react-native';
+import {
+  View, StyleSheet, TouchableOpacity, TextInput as RNTextInput,
+  KeyboardAvoidingView, Platform, Keyboard, ScrollView, Alert,
+  SafeAreaView, Animated,
+} from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -14,34 +18,58 @@ export const OTPVerificationScreen = () => {
   const navigation = useNavigation<any>();
   const inputRefs = useRef<RNTextInput[]>([]);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(32)).current;
+  const boxScales = useRef(
+    Array.from({ length: 6 }, () => new Animated.Value(1))
+  ).current;
+
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 75, friction: 12, useNativeDriver: true }),
+    ]).start();
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setCanResend(true);
-          return 0;
-        }
+        if (prev <= 1) { setCanResend(true); return 0; }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  const handleOtpChange = (text: string, index: number): void => {
+  const animateBox = (index: number, filled: boolean) => {
+    Animated.sequence([
+      Animated.timing(boxScales[index], {
+        toValue: filled ? 1.14 : 0.92,
+        duration: 70,
+        useNativeDriver: true,
+      }),
+      Animated.spring(boxScales[index], {
+        toValue: 1,
+        tension: 220,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleOtpChange = (text: string, index: number) => {
     const numericText = text.replace(/[^0-9]/g, '');
     if (numericText.length > 1) return;
 
     const newOtp = [...otp];
     newOtp[index] = numericText;
     setOtp(newOtp);
+    animateBox(index, !!numericText);
 
     if (numericText && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyPress = (e: { nativeEvent: { key: string } }, index: number): void => {
+  const handleKeyPress = (e: { nativeEvent: { key: string } }, index: number) => {
     if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -51,104 +79,100 @@ export const OTPVerificationScreen = () => {
     Keyboard.dismiss();
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
-      Alert.alert('Validation', 'Please enter all 6 digits');
+      Alert.alert('Incomplete', 'Please enter all 6 digits.');
       return;
     }
-
-    Alert.alert('Success', 'OTP verified!', [
-      {
-        text: 'OK',
-        onPress: () => navigation.navigate('Login')
-      }
+    Alert.alert('Verified!', 'OTP verified successfully.', [
+      { text: 'Continue', onPress: () => navigation.navigate('Login') },
     ]);
   };
 
-  const handleResendOTP = () => {
+  const handleResend = () => {
     setTimeLeft(45);
     setCanResend(false);
     setOtp(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
-    Alert.alert('Info', 'OTP sent to ' + route.params?.phoneNumber);
+    Alert.alert('Sent', `A new code has been sent to ${route.params?.phone}`);
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        style={styles.keyboardView} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-          </TouchableOpacity>
+          <Animated.View
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+          >
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
+            </TouchableOpacity>
 
-          <View style={styles.header}>
-            <Text style={styles.title}>Verify phone</Text>
-            <Text style={styles.subtitle}>Enter the 6-digit code sent to your phone</Text>
-          </View>
-
-          <View style={styles.content}>
-            <View style={styles.phoneSection}>
-              <MaterialCommunityIcons name="cellphone-check" size={24} color={colors.primary} />
-              <View style={styles.phoneInfo}>
-                <Text style={styles.phoneLabel}>SENDING TO</Text>
-                <Text style={styles.phoneNumber}>{route.params?.phoneNumber || '+63 9xx xxx xxxx'}</Text>
+            <View style={styles.headerSection}>
+              <View style={styles.iconCircle}>
+                <MaterialCommunityIcons name="shield-check-outline" size={28} color={colors.primary} />
               </View>
+              <Text style={styles.title}>Verify your phone</Text>
+              <Text style={styles.subtitle}>
+                Enter the 6-digit code sent to{'\n'}
+                <Text style={styles.phoneHighlight}>
+                  {route.params?.phone || '+63 9xx xxx xxxx'}
+                </Text>
+              </Text>
             </View>
 
-            <View style={styles.otpContainer}>
+            {/* OTP Boxes */}
+            <View style={styles.otpRow}>
               {otp.map((digit, index) => (
-                <RNTextInput
+                <Animated.View
                   key={index}
-                  ref={(ref) => {
-                    if (ref) inputRefs.current[index] = ref;
-                  }}
-                  style={[styles.otpBox, digit && styles.otpBoxFilled]}
-                  value={digit}
-                  onChangeText={(text: string) => handleOtpChange(text, index)}
-                  onKeyPress={(e: any) => handleKeyPress(e, index)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  placeholder="-"
-                  placeholderTextColor={colors.textMuted}
-                  selectionColor={colors.primary}
-                />
+                  style={{ transform: [{ scale: boxScales[index] }] }}
+                >
+                  <RNTextInput
+                    ref={(ref) => { if (ref) inputRefs.current[index] = ref; }}
+                    style={[styles.otpBox, digit ? styles.otpBoxFilled : null]}
+                    value={digit}
+                    onChangeText={(text) => handleOtpChange(text, index)}
+                    onKeyPress={(e: any) => handleKeyPress(e, index)}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    placeholder="·"
+                    placeholderTextColor={colors.textMuted}
+                    selectionColor={colors.primary}
+                  />
+                </Animated.View>
               ))}
             </View>
 
-            <View style={styles.resendContainer}>
+            <View style={styles.resendRow}>
               {!canResend ? (
                 <Text style={styles.timerText}>
-                  Resend code in <Text style={styles.timerBold}>{timeLeft}s</Text>
+                  Resend in{' '}
+                  <Text style={styles.timerBold}>{timeLeft}s</Text>
                 </Text>
               ) : (
-                <TouchableOpacity onPress={handleResendOTP}>
-                  <Text style={styles.resendLink}>Resend OTP</Text>
+                <TouchableOpacity onPress={handleResend}>
+                  <Text style={styles.resendLink}>Resend code</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            <Button 
-              variant="primary" 
-              onPress={handleVerifyOTP}
-              style={styles.verifyBtn}
-            >
+            <Button variant="primary" onPress={handleVerifyOTP} style={styles.cta}>
               Verify code
             </Button>
 
-            <TouchableOpacity 
-              style={styles.changePhoneBtn}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.changePhoneText}>
-                Wrong number? <Text style={styles.changePhoneLink}>Change</Text>
+            <TouchableOpacity style={styles.changeBtn} onPress={() => navigation.goBack()}>
+              <Text style={styles.changeBtnText}>
+                Wrong number?{' '}
+                <Text style={styles.changeLink}>Change it</Text>
               </Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -158,10 +182,7 @@ export const OTPVerificationScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface
-  },
-  keyboardView: {
-    flex: 1,
+    backgroundColor: colors.surface,
   },
   scrollContent: {
     flexGrow: 1,
@@ -170,17 +191,25 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
-    marginLeft: -4,
   },
-  header: {
+  headerSection: {
     marginBottom: spacing.xl,
+  },
+  iconCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   title: {
     ...typography.h1,
@@ -190,53 +219,36 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+    lineHeight: 22,
   },
-  content: {
-    flex: 1
-  },
-  phoneSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  phoneInfo: {
-    marginLeft: spacing.md,
-  },
-  phoneLabel: {
-    ...typography.labelSmall,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: colors.textMuted,
-  },
-  phoneNumber: {
-    ...typography.subtitle,
-    fontSize: 16,
+  phoneHighlight: {
+    ...typography.label,
     color: colors.text,
+    fontWeight: '700',
   },
-  otpContainer: {
+  otpRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: spacing.xl,
   },
   otpBox: {
-    width: 44,
-    height: 54,
-    borderWidth: 1,
+    width: 48,
+    height: 60,
+    borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radius.md,
-    fontSize: 20,
+    fontSize: 22,
     ...typography.number,
     textAlign: 'center',
     backgroundColor: colors.surface,
+    color: colors.text,
   },
   otpBoxFilled: {
     borderColor: colors.primary,
+    borderWidth: 2,
     backgroundColor: colors.surfaceAlt,
   },
-  resendContainer: {
+  resendRow: {
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
@@ -245,27 +257,28 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   timerBold: {
+    ...typography.label,
     fontWeight: '700',
-    color: colors.primary
+    color: colors.text,
   },
   resendLink: {
     ...typography.labelSmall,
     color: colors.accent,
     fontWeight: '700',
   },
-  verifyBtn: {
-    height: 52,
+  cta: {
+    height: 54,
     marginBottom: spacing.xl,
   },
-  changePhoneBtn: {
-    alignItems: 'center'
+  changeBtn: {
+    alignItems: 'center',
   },
-  changePhoneText: {
+  changeBtnText: {
     ...typography.bodySmall,
     color: colors.textSecondary,
   },
-  changePhoneLink: {
+  changeLink: {
     color: colors.accent,
-    fontWeight: '700'
-  }
+    fontWeight: '700',
+  },
 });

@@ -74,7 +74,7 @@ export const AdminDashboard = () => {
         <View style={styles.body}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>PLATFORM PERFORMANCE</Text>
-            <TouchableOpacity activeOpacity={0.7}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('Analytics')}>
               <Text style={styles.seeAllText}>Reports</Text>
             </TouchableOpacity>
           </View>
@@ -134,7 +134,7 @@ export const AdminDashboard = () => {
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>RECENT SYSTEM ACTIVITY</Text>
-            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('ActivityLogs')}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('Logs')}>
               <Text style={styles.seeAllText}>View All</Text>
             </TouchableOpacity>
           </View>

@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Driver, Booking } from '@/models/types';
+import { startTrip } from './bookingSlice';
 
 const userRepo = new UserRepository();
 const bookingRepo = new BookingRepository();
@@ -9,6 +10,7 @@ const bookingRepo = new BookingRepository();
 interface DriverState {
   driverInfo: Driver | null;
   currentStatus: 'online' | 'offline' | 'on-trip';
+  currentTrip: Booking | null;
   incomingRequests: Booking[];
   completedTrips: Booking[];
   totalEarnings: number;
@@ -20,6 +22,7 @@ interface DriverState {
 const initialState: DriverState = {
   driverInfo: null,
   currentStatus: 'offline',
+  currentTrip: null,
   incomingRequests: [],
   completedTrips: [],
   totalEarnings: 0,
@@ -81,12 +84,19 @@ const driverSlice = createSlice({
     },
     updateDailyEarnings: (state, action: PayloadAction<number>) => {
       state.dailyEarnings += action.payload;
-    }
+    },
+    clearCurrentTrip: (state) => {
+      state.currentTrip = null;
+      state.currentStatus = 'online';
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(updateDriverStatus.fulfilled, (state, action) => {
         state.currentStatus = action.payload;
+        if (action.payload === 'online') {
+          state.currentTrip = null;
+        }
       })
       .addCase(acceptBooking.pending, (state) => {
         state.loading = true;
@@ -94,11 +104,17 @@ const driverSlice = createSlice({
       .addCase(acceptBooking.fulfilled, (state, action) => {
         state.loading = false;
         state.currentStatus = 'on-trip';
+        state.currentTrip = action.payload;
         state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload.id);
       })
       .addCase(acceptBooking.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      })
+      .addCase(startTrip.fulfilled, (state, action) => {
+        if (state.currentTrip && action.payload?.id === state.currentTrip.id) {
+          state.currentTrip = action.payload;
+        }
       })
       .addCase(fetchCompletedTrips.fulfilled, (state, action) => {
         state.completedTrips = action.payload.filter(b => b.status === 'completed');
@@ -110,5 +126,5 @@ const driverSlice = createSlice({
   }
 });
 
-export const { setDriverInfo, addIncomingRequest, removeIncomingRequest, updateDailyEarnings } = driverSlice.actions;
+export const { setDriverInfo, addIncomingRequest, removeIncomingRequest, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
 export default driverSlice.reducer;

@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, StyleSheet, ScrollView, KeyboardAvoidingView,
+  Platform, TouchableOpacity, Alert, SafeAreaView, Animated,
+} from 'react-native';
 import { Text, TextInput, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, typography, radius } from '@/views/styles/theme';
+import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
-import { Card } from '@/views/components/common/Card';
 import { AuthService } from '@/models/services/AuthService';
 
 export const DriverRegisterScreen = () => {
   const navigation = useNavigation<any>();
   const authService = new AuthService();
-  
+
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -26,24 +28,32 @@ export const DriverRegisterScreen = () => {
     vehicle_model: '',
     toda_membership: '',
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [errors, setErrors] = useState<any>({});
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(32)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 75, friction: 12, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
   const validate = () => {
-    const newErrors: any = {};
+    const newErrors: Record<string, string> = {};
     if (!formData.name) newErrors.name = 'Full name is required';
     if (!formData.email) newErrors.email = 'Email is required';
-    if (!formData.license_number) newErrors.license_number = 'License is required';
+    if (!formData.license_number) newErrors.license_number = 'License number is required';
     if (!formData.plate_number) newErrors.plate_number = 'Plate number is required';
-    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    
+    if (formData.password !== formData.confirmPassword)
+      newErrors.confirmPassword = 'Passwords do not match';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleRegister = async () => {
     if (!validate()) return;
-
     setLoading(true);
     try {
       await authService.signUp(formData.email, formData.password, {
@@ -56,11 +66,13 @@ export const DriverRegisterScreen = () => {
           plate_number: formData.plate_number,
           make: formData.vehicle_make,
           model: formData.vehicle_model,
-        }
+        },
       });
-      Alert.alert('Registration Successful', 'Your driver account has been created. Our team will verify your documents shortly.', [
-        { text: 'Great!', onPress: () => navigation.navigate('Login') }
-      ]);
+      Alert.alert(
+        'Application Submitted!',
+        'Our team will verify your documents and activate your account shortly.',
+        [{ text: 'Got it', onPress: () => navigation.navigate('Login') }]
+      );
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message);
     } finally {
@@ -68,144 +80,157 @@ export const DriverRegisterScreen = () => {
     }
   };
 
-  const SectionHeader = ({ title, icon }: any) => (
+  const field = (key: keyof typeof formData) => ({
+    value: formData[key],
+    onChangeText: (text: string) => setFormData({ ...formData, [key]: text }),
+    errorText: errors[key],
+  });
+
+  const SectionHeader = ({ title, icon }: { title: string; icon: string }) => (
     <View style={styles.sectionHeader}>
-      <View style={styles.sectionIcon}>
-        <MaterialCommunityIcons name={icon} size={20} color={colors.primary} />
+      <View style={styles.sectionIconBox}>
+        <MaterialCommunityIcons name={icon as any} size={18} color={colors.primary} />
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Driver Signup</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.subtitle}>Join our community and start earning.</Text>
-        
-        <Card variant="elevated" padding="md" style={styles.formCard}>
-          <SectionHeader title="Personal Information" icon="account-details" />
-          <Input
-            label="Full Name"
-            placeholder="Juan Dela Cruz"
-            value={formData.name}
-            onChangeText={(text) => setFormData({ ...formData, name: text })}
-            errorText={errors.name}
-            left={<TextInput.Icon icon="account" />}
-          />
-          <Input
-            label="Email"
-            placeholder="juan@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={formData.email}
-            onChangeText={(text) => setFormData({ ...formData, email: text })}
-            errorText={errors.email}
-            left={<TextInput.Icon icon="email" />}
-          />
-          <Input
-            label="Phone"
-            placeholder="09xx xxx xxxx"
-            keyboardType="phone-pad"
-            value={formData.phone}
-            onChangeText={(text) => setFormData({ ...formData, phone: text })}
-            left={<TextInput.Icon icon="phone" />}
-          />
-
-          <Divider style={styles.divider} />
-          
-          <SectionHeader title="License & Membership" icon="card-account-details-outline" />
-          <Input
-            label="License Number"
-            placeholder="D01-XX-XXXXXX"
-            autoCapitalize="characters"
-            value={formData.license_number}
-            onChangeText={(text) => setFormData({ ...formData, license_number: text })}
-            errorText={errors.license_number}
-            left={<TextInput.Icon icon="card-account-details" />}
-          />
-          <Input
-            label="TODA Membership ID"
-            placeholder="TODA-12345"
-            value={formData.toda_membership}
-            onChangeText={(text) => setFormData({ ...formData, toda_membership: text })}
-            left={<TextInput.Icon icon="badge-account-horizontal" />}
-          />
-
-          <Divider style={styles.divider} />
-
-          <SectionHeader title="Vehicle Details" icon="tricycle" />
-          <Input
-            label="Plate Number"
-            placeholder="123 ABC"
-            autoCapitalize="characters"
-            value={formData.plate_number}
-            onChangeText={(text) => setFormData({ ...formData, plate_number: text })}
-            errorText={errors.plate_number}
-            left={<TextInput.Icon icon="numeric" />}
-          />
-          <View style={styles.row}>
-            <Input
-              label="Make"
-              placeholder="Kawasaki"
-              containerStyle={{ flex: 1, marginRight: 8 }}
-              value={formData.vehicle_make}
-              onChangeText={(text) => setFormData({ ...formData, vehicle_make: text })}
-            />
-            <Input
-              label="Model"
-              placeholder="Barako"
-              containerStyle={{ flex: 1 }}
-              value={formData.vehicle_model}
-              onChangeText={(text) => setFormData({ ...formData, vehicle_model: text })}
-            />
-          </View>
-
-          <Divider style={styles.divider} />
-
-          <SectionHeader title="Security" icon="shield-lock-outline" />
-          <Input
-            label="Password"
-            placeholder="••••••••"
-            secureTextEntry
-            value={formData.password}
-            onChangeText={(text) => setFormData({ ...formData, password: text })}
-            left={<TextInput.Icon icon="lock" />}
-          />
-          <Input
-            label="Confirm Password"
-            placeholder="••••••••"
-            secureTextEntry
-            value={formData.confirmPassword}
-            onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
-            errorText={errors.confirmPassword}
-            left={<TextInput.Icon icon="lock-check" />}
-          />
-        </Card>
-
-        <Button 
-          variant="primary" 
-          onPress={handleRegister} 
-          loading={loading}
-          style={styles.submitBtn}
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          Submit Application
-        </Button>
+          <Animated.View
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+          >
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
+            </TouchableOpacity>
 
-        <TouchableOpacity style={styles.footer} onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.footerText}>Already have an account? <Text style={styles.loginLink}>Login</Text></Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <View style={styles.headerSection}>
+              <View style={styles.iconCircle}>
+                <MaterialCommunityIcons name="moped" size={28} color={colors.secondary} />
+              </View>
+              <Text style={styles.title}>Driver Sign Up</Text>
+              <Text style={styles.subtitle}>
+                Join our driver network and start earning today.
+              </Text>
+            </View>
+
+            {/* Personal Info */}
+            <View style={styles.formCard}>
+              <SectionHeader title="Personal Information" icon="account-details" />
+              <Input
+                label="Full name"
+                placeholder="Juan Dela Cruz"
+                {...field('name')}
+                left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
+              />
+              <Input
+                label="Email address"
+                placeholder="juan@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                {...field('email')}
+                left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
+              />
+              <Input
+                label="Phone number"
+                placeholder="09xx xxx xxxx"
+                keyboardType="phone-pad"
+                {...field('phone')}
+                left={<TextInput.Icon icon="phone-outline" color={colors.textMuted} />}
+              />
+            </View>
+
+            {/* License & Membership */}
+            <View style={styles.formCard}>
+              <SectionHeader title="License & Membership" icon="card-account-details-outline" />
+              <Input
+                label="License number"
+                placeholder="D01-XX-XXXXXX"
+                autoCapitalize="characters"
+                {...field('license_number')}
+                left={<TextInput.Icon icon="card-account-details" color={colors.textMuted} />}
+              />
+              <Input
+                label="TODA Membership ID"
+                placeholder="TODA-12345"
+                {...field('toda_membership')}
+                left={<TextInput.Icon icon="badge-account-horizontal" color={colors.textMuted} />}
+              />
+            </View>
+
+            {/* Vehicle */}
+            <View style={styles.formCard}>
+              <SectionHeader title="Vehicle Details" icon="tricycle" />
+              <Input
+                label="Plate number"
+                placeholder="123 ABC"
+                autoCapitalize="characters"
+                {...field('plate_number')}
+                left={<TextInput.Icon icon="numeric" color={colors.textMuted} />}
+              />
+              <View style={styles.row}>
+                <Input
+                  label="Make"
+                  placeholder="Kawasaki"
+                  containerStyle={{ flex: 1, marginRight: 8 }}
+                  {...field('vehicle_make')}
+                />
+                <Input
+                  label="Model"
+                  placeholder="Barako"
+                  containerStyle={{ flex: 1 }}
+                  {...field('vehicle_model')}
+                />
+              </View>
+            </View>
+
+            {/* Security */}
+            <View style={styles.formCard}>
+              <SectionHeader title="Security" icon="shield-lock-outline" />
+              <Input
+                label="Password"
+                placeholder="••••••••"
+                secureTextEntry
+                {...field('password')}
+                left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
+              />
+              <Input
+                label="Confirm password"
+                placeholder="••••••••"
+                secureTextEntry
+                {...field('confirmPassword')}
+                left={<TextInput.Icon icon="lock-check-outline" color={colors.textMuted} />}
+              />
+            </View>
+
+            <Button
+              variant="primary"
+              onPress={handleRegister}
+              loading={loading}
+              style={styles.cta}
+            >
+              Submit Application
+            </Button>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account?  </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.footerLink}>Sign in</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -214,79 +239,88 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    paddingTop: 60,
+  scrollContent: {
     paddingHorizontal: spacing.screen,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 20,
-    backgroundColor: colors.surface,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.background,
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginBottom: spacing.xl,
+  },
+  headerSection: {
+    marginBottom: spacing.xl,
+  },
+  iconCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.secondaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   title: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  scrollContent: {
-    padding: spacing.screen,
-    paddingBottom: 60,
+    ...typography.h1,
+    fontSize: 28,
+    marginBottom: spacing.xs,
   },
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
-    marginBottom: 24,
   },
   formCard: {
-    marginBottom: 24,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 8,
+    marginBottom: spacing.md,
   },
-  sectionIcon: {
+  sectionIconBox: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.primary + '15',
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.sm,
   },
   sectionTitle: {
     ...typography.label,
-    fontSize: 16,
-    color: colors.primary,
-  },
-  divider: {
-    marginVertical: 24,
-    backgroundColor: colors.borderLight,
+    fontSize: 15,
+    color: colors.text,
   },
   row: {
     flexDirection: 'row',
   },
-  submitBtn: {
-    marginTop: 8,
+  cta: {
+    height: 54,
+    marginTop: spacing.sm,
   },
   footer: {
-    marginTop: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    marginTop: spacing.xl,
   },
   footerText: {
     ...typography.bodySmall,
-    color: colors.textSecondary,
   },
-  loginLink: {
-    ...typography.label,
-    color: colors.primary,
-  }
+  footerLink: {
+    ...typography.labelSmall,
+    color: colors.accent,
+    fontWeight: '700',
+  },
 });

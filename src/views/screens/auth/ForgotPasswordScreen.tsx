@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View, StyleSheet, TouchableOpacity, SafeAreaView,
+  KeyboardAvoidingView, Platform, ScrollView, Animated,
+} from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { AuthService } from '@/models/services/AuthService';
-import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
@@ -17,23 +19,38 @@ export const ForgotPasswordScreen = () => {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(32)).current;
+  const successScale = useRef(new Animated.Value(0.7)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 75, friction: 12, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
   const handleReset = async () => {
     if (!email.trim()) return;
     setLoading(true);
     try {
       await authService.resetPassword(email.trim());
-    } catch {
-      // Prototype mode fallback
-    } finally {
+    } catch {}
+    finally {
       setLoading(false);
       setSent(true);
+      Animated.parallel([
+        Animated.timing(successOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(successScale, { toValue: 1, tension: 70, friction: 10, useNativeDriver: true }),
+      ]).start();
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
@@ -41,36 +58,51 @@ export const ForgotPasswordScreen = () => {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-          </TouchableOpacity>
+          <Animated.View
+            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+          >
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color={colors.text} />
+            </TouchableOpacity>
 
-          <View style={styles.header}>
-            <TricycleIcon size={48} color={colors.primary} />
-            <Text style={styles.title}>Reset password</Text>
-            <Text style={styles.subtitle}>Enter your email to receive instructions</Text>
-          </View>
-
-          <View style={styles.content}>
             {sent ? (
-              <View style={styles.successBox}>
-                <View style={styles.successIcon}>
-                  <MaterialCommunityIcons name="email-check-outline" size={48} color={colors.primary} />
+              <Animated.View
+                style={[
+                  styles.successSection,
+                  { opacity: successOpacity, transform: [{ scale: successScale }] },
+                ]}
+              >
+                <View style={styles.successIconCircle}>
+                  <MaterialCommunityIcons name="email-check-outline" size={36} color={colors.primary} />
                 </View>
-                <Text style={styles.successTitle}>Check your email</Text>
+                <Text style={styles.successTitle}>Check your inbox</Text>
                 <Text style={styles.successText}>
-                  Instructions have been sent to {email}. Please check your inbox and spam folder.
+                  Reset instructions have been sent to{'\n'}
+                  <Text style={styles.successEmail}>{email}</Text>
                 </Text>
-                <Button 
-                  variant="primary" 
+                <Button
+                  variant="primary"
                   onPress={() => navigation.navigate('Login')}
-                  style={styles.actionBtn}
+                  style={styles.cta}
                 >
                   Return to Sign In
                 </Button>
-              </View>
+                <Text style={styles.spamNote}>
+                  Didn't receive it? Check your spam folder.
+                </Text>
+              </Animated.View>
             ) : (
               <>
+                <View style={styles.headerSection}>
+                  <View style={styles.iconCircle}>
+                    <MaterialCommunityIcons name="lock-reset" size={28} color={colors.primary} />
+                  </View>
+                  <Text style={styles.title}>Reset password</Text>
+                  <Text style={styles.subtitle}>
+                    Enter your email and we'll send you reset instructions.
+                  </Text>
+                </View>
+
                 <Input
                   label="Email address"
                   placeholder="you@example.com"
@@ -86,19 +118,23 @@ export const ForgotPasswordScreen = () => {
                   onPress={handleReset}
                   disabled={!email.trim() || loading}
                   loading={loading}
-                  style={styles.actionBtn}
+                  style={styles.cta}
                 >
-                  Send Reset Link
+                  Send reset link
                 </Button>
 
-                <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backLink}>
-                  <Text style={styles.backText}>
-                    Remembered it? <Text style={styles.backHighlight}>Sign In</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Login')}
+                  style={styles.footer}
+                >
+                  <Text style={styles.footerText}>
+                    Remembered it?{'  '}
+                    <Text style={styles.footerLink}>Sign in</Text>
                   </Text>
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -106,12 +142,9 @@ export const ForgotPasswordScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.surface 
-  },
-  keyboardView: {
+  container: {
     flex: 1,
+    backgroundColor: colors.surface,
   },
   scrollContent: {
     flexGrow: 1,
@@ -120,67 +153,86 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxl,
   },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
-    marginLeft: -4,
   },
-  header: {
+  headerSection: {
     marginBottom: spacing.xl,
   },
-  title: { 
+  iconCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  title: {
     ...typography.h1,
-    marginTop: spacing.md,
+    fontSize: 28,
     marginBottom: spacing.xs,
   },
-  subtitle: { 
+  subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+    lineHeight: 22,
   },
-  content: { 
-    flex: 1,
-  },
-  actionBtn: {
+  cta: {
+    height: 54,
     marginTop: spacing.md,
-    height: 52,
   },
-  backLink: { 
-    marginTop: spacing.xl, 
-    alignItems: 'center' 
+  footer: {
+    alignItems: 'center',
+    marginTop: spacing.xl,
   },
-  backText: { 
+  footerText: {
     ...typography.bodySmall,
     color: colors.textSecondary,
   },
-  backHighlight: { 
-    color: colors.accent, 
-    fontWeight: '700' 
+  footerLink: {
+    color: colors.accent,
+    fontWeight: '700',
   },
-  successBox: { 
-    alignItems: 'center', 
-    paddingTop: spacing.lg 
+  successSection: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
   },
-  successIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  successIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
   },
-  successTitle: { 
+  successTitle: {
     ...typography.h2,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
-  successText: { 
+  successText: {
     ...typography.body,
-    textAlign: 'center', 
-    lineHeight: 22, 
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
     marginBottom: spacing.xl,
+  },
+  successEmail: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  spamNote: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
 });

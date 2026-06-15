@@ -7,6 +7,9 @@ import { ActivityLogsScreen } from '@/views/screens/admin/ActivityLogsScreen';
 import { SystemHealthScreen } from '@/views/screens/admin/SystemHealthScreen';
 import { FranchiseManagementScreen } from '@/views/screens/admin/FranchiseManagementScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
+import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
+import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
+import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -34,6 +37,11 @@ const AdminTabs = () => (
       component={SystemHealthScreen}
       options={{ tabBarLabel: 'System', tabBarIcon: tabIcon('server') }}
     />
+    <Tab.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={{ tabBarLabel: 'Account', tabBarIcon: tabIcon('account', 'account-outline') }}
+    />
   </Tab.Navigator>
 );
 
@@ -41,6 +49,8 @@ export const AdminNavigator = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="AdminMain" component={AdminTabs} />
     <Stack.Screen name="UserManagement" component={UserManagementScreen} />
-    <Stack.Screen name="Profile" component={ProfileScreen} />
+    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+    <Stack.Screen name="Settings" component={SettingsScreen} />
+    <Stack.Screen name="Analytics" component={AnalyticsScreen} />
   </Stack.Navigator>
 );

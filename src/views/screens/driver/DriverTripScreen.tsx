@@ -1,0 +1,391 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Text } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import { useAppDispatch, useAppSelector } from '@/controllers/store';
+import { startTrip, completeTrip } from '@/controllers/slices/bookingSlice';
+import { updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
+import { Button } from '@/views/components/common/Button';
+import { Card } from '@/views/components/common/Card';
+import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { formatETA, formatDistance } from '@/utils/locationUtils';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
+
+const { height } = Dimensions.get('window');
+
+const UBER_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
+];
+
+type TripPhase = 'to_pickup' | 'in_trip';
+
+export const DriverTripScreen = () => {
+  const dispatch = useAppDispatch();
+  const navigation = useNavigation<any>();
+  const { user } = useAppSelector(state => state.auth);
+  const { currentTrip } = useAppSelector(state => state.driver);
+  const currentBooking = currentTrip;
+
+  const [phase, setPhase] = useState<TripPhase>(
+    currentBooking?.status === 'in-transit' ? 'in_trip' : 'to_pickup'
+  );
+  const [completing, setCompleting] = useState(false);
+
+  const slideAnim = useRef(new Animated.Value(height * 0.4)).current;
+
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      tension: 60,
+      friction: 9,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  if (!currentBooking) {
+    return (
+      <View style={styles.emptyContainer}>
+        <MaterialCommunityIcons name="map-marker-off-outline" size={72} color={colors.textLight} />
+        <Text style={styles.emptyTitle}>No active trip</Text>
+        <Button variant="outline" onPress={() => navigation.goBack()}>
+          Back to Dashboard
+        </Button>
+      </View>
+    );
+  }
+
+  const pickup = currentBooking.pickup_location;
+  const dropoff = currentBooking.dropoff_location;
+
+  const mapCenter = phase === 'to_pickup'
+    ? { latitude: pickup?.latitude ?? 13.4452, longitude: pickup?.longitude ?? 121.8401 }
+    : { latitude: dropoff?.latitude ?? 13.4452, longitude: dropoff?.longitude ?? 121.8401 };
+
+  const handlePickedUp = async () => {
+    try {
+      await dispatch(startTrip(currentBooking.id)).unwrap();
+      setPhase('in_trip');
+    } catch {
+      Alert.alert('Error', 'Could not update trip status. Try again.');
+    }
+  };
+
+  const handleDropOff = async () => {
+    Alert.alert('Complete Trip', 'Confirm passenger drop-off at destination?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Confirm',
+        onPress: async () => {
+          setCompleting(true);
+          try {
+            await dispatch(completeTrip(currentBooking.id)).unwrap();
+            if (user?.id) {
+              await dispatch(updateDriverStatus({ driverId: user.id, status: 'online' }));
+            }
+            dispatch(clearCurrentTrip());
+            Alert.alert('Trip Complete!', 'Payment will be settled with the passenger.', [
+              { text: 'OK', onPress: () => navigation.navigate('DriverDashboard') },
+            ]);
+          } catch {
+            Alert.alert('Error', 'Failed to complete trip. Try again.');
+          } finally {
+            setCompleting(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSOS = () => {
+    Alert.alert('Emergency SOS', 'Choose an action:', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Call TODA Dispatch', onPress: () => undefined },
+      { text: 'Flag Emergency', style: 'destructive', onPress: () => undefined },
+    ]);
+  };
+
+  const isToPickup = phase === 'to_pickup';
+  const phaseLabel = isToPickup ? 'HEAD TO PICKUP' : 'IN PROGRESS';
+  const phaseColor = isToPickup ? colors.accent : colors.secondary;
+
+  return (
+    <View style={styles.container}>
+      <MapView
+        style={styles.map}
+        provider={PROVIDER_GOOGLE}
+        customMapStyle={UBER_MAP_STYLE}
+        region={{ ...mapCenter, latitudeDelta: 0.025, longitudeDelta: 0.025 }}
+        showsUserLocation
+        showsMyLocationButton={false}
+      >
+        {pickup && (
+          <Marker
+            coordinate={{ latitude: pickup.latitude, longitude: pickup.longitude }}
+            title="Pickup"
+          >
+            <View style={[styles.markerPin, { backgroundColor: colors.secondary }]}>
+              <MaterialCommunityIcons name="account" size={16} color="#fff" />
+            </View>
+          </Marker>
+        )}
+        {dropoff && (
+          <Marker
+            coordinate={{ latitude: dropoff.latitude, longitude: dropoff.longitude }}
+            title="Dropoff"
+          >
+            <View style={[styles.markerPin, { backgroundColor: colors.accent }]}>
+              <MaterialCommunityIcons name="map-marker" size={16} color="#fff" />
+            </View>
+          </Marker>
+        )}
+        {pickup && dropoff && (
+          <Polyline
+            coordinates={[
+              { latitude: pickup.latitude, longitude: pickup.longitude },
+              { latitude: dropoff.latitude, longitude: dropoff.longitude },
+            ]}
+            strokeColor={colors.primary}
+            strokeWidth={3}
+          />
+        )}
+      </MapView>
+
+      {/* Header */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <MaterialCommunityIcons name="chevron-left" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={[styles.phasePill, { backgroundColor: phaseColor + '18', borderColor: phaseColor }]}>
+          <View style={[styles.phaseDot, { backgroundColor: phaseColor }]} />
+          <Text style={[styles.phaseLabel, { color: phaseColor }]}>{phaseLabel}</Text>
+        </View>
+        <TouchableOpacity style={styles.sosBtn} onPress={handleSOS}>
+          <MaterialCommunityIcons name="alarm-light" size={22} color={colors.error} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom panel */}
+      <Animated.View style={[styles.panel, { transform: [{ translateY: slideAnim }] }]}>
+        <View style={styles.handle} />
+
+        {/* Passenger info */}
+        <View style={styles.passengerRow}>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarText}>P</Text>
+          </View>
+          <View style={styles.passengerInfo}>
+            <Text style={styles.passengerName}>Passenger</Text>
+            <View style={styles.ratingRow}>
+              <MaterialCommunityIcons name="star" size={14} color={colors.warning} />
+              <Text style={styles.ratingText}>4.8</Text>
+            </View>
+          </View>
+          <View style={styles.contactRow}>
+            <TouchableOpacity style={styles.contactBtn}>
+              <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.contactBtn}>
+              <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Fare & route */}
+        <Card variant="elevated" padding="md" style={styles.fareCard}>
+          <View style={styles.fareRow}>
+            <View style={styles.fareItem}>
+              <Text style={styles.fareValue}>₱{(currentBooking.total_fare ?? 0).toFixed(2)}</Text>
+              <Text style={styles.fareLabel}>FARE</Text>
+            </View>
+            <View style={styles.fareDivider} />
+            <View style={styles.fareItem}>
+              <Text style={styles.fareValue}>{formatDistance(currentBooking.distance ?? 0)}</Text>
+              <Text style={styles.fareLabel}>DISTANCE</Text>
+            </View>
+            <View style={styles.fareDivider} />
+            <View style={styles.fareItem}>
+              <Text style={styles.fareValue}>{formatETA(currentBooking.estimated_duration ?? 0)}</Text>
+              <Text style={styles.fareLabel}>ETA</Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Location display */}
+        <View style={styles.locationBlock}>
+          <View style={styles.locationRow}>
+            <View style={[styles.locationDot, { backgroundColor: colors.secondary }]} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {pickup?.address ?? 'Pickup location'}
+            </Text>
+          </View>
+          <View style={styles.locationConnector} />
+          <View style={styles.locationRow}>
+            <View style={[styles.locationDot, { backgroundColor: colors.accent }]} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {dropoff?.address ?? 'Dropoff location'}
+            </Text>
+          </View>
+        </View>
+
+        {/* CTA */}
+        {isToPickup ? (
+          <Button variant="primary" onPress={handlePickedUp} style={styles.ctaBtn}>
+            Passenger Picked Up
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            onPress={handleDropOff}
+            loading={completing}
+            disabled={completing}
+            style={styles.ctaBtn}
+          >
+            Complete Trip
+          </Button>
+        )}
+      </Animated.View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  map: { flex: 1 },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+    padding: 40,
+    backgroundColor: colors.background,
+  },
+  emptyTitle: { ...typography.h2, color: colors.textSecondary },
+  topBar: {
+    position: 'absolute',
+    top: 52,
+    left: spacing.screen,
+    right: spacing.screen,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  phasePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 8,
+    backgroundColor: '#fff',
+    ...shadows.sm,
+  },
+  phaseDot: { width: 8, height: 8, borderRadius: 4 },
+  phaseLabel: { ...typography.label, fontSize: 11, letterSpacing: 1 },
+  sosBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  panel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.screen,
+    paddingBottom: 36,
+    paddingTop: 16,
+    ...shadows.xl,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.borderLight,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  passengerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: { ...typography.h3, color: colors.primary },
+  passengerInfo: { flex: 1, marginLeft: 14 },
+  passengerName: { ...typography.subtitle, color: colors.text },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  ratingText: { ...typography.bodySmall, color: colors.textSecondary },
+  contactRow: { flexDirection: 'row', gap: 12 },
+  contactBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fareCard: { marginBottom: 20 },
+  fareRow: { flexDirection: 'row', alignItems: 'center' },
+  fareItem: { flex: 1, alignItems: 'center' },
+  fareValue: { ...typography.h3, color: colors.text, fontSize: 18 },
+  fareLabel: { ...typography.label, color: colors.textMuted, fontSize: 10, letterSpacing: 1, marginTop: 2 },
+  fareDivider: { width: 1, height: 32, backgroundColor: colors.borderLight },
+  locationBlock: { marginBottom: 24 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 14, height: 40 },
+  locationDot: { width: 12, height: 12, borderRadius: 6 },
+  locationConnector: {
+    width: 2,
+    height: 16,
+    backgroundColor: colors.borderLight,
+    marginLeft: 5,
+  },
+  locationText: { ...typography.body, color: colors.text, flex: 1 },
+  ctaBtn: { marginTop: 4 },
+  markerPin: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+});

@@ -2,11 +2,13 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
+  const navigation = useNavigation<any>();
 
   const handleLogout = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -62,7 +64,7 @@ export const ProfileScreen = () => {
           <TouchableOpacity
             style={styles.iconBtn}
             activeOpacity={0.7}
-            onPress={() => Alert.alert('Notifications', 'You have no new notifications')}
+            onPress={() => navigation.navigate('Notifications')}
           >
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
             <View style={styles.badge} />
@@ -70,7 +72,7 @@ export const ProfileScreen = () => {
           <TouchableOpacity
             style={styles.iconBtn}
             activeOpacity={0.7}
-            onPress={() => Alert.alert('Settings', 'Coming soon')}
+            onPress={() => navigation.navigate('Settings')}
           >
             <MaterialCommunityIcons name="cog-outline" size={22} color={colors.text} />
           </TouchableOpacity>
@@ -126,9 +128,12 @@ export const ProfileScreen = () => {
         {/* Account management */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
-          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => Alert.alert('Edit Profile', 'Coming soon')} />
-          <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => Alert.alert('Payment Methods', 'Coming soon')} />
-          <MenuItem icon="shield-account-outline" label="Privacy & Security" onPress={() => Alert.alert('Privacy & Security', 'Coming soon')} last />
+          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => Alert.alert('Edit Profile', 'Profile editing coming in next update.')} />
+          {user?.user_type === 'passenger' && (
+            <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} />
+          )}
+          <MenuItem icon="bell-outline" label="Notifications" onPress={() => navigation.navigate('Notifications')} />
+          <MenuItem icon="cog-outline" label="Settings" onPress={() => navigation.navigate('Settings')} last />
         </View>
 
         {/* Support */}

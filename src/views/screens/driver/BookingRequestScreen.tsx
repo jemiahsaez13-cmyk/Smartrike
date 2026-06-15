@@ -18,8 +18,8 @@ export const BookingRequestScreen = () => {
   const handleAccept = async (bookingId: string) => {
     try {
       await dispatch(acceptBooking({ bookingId, driverId: user!.id })).unwrap();
-      navigation.navigate('DriverDashboard');
-      Alert.alert('Success', 'Ride accepted! Head to the pickup location.');
+      navigation.navigate('DriverTrip');
+      Alert.alert('Ride Accepted!', 'Head to the pickup location.');
     } catch (error: any) {
       Alert.alert('Error', error || 'Failed to accept ride');
     }

@@ -1,10 +1,21 @@
-export interface PushNotification {
+export type NotificationType =
+  | 'booking_request'
+  | 'booking_accepted'
+  | 'booking_completed'
+  | 'booking_cancelled'
+  | 'driver_arrived'
+  | 'trip_started'
+  | 'payment_received'
+  | 'franchise_status'
+  | 'system_alert';
+
+export interface AppNotification {
   id: string;
   user_id: string;
+  type: NotificationType | string;
   title: string;
   body: string;
-  type: 'booking_update' | 'driver_arrival' | 'system_alert' | 'promotion';
-  data?: Record<string, any>;
+  booking_id?: string | null;
   read: boolean;
-  created_at: Date;
+  created_at: string;
 }

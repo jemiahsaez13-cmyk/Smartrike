@@ -9,13 +9,28 @@ import { OTPVerificationScreen } from '@/views/screens/auth/OTPVerificationScree
 import { ForgotPasswordScreen } from '@/views/screens/auth/ForgotPasswordScreen';
 import { EmailLoginScreen } from '@/views/screens/auth/EmailLoginScreen';
 import { EmailRegisterScreen } from '@/views/screens/auth/EmailRegisterScreen';
+import { colors } from '@/views/styles/theme';
 
 const Stack = createNativeStackNavigator();
 
 export const AuthNavigator = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="Login" component={LoginScreen} />
-    <Stack.Screen name="Register" component={RegisterScreen} />
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      animation: 'slide_from_right',
+      contentStyle: { backgroundColor: colors.surface },
+    }}
+  >
+    <Stack.Screen
+      name="Login"
+      component={LoginScreen}
+      options={{ animation: 'fade' }}
+    />
+    <Stack.Screen
+      name="Register"
+      component={RegisterScreen}
+      options={{ animation: 'slide_from_bottom' }}
+    />
     <Stack.Screen name="PassengerRegister" component={PassengerRegisterScreen} />
     <Stack.Screen name="DriverRegister" component={DriverRegisterScreen} />
     <Stack.Screen name="PhoneLogin" component={PhoneLoginScreen} />
@@ -25,4 +40,3 @@ export const AuthNavigator = () => (
     <Stack.Screen name="EmailRegister" component={EmailRegisterScreen} />
   </Stack.Navigator>
 );
-
