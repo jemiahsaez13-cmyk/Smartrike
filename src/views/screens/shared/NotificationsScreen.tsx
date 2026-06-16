@@ -65,10 +65,23 @@ export const NotificationsScreen = () => {
   useEffect(() => {
     if (!user?.id) return;
     dispatch(fetchNotifications(user.id));
-    const key = realtime.subscribeToNotifications(user.id, (payload: any) => {
-      if (payload?.new) dispatch(addNotification(payload.new));
-    });
-    return () => realtime.unsubscribe(key);
+    // Realtime is best-effort: a failed channel/WebSocket must never blank the
+    // list, so guard subscribe/unsubscribe and just log on failure.
+    let key: string | undefined;
+    try {
+      key = realtime.subscribeToNotifications(user.id, (payload: any) => {
+        if (payload?.new) dispatch(addNotification(payload.new));
+      });
+    } catch (err) {
+      console.warn('Notification realtime subscribe failed:', err);
+    }
+    return () => {
+      try {
+        if (key) realtime.unsubscribe(key);
+      } catch {
+        // ignore teardown errors
+      }
+    };
   }, [user?.id]);
 
   const onRefresh = async () => {
