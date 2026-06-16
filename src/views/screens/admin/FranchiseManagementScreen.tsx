@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
-import { Text, Chip } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { fetchAllApplications, advanceApplication } from '@/controllers/slices/franchiseSlice';
@@ -31,6 +31,13 @@ const STATUS_COLOR: Record<FranchiseStatus, string> = {
   issued: colors.success,
   rejected: colors.error,
 };
+
+// Shared choice-chip design (matches TripHistory / Earnings filters).
+const FilterChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[styles.chip, active && styles.chipActive]}>
+    <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export const FranchiseManagementScreen = () => {
   const dispatch = useAppDispatch();
@@ -97,9 +104,9 @@ export const FranchiseManagementScreen = () => {
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
           <View style={styles.filters}>
-            <Chip selected={filter === 'all'} onPress={() => setFilter('all')} style={styles.chip} textStyle={styles.chipText} compact>All</Chip>
-            <Chip selected={filter === 'pending'} onPress={() => setFilter('pending')} style={styles.chip} textStyle={styles.chipText} compact>Pending</Chip>
-            <Chip selected={filter === 'issued'} onPress={() => setFilter('issued')} style={styles.chip} textStyle={styles.chipText} compact>Issued</Chip>
+            <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+            <FilterChip label="Pending" active={filter === 'pending'} onPress={() => setFilter('pending')} />
+            <FilterChip label="Issued" active={filter === 'issued'} onPress={() => setFilter('issued')} />
           </View>
         </ScrollView>
       </View>
@@ -224,18 +231,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm, 
     alignItems: 'center' 
   },
-  chip: { 
-    height: 32, 
-    backgroundColor: colors.surfaceAlt, 
-    borderRadius: radius.md,
-    borderWidth: 0,
+  chip: {
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
-    ...typography.labelSmall,
-    fontSize: 12,
+    ...typography.label,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginVertical: 0,
-    marginHorizontal: 4,
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
   },
   scroll: { 
     flex: 1 
