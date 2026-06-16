@@ -4,27 +4,25 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { confirmDialog } from '@/utils/dialog';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const navigation = useNavigation<any>();
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await logout();
-          } catch {
-            // Demo sessions have no remote state; dropping auth is enough.
-          }
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    // confirmDialog works on web too (Alert.alert is a no-op there).
+    const ok = await confirmDialog('Log Out', 'Are you sure you want to log out?', {
+      confirmText: 'Log Out',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await logout();
+    } catch {
+      // Best-effort: signOut clears local auth state regardless of remote result.
+    }
   };
 
   const roleLabel =
