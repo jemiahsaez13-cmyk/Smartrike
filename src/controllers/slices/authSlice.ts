@@ -59,11 +59,14 @@ export const signIn = createAsyncThunk(
   }
 );
 
-export const signOut = createAsyncThunk('auth/signOut', async (_, { rejectWithValue }) => {
+export const signOut = createAsyncThunk('auth/signOut', async () => {
+  // Best-effort remote sign-out. Demo sessions and expired/missing Supabase
+  // sessions throw here, but logout must always succeed locally — the
+  // fulfilled reducer clears the auth state regardless of the remote result.
   try {
     await authService.signOut();
-  } catch (error: any) {
-    return rejectWithValue(error.message);
+  } catch (error) {
+    console.warn('Remote sign-out failed; clearing local session anyway:', error);
   }
 });
 
