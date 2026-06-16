@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, SafeAreaView, Animated,
+  Platform, TouchableOpacity, Alert, SafeAreaView, Animated, Keyboard,
 } from 'react-native';
 import { Text, TextInput, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';

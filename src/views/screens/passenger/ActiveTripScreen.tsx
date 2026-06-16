@@ -10,6 +10,10 @@ import { Button } from '@/views/components/common/Button';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { RealtimeService } from '@/models/services/RealtimeService';
+import { LocationService } from '@/models/services/LocationService';
+import { haversineDistance, estimateETA, formatETA } from '@/utils/locationUtils';
+import { Location } from '@/models/types';
 
 const { height } = Dimensions.get('window');
 
@@ -22,6 +26,7 @@ export const ActiveTripScreen = () => {
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [driverCoords, setDriverCoords] = useState<Location | null>(null);
 
   // Animation for the tracking card
   const slideAnim = useRef(new Animated.Value(height * 0.3)).current;
@@ -34,6 +39,35 @@ export const ActiveTripScreen = () => {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  // Subscribe to the assigned driver's live location so we can show a moving
+  // position + a live ETA to the pickup point. Falls back silently if the
+  // driver isn't streaming yet.
+  const driverId = currentBooking?.driver_id;
+  useEffect(() => {
+    if (!driverId) return;
+    const realtime = new RealtimeService();
+    const locationService = new LocationService();
+
+    locationService.getDriverLocation(driverId).then((loc) => {
+      if (loc) setDriverCoords(loc);
+    });
+
+    const key = realtime.subscribeToDriverLocation(driverId, (payload) => {
+      const row = payload?.new;
+      if (row?.latitude != null && row?.longitude != null) {
+        setDriverCoords({ latitude: row.latitude, longitude: row.longitude, address: '' });
+      }
+    });
+
+    return () => realtime.unsubscribe(key);
+  }, [driverId]);
+
+  // Live ETA from the driver's current coords to the passenger's pickup point.
+  const liveEtaMinutes =
+    driverCoords && currentBooking?.pickup_location
+      ? estimateETA(haversineDistance(driverCoords, currentBooking.pickup_location))
+      : null;
 
   const handleCallDriver = () => {
     Alert.alert('Call Driver', 'Driver contact is ready for production phone linking.');
@@ -101,6 +135,14 @@ export const ActiveTripScreen = () => {
 
         <View style={styles.trackingOverlay}>
           <StatusBadge status={currentBooking?.status || 'accepted'} />
+          {liveEtaMinutes != null && (
+            <View style={styles.liveEtaChip}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveEtaText}>
+                Driver {formatETA(liveEtaMinutes)} away
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -245,7 +287,10 @@ const styles = StyleSheet.create({
   mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   backBtn: { position: 'absolute', top: layout.headerTop - 10, left: 20, zIndex: 10, ...shadows.md },
   trackingOverlay: { position: 'absolute', top: layout.headerTop, alignSelf: 'center', zIndex: 5 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, ...shadows.md },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surface, ...shadows.md },
+  liveEtaChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface, ...shadows.sm },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16A34A', marginRight: 6 },
+  liveEtaText: { ...typography.label, fontSize: 12, color: colors.text },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { ...typography.label, fontSize: 13 },
   trackingCard: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: 40, ...shadows.xl },

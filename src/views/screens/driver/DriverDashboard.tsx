@@ -6,7 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { addIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { useLocation } from '@/controllers/hooks/useLocation';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
@@ -23,6 +25,9 @@ export const DriverDashboard = () => {
   const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
   const { currentStatus, dailyEarnings, incomingRequests, completedTrips, loading } = useAppSelector(state => state.driver);
+  const { startWatchingLocation, stopWatchingLocation } = useLocation();
+  const realtimeRef = useRef<RealtimeService | null>(null);
+  if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -47,8 +52,11 @@ export const DriverDashboard = () => {
   }, [dispatch, user?.id]);
 
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || !user?.id) return;
     let cancelled = false;
+    const realtime = realtimeRef.current!;
+
+    // 1. Seed the list with any already-pending requests.
     new BookingRepository()
       .findActiveBookings()
       .then((bookings) => {
@@ -58,10 +66,21 @@ export const DriverDashboard = () => {
           .forEach((booking) => dispatch(addIncomingRequest(booking)));
       })
       .catch(() => undefined);
+
+    // 2. Push new pending bookings as they are created (no re-toggle needed).
+    const bookingsKey = realtime.subscribeToNewBookings((payload) => {
+      if (payload?.new) dispatch(addIncomingRequest(payload.new));
+    });
+
+    // 3. Stream this driver's GPS position to driver_locations for live tracking.
+    startWatchingLocation(user.id);
+
     return () => {
       cancelled = true;
+      realtime.unsubscribe(bookingsKey);
+      stopWatchingLocation();
     };
-  }, [dispatch, isOnline]);
+  }, [dispatch, isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
 
   const toggleStatus = async () => {
     if (!user?.id) return;

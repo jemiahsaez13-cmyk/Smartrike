@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
-import { getCurrentLocation, updateDriverLocation, setWatchId, clearWatchId } from '../slices/locationSlice';
+import { getCurrentLocation, updateDriverLocation } from '../slices/locationSlice';
 import { LocationService } from '@/models/services/LocationService';
 
 const locationService = new LocationService();
@@ -15,17 +15,18 @@ export const useLocation = () => {
 
   const startWatchingLocation = useCallback(
     async (driverId: string) => {
-      const watchId = await locationService.watchPosition((location) => {
+      // Streams the driver's position to `driver_locations` every ~5s so
+      // passengers can track them live. Returns false if permission denied.
+      return locationService.startWatching((location) => {
         dispatch(updateDriverLocation({ driverId, location }));
       });
-      dispatch(setWatchId(watchId));
     },
     [dispatch]
   );
 
   const stopWatchingLocation = useCallback(() => {
-    dispatch(clearWatchId());
-  }, [dispatch]);
+    locationService.stopWatching();
+  }, []);
 
   return {
     currentLocation,
