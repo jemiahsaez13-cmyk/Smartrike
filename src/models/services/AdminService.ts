@@ -91,9 +91,16 @@ export class AdminService {
 
   // Permanently deletes a user's profile row. The admin "god mode" ALL policy
   // (migration 011) authorizes this; FKs cascade/null related rows.
+  // Returns the deleted rows so we can detect a silent RLS block (0 rows, no
+  // error) instead of pretending the delete succeeded.
   async deleteUser(id: string): Promise<void> {
-    const { error } = await supabase.from('users').delete().eq('id', id);
+    const { data, error } = await supabase.from('users').delete().eq('id', id).select('id');
     if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error(
+        'The account could not be deleted. You may not have admin permission, or it was already removed. Try signing out and back in as an administrator.'
+      );
+    }
   }
 
   // ── Aggregate stats for the dashboard ────────────────────────────────────────

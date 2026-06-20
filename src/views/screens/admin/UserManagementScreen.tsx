@@ -135,17 +135,22 @@ export const UserManagementScreen = () => {
       notify('Not allowed', 'You cannot delete your own account.');
       return;
     }
+    // Close the action sheet first — iOS/Android show only one modal at a time,
+    // so the confirm dialog would otherwise never appear over the open sheet.
+    setSelected(null);
+    await new Promise((r) => setTimeout(r, 300));
+
     const ok = await confirm(
       'Delete Account',
       `Permanently delete ${user.name}'s account? This removes their profile and cannot be undone.`,
       { confirmText: 'Delete', destructive: true }
     );
     if (!ok) return;
+
     setWorking(true);
     try {
       await adminService.deleteUser(user.id);
       setUsers((prev) => prev.filter((u) => u.id !== user.id));
-      setSelected(null);
       void ActivityLogService.logActivity({
         action_type: 'user_action',
         entity_type: 'user',
@@ -153,6 +158,7 @@ export const UserManagementScreen = () => {
         description: `Admin deleted ${user.user_type} account: ${user.name}.`,
         severity: 'warning',
       });
+      notify('Account deleted', `${user.name}'s account has been removed.`);
     } catch (e: any) {
       notify('Delete failed', e?.message || 'Could not delete the account.');
     } finally {
