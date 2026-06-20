@@ -7,6 +7,10 @@ import { ConfirmBookingScreen } from '@/views/screens/passenger/ConfirmBookingSc
 import { ActiveTripScreen } from '@/views/screens/passenger/ActiveTripScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
+import { EditProfileScreen } from '@/views/screens/shared/EditProfileScreen';
+import { HelpSupportScreen } from '@/views/screens/shared/HelpSupportScreen';
+import { AboutScreen } from '@/views/screens/shared/AboutScreen';
+import { LegalScreen } from '@/views/screens/shared/LegalScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
@@ -43,6 +47,10 @@ export const PassengerNavigator = () => (
     <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
+    <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+    <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+    <Stack.Screen name="About" component={AboutScreen} />
+    <Stack.Screen name="Legal" component={LegalScreen} />
     <Stack.Screen name="Payment" component={PaymentScreen} />
   </Stack.Navigator>
 );

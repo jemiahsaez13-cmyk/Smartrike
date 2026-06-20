@@ -7,6 +7,10 @@ import { DriverTripScreen } from '@/views/screens/driver/DriverTripScreen';
 import { EarningsScreen } from '@/views/screens/driver/EarningsScreen';
 import { FranchiseScreen } from '@/views/screens/driver/FranchiseScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
+import { EditProfileScreen } from '@/views/screens/shared/EditProfileScreen';
+import { HelpSupportScreen } from '@/views/screens/shared/HelpSupportScreen';
+import { AboutScreen } from '@/views/screens/shared/AboutScreen';
+import { LegalScreen } from '@/views/screens/shared/LegalScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
@@ -48,5 +52,9 @@ export const DriverNavigator = () => (
     <Stack.Screen name="Earnings" component={EarningsScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
+    <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+    <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+    <Stack.Screen name="About" component={AboutScreen} />
+    <Stack.Screen name="Legal" component={LegalScreen} />
   </Stack.Navigator>
 );

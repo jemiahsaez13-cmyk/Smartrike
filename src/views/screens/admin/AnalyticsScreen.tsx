@@ -1,50 +1,65 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '@/views/components/common/Card';
+import { Loading } from '@/views/components/common/Loading';
+import { AdminService, Analytics, AnalyticsPeriod } from '@/models/services/AdminService';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
+const adminService = new AdminService();
+
 const PERIODS = ['Daily', 'Weekly', 'Monthly'] as const;
-type Period = typeof PERIODS[number];
+type Period = AnalyticsPeriod;
 
-const METRICS: Record<Period, { revenue: string; trips: string; drivers: string; avgFare: string; topZone: string }> = {
-  Daily: { revenue: '₱12,450', trips: '342', drivers: '38', avgFare: '₱54.20', topZone: 'Boac Market' },
-  Weekly: { revenue: '₱78,900', trips: '2,140', drivers: '45', avgFare: '₱52.80', topZone: 'Boac Market' },
-  Monthly: { revenue: '₱312,600', trips: '8,780', drivers: '52', avgFare: '₱55.10', topZone: 'MSC Tanza Gate' },
-};
-
-const DAILY_BARS = [38, 55, 72, 45, 80, 60, 90];
-const WEEKLY_BARS = [310, 420, 380, 500, 290, 450, 520];
-const MONTHLY_BARS = [2800, 3200, 2600, 3500, 3100, 2900, 3700];
-
-const BAR_LABELS: Record<Period, string[]> = {
-  Daily: ['8h', '10h', '12h', '14h', '16h', '18h', '20h'],
-  Weekly: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  Monthly: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-};
-
-const TOP_ROUTES = [
-  { from: 'Boac Market', to: 'Town Plaza', trips: 892, pct: 82 },
-  { from: 'Terminal', to: 'MSC Tanza', trips: 654, pct: 60 },
-  { from: 'Provincial Hospital', to: 'Boac Market', trips: 510, pct: 47 },
-  { from: 'MSC Tanza', to: 'Boac Market', trips: 430, pct: 40 },
-];
-
-const DRIVER_PERF = [
-  { name: 'Juan Dela Cruz', trips: 148, rating: 4.9, earnings: '₱8,240' },
-  { name: 'Pedro Santos', trips: 132, rating: 4.8, earnings: '₱7,680' },
-  { name: 'Roberto Reyes', trips: 121, rating: 4.7, earnings: '₱6,950' },
-];
+const peso = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`;
+const peso2 = (n: number) => `₱${n.toFixed(2)}`;
 
 export const AnalyticsScreen = () => {
   const navigation = useNavigation<any>();
   const [period, setPeriod] = useState<Period>('Daily');
-  const metrics = METRICS[period];
-  const bars = period === 'Daily' ? DAILY_BARS : period === 'Weekly' ? WEEKLY_BARS : MONTHLY_BARS;
-  const maxBar = Math.max(...bars);
+  const [data, setData] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const a = await adminService.getAnalytics();
+      setData(a);
+    } catch (e) {
+      console.error('Analytics load failed:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
+  };
+
+  if (loading) return <Loading message="Loading reports..." />;
+
+  const m = data?.metrics[period];
+  const metrics = {
+    revenue: m ? peso(m.revenue) : '—',
+    trips: m ? `${m.trips}` : '0',
+    drivers: m ? `${m.drivers}` : '0',
+    avgFare: m ? peso2(m.avgFare) : '₱0.00',
+    topZone: m?.topZone || '—',
+  };
+  const bars = data?.bars[period] ?? [];
+  const barLabels = data?.labels[period] ?? [];
+  const maxBar = Math.max(1, ...bars);
+  const topRoutes = data?.topRoutes ?? [];
+  const driverPerf = data?.topDrivers ?? [];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -63,7 +78,11 @@ export const AnalyticsScreen = () => {
         </View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
         {/* Period Toggle */}
         <View style={styles.periodRow}>
           {PERIODS.map(p => (
@@ -103,9 +122,9 @@ export const AnalyticsScreen = () => {
             {bars.map((h, idx) => (
               <View key={idx} style={styles.barCol}>
                 <View style={[styles.barTrack, { height: 100 }]}>
-                  <View style={[styles.barFill, { height: `${(h / maxBar) * 100}%` }]} />
+                  <View style={[styles.barFill, { height: `${Math.max(3, (h / maxBar) * 100)}%` }]} />
                 </View>
-                <Text style={styles.barLabel}>{BAR_LABELS[period][idx]}</Text>
+                <Text style={styles.barLabel}>{barLabels[idx]}</Text>
               </View>
             ))}
           </View>
@@ -118,40 +137,48 @@ export const AnalyticsScreen = () => {
         {/* Top Routes */}
         <Text style={styles.sectionLabel}>TOP ROUTES</Text>
         <Card variant="elevated" padding="none" style={styles.routeCard}>
-          {TOP_ROUTES.map((route, idx) => (
-            <View key={idx} style={[styles.routeRow, idx < TOP_ROUTES.length - 1 && styles.routeRowBorder]}>
-              <View style={styles.routeInfo}>
-                <Text style={styles.routeName}>{route.from} → {route.to}</Text>
-                <Text style={styles.routeTrips}>{route.trips} trips</Text>
-              </View>
-              <View style={styles.routeBarWrap}>
-                <View style={styles.routeBarTrack}>
-                  <View style={[styles.routeBarFill, { width: `${route.pct}%` }]} />
+          {topRoutes.length === 0 ? (
+            <View style={styles.routeRow}><Text style={styles.routeTrips}>No route data yet</Text></View>
+          ) : (
+            topRoutes.map((route, idx) => (
+              <View key={idx} style={[styles.routeRow, idx < topRoutes.length - 1 && styles.routeRowBorder]}>
+                <View style={styles.routeInfo}>
+                  <Text style={styles.routeName} numberOfLines={1}>{route.from} → {route.to}</Text>
+                  <Text style={styles.routeTrips}>{route.trips} trips</Text>
                 </View>
-                <Text style={styles.routePct}>{route.pct}%</Text>
+                <View style={styles.routeBarWrap}>
+                  <View style={styles.routeBarTrack}>
+                    <View style={[styles.routeBarFill, { width: `${route.pct}%` }]} />
+                  </View>
+                  <Text style={styles.routePct}>{route.pct}%</Text>
+                </View>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </Card>
 
         {/* Top Drivers */}
         <Text style={styles.sectionLabel}>TOP DRIVERS</Text>
         <Card variant="elevated" padding="none" style={styles.driverCard}>
-          {DRIVER_PERF.map((driver, idx) => (
-            <View key={idx} style={[styles.driverRow, idx < DRIVER_PERF.length - 1 && styles.routeRowBorder]}>
-              <View style={[styles.rankBadge, { backgroundColor: idx === 0 ? colors.warning : colors.surfaceAlt }]}>
-                <Text style={[styles.rankText, { color: idx === 0 ? '#fff' : colors.textSecondary }]}>#{idx + 1}</Text>
-              </View>
-              <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>{driver.name}</Text>
-                <View style={styles.driverMeta}>
-                  <MaterialCommunityIcons name="star" size={12} color={colors.warning} />
-                  <Text style={styles.driverMetaText}>{driver.rating} · {driver.trips} trips</Text>
+          {driverPerf.length === 0 ? (
+            <View style={styles.driverRow}><Text style={styles.routeTrips}>No driver data yet</Text></View>
+          ) : (
+            driverPerf.map((driver, idx) => (
+              <View key={driver.id || idx} style={[styles.driverRow, idx < driverPerf.length - 1 && styles.routeRowBorder]}>
+                <View style={[styles.rankBadge, { backgroundColor: idx === 0 ? colors.warning : colors.surfaceAlt }]}>
+                  <Text style={[styles.rankText, { color: idx === 0 ? '#fff' : colors.textSecondary }]}>#{idx + 1}</Text>
                 </View>
+                <View style={styles.driverInfo}>
+                  <Text style={styles.driverName}>{driver.name}</Text>
+                  <View style={styles.driverMeta}>
+                    <MaterialCommunityIcons name="star" size={12} color={colors.warning} />
+                    <Text style={styles.driverMetaText}>{driver.rating.toFixed(1)} · {driver.trips} trips</Text>
+                  </View>
+                </View>
+                <Text style={[styles.driverEarnings, typography.currency]}>{peso(driver.earnings)}</Text>
               </View>
-              <Text style={[styles.driverEarnings, typography.currency]}>{driver.earnings}</Text>
-            </View>
-          ))}
+            ))
+          )}
         </Card>
 
         {/* Top Zone */}

@@ -1,6 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { FranchiseService } from '@/models/services/FranchiseService';
-import { FranchiseApplication, FranchiseStatus } from '@/models/entities/Franchise';
+import { ActivityLogService } from '@/models/services/ActivityLogService';
+import {
+  FranchiseApplication,
+  FranchiseStatus,
+  FRANCHISE_STATUS_LABEL,
+} from '@/models/entities/Franchise';
 
 const service = new FranchiseService();
 
@@ -44,7 +49,16 @@ export const submitApplication = createAsyncThunk(
   'franchise/submit',
   async (payload: Partial<FranchiseApplication>, { rejectWithValue }) => {
     try {
-      return await service.submit(payload);
+      const app = await service.submit(payload);
+      void ActivityLogService.logActivity({
+        user_id: app.driver_id,
+        action_type: 'user_action',
+        entity_type: 'driver',
+        entity_id: app.id,
+        description: `${app.driver_name} submitted an MTOP ${app.type} application (${app.plate_number}).`,
+        severity: 'info',
+      });
+      return app;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -58,7 +72,17 @@ export const advanceApplication = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      return await service.updateStatus(payload.id, payload.status, payload.patch);
+      const updated = await service.updateStatus(payload.id, payload.status, payload.patch);
+      const severity =
+        updated.status === 'rejected' ? 'warning' : updated.status === 'issued' ? 'success' : 'info';
+      void ActivityLogService.logActivity({
+        action_type: 'system_alert',
+        entity_type: 'system',
+        entity_id: updated.id,
+        description: `Franchise ${updated.plate_number} (${updated.driver_name}) → ${FRANCHISE_STATUS_LABEL[updated.status]}.`,
+        severity,
+      });
+      return updated;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

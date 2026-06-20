@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView, Modal, Image } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image } from 'react-native';
 import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
@@ -19,6 +19,7 @@ import {
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
+import { confirm } from '@/utils/confirm';
 
 const REVIEW_COLOR: Record<DocumentReviewStatus, string> = {
   pending: colors.warning,
@@ -115,54 +116,45 @@ export const FranchiseManagementScreen = () => {
     );
   };
 
-  const advance = (app: FranchiseApplication) => {
+  const advance = async (app: FranchiseApplication) => {
     const next = NEXT[app.status];
     if (!next) return;
     // Gate: the "Approve Documents" step requires every document approved first.
     if (app.status === 'document_verification' && !allDocumentsApproved(app.documents)) {
-      Alert.alert(
+      const open = await confirm(
         'Documents Not Verified',
-        'You must review and approve all submitted documents before approving this stage.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Review Documents', onPress: () => setReviewAppId(app.id) },
-        ]
+        'You must review and approve all submitted documents before approving this stage. Open the document review now?',
+        { confirmText: 'Review Documents' }
       );
+      if (open) setReviewAppId(app.id);
       return;
     }
-    const doIt = () => {
-      const patch = { ...next.patch };
-      if (next.status === 'issued') {
-        patch.mtop_number = `MTOP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      }
-      dispatch(advanceApplication({ id: app.id, status: next.status, patch }));
-    };
     if (next.status === 'issued') {
-      Alert.alert('Issue MTOP', `Issue franchise certificate to ${app.driver_name}?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Issue', onPress: doIt },
-      ]);
-    } else {
-      doIt();
+      const ok = await confirm('Issue MTOP', `Issue franchise certificate to ${app.driver_name}?`, {
+        confirmText: 'Issue',
+      });
+      if (!ok) return;
     }
+    const patch = { ...next.patch };
+    if (next.status === 'issued') {
+      patch.mtop_number = `MTOP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    dispatch(advanceApplication({ id: app.id, status: next.status, patch }));
   };
 
-  const reject = (app: FranchiseApplication) => {
-    Alert.alert('Reject Application', `Reject ${app.driver_name}'s application?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reject',
-        style: 'destructive',
-        onPress: () =>
-          dispatch(
-            advanceApplication({
-              id: app.id,
-              status: 'rejected',
-              patch: { remarks: 'Rejected by administrator.' },
-            })
-          ),
-      },
-    ]);
+  const reject = async (app: FranchiseApplication) => {
+    const ok = await confirm('Reject Application', `Reject ${app.driver_name}'s application?`, {
+      confirmText: 'Reject',
+      destructive: true,
+    });
+    if (!ok) return;
+    dispatch(
+      advanceApplication({
+        id: app.id,
+        status: 'rejected',
+        patch: { remarks: 'Rejected by administrator.' },
+      })
+    );
   };
 
   const filtered = applications.filter((a) => {

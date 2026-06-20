@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { Text, Surface, Chip } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl, Platform } from 'react-native';
+import { Text, Chip } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { ExportService } from '@/models/services/ExportService';
-import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
+import { supabase, isSupabaseConfigured } from '@/config/supabase';
+import { notify } from '@/utils/confirm';
+import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 
@@ -13,17 +16,11 @@ export const ActivityLogsScreen = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
 
-  useEffect(() => {
-    loadLogs();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [severityFilter, logs]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     try {
       const data = await ActivityLogService.getRecentLogs(100);
       setLogs(data);
@@ -31,8 +28,50 @@ export const ActivityLogsScreen = () => {
       console.error('Failed to load logs:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
+
+  // Reload whenever the admin opens / returns to the Logs tab.
+  useFocusEffect(
+    useCallback(() => {
+      loadLogs();
+    }, [loadLogs])
+  );
+
+  // Live updates: prepend new events as they are written to activity_logs.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let channel: any;
+    try {
+      channel = supabase
+        .channel('activity_logs_admin')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'activity_logs' },
+          (payload: any) => {
+            setLogs((prev) => {
+              if (prev.some((l) => l.id === payload.new.id)) return prev;
+              return [payload.new, ...prev].slice(0, 100);
+            });
+          }
+        )
+        .subscribe();
+    } catch {
+      // Realtime unavailable (e.g. mock backend) — refresh still works.
+    }
+    return () => {
+      try {
+        if (channel) supabase.removeChannel(channel);
+      } catch {
+        /* noop */
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [severityFilter, logs]);
 
   const applyFilters = () => {
     if (severityFilter === 'all') {
@@ -42,11 +81,27 @@ export const ActivityLogsScreen = () => {
     }
   };
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadLogs();
+  };
+
   const handleExport = async () => {
+    if (filteredLogs.length === 0) {
+      notify('No events', 'There are no logs to export in this view.');
+      return;
+    }
+    setExporting(true);
     try {
       await ExportService.exportLogsToCSV(filteredLogs);
+      if (Platform.OS === 'web') {
+        notify('Exported', `Downloaded ${filteredLogs.length} events as a CSV file.`);
+      }
     } catch (error) {
       console.error('Export failed:', error);
+      notify('Export failed', 'Could not export the logs. Please try again.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -79,9 +134,14 @@ export const ActivityLogsScreen = () => {
           <Text style={styles.headerTitle}>System Logs</Text>
           <Text style={styles.headerSubtitle}>Monitor real-time platform activity</Text>
         </View>
-        <TouchableOpacity style={styles.exportBtn} onPress={handleExport}>
-          <MaterialCommunityIcons name="download" size={22} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.exportBtn} onPress={onRefresh} disabled={refreshing}>
+            <MaterialCommunityIcons name="refresh" size={22} color={refreshing ? colors.textMuted : colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.exportBtn} onPress={handleExport} disabled={exporting}>
+            <MaterialCommunityIcons name="download" size={22} color={exporting ? colors.textMuted : colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.filterContainer}>
@@ -103,8 +163,27 @@ export const ActivityLogsScreen = () => {
         </ScrollView>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+      >
         <Text style={styles.resultCount}>SHOWING {filteredLogs.length} EVENTS</Text>
+
+        {filteredLogs.length === 0 && (
+          <View style={styles.empty}>
+            <MaterialCommunityIcons name="text-box-search-outline" size={56} color={colors.textLight} />
+            <Text style={styles.emptyTitle}>No activity yet</Text>
+            <Text style={styles.emptyText}>
+              {severityFilter === 'all'
+                ? 'System events from bookings, franchises, and sign-ins will appear here as they happen.'
+                : `No ${severityFilter} events in this view.`}
+            </Text>
+          </View>
+        )}
 
         {filteredLogs.map((log, index) => (
           <Card key={log.id || index} variant="elevated" padding="md" style={styles.logCard}>
@@ -167,6 +246,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   exportBtn: {
     width: 44,
     height: 44,
@@ -176,6 +260,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.borderLight,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl * 2,
+    paddingHorizontal: spacing.lg,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    fontSize: 17,
+    color: colors.text,
+    marginTop: spacing.md,
+  },
+  emptyText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    lineHeight: 19,
   },
   filterContainer: {
     borderBottomWidth: 1,

@@ -1,30 +1,27 @@
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const navigation = useNavigation<any>();
 
-  const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await logout();
-          } catch {
-            // Demo sessions have no remote state; dropping auth is enough.
-          }
-        },
-      },
-    ]);
+  const handleLogout = async () => {
+    const ok = await confirm('Log Out', 'Are you sure you want to log out?', {
+      confirmText: 'Log Out',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await logout();
+    } catch {
+      // Demo sessions have no remote state; dropping auth is enough.
+    }
   };
 
   const roleLabel =
@@ -84,11 +81,15 @@ export const ProfileScreen = () => {
         <TouchableOpacity
           style={styles.identity}
           activeOpacity={0.7}
-          onPress={() => Alert.alert('Edit Profile', 'Coming soon')}
+          onPress={() => navigation.navigate('EditProfile')}
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-          </View>
+          {user?.profile_photo_url ? (
+            <Image source={{ uri: user.profile_photo_url }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+            </View>
+          )}
           <View style={styles.identityCopy}>
             <Text style={styles.name} numberOfLines={1}>{user?.name || 'User'}</Text>
             <View style={styles.roleBadge}>
@@ -114,13 +115,13 @@ export const ProfileScreen = () => {
             icon="email-outline"
             label="Email"
             value={user?.email || 'Not set'}
-            onPress={() => Alert.alert('Email', user?.email || 'Not set')}
+            onPress={() => notify('Email', user?.email || 'Not set')}
           />
           <MenuItem
             icon="phone-outline"
             label="Phone"
             value={user?.phone || 'Not set'}
-            onPress={() => Alert.alert('Phone', user?.phone || 'Not set')}
+            onPress={() => notify('Phone', user?.phone || 'Not set')}
             last
           />
         </View>
@@ -128,7 +129,7 @@ export const ProfileScreen = () => {
         {/* Account management */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
-          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => Alert.alert('Edit Profile', 'Profile editing coming in next update.')} />
+          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
           {user?.user_type === 'passenger' && (
             <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} />
           )}
@@ -139,8 +140,8 @@ export const ProfileScreen = () => {
         {/* Support */}
         <Text style={styles.sectionTitle}>Support</Text>
         <View style={styles.card}>
-          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => Alert.alert('Help & Support', 'Contact FEDTODAB office')} />
-          <MenuItem icon="information-outline" label="About Smart Trike" onPress={() => Alert.alert('About', 'Smart Trike • v1.0.0')} last />
+          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
+          <MenuItem icon="information-outline" label="About Smart Trike" onPress={() => navigation.navigate('About')} last />
         </View>
 
         {/* Sign out */}
@@ -222,6 +223,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.primary,
     marginRight: spacing.md,
+  },
+  avatarImg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: spacing.md,
+    backgroundColor: colors.surfaceAlt,
   },
   avatarText: {
     color: '#FFFFFF',

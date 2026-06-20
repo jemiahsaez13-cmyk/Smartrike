@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { BookingService } from '@/models/services/BookingService';
+import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { Booking, Location, Rating } from '@/models/types';
 
 const bookingService = new BookingService();
@@ -26,7 +27,16 @@ export const createBooking = createAsyncThunk(
   'booking/create',
   async (payload: { passengerId: string; pickup: Location; dropoff: Location; scheduledTime?: Date }, { rejectWithValue }) => {
     try {
-      return await bookingService.createBooking(payload.passengerId, payload.pickup, payload.dropoff, payload.scheduledTime);
+      const booking = await bookingService.createBooking(payload.passengerId, payload.pickup, payload.dropoff, payload.scheduledTime);
+      void ActivityLogService.logActivity({
+        user_id: payload.passengerId,
+        action_type: 'booking_created',
+        entity_type: 'booking',
+        entity_id: booking.id,
+        description: `New ride request from ${payload.pickup.address} to ${payload.dropoff.address}.`,
+        severity: 'info',
+      });
+      return booking;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -37,7 +47,16 @@ export const acceptBooking = createAsyncThunk(
   'booking/accept',
   async (payload: { bookingId: string; driverId: string }, { rejectWithValue }) => {
     try {
-      return await bookingService.acceptBooking(payload.bookingId, payload.driverId);
+      const booking = await bookingService.acceptBooking(payload.bookingId, payload.driverId);
+      void ActivityLogService.logActivity({
+        user_id: payload.driverId,
+        action_type: 'driver_status_changed',
+        entity_type: 'booking',
+        entity_id: payload.bookingId,
+        description: 'Driver accepted a ride request.',
+        severity: 'success',
+      });
+      return booking;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -46,7 +65,16 @@ export const acceptBooking = createAsyncThunk(
 
 export const startTrip = createAsyncThunk('booking/startTrip', async (bookingId: string, { rejectWithValue }) => {
   try {
-    return await bookingService.startTrip(bookingId);
+    const booking = await bookingService.startTrip(bookingId);
+    void ActivityLogService.logActivity({
+      user_id: (booking as any)?.driver_id,
+      action_type: 'driver_status_changed',
+      entity_type: 'booking',
+      entity_id: bookingId,
+      description: 'Trip started — driver is on the way.',
+      severity: 'info',
+    });
+    return booking;
   } catch (error: any) {
     return rejectWithValue(error.message);
   }
@@ -54,7 +82,16 @@ export const startTrip = createAsyncThunk('booking/startTrip', async (bookingId:
 
 export const completeTrip = createAsyncThunk('booking/completeTrip', async (bookingId: string, { rejectWithValue }) => {
   try {
-    return await bookingService.completeTrip(bookingId);
+    const booking = await bookingService.completeTrip(bookingId);
+    void ActivityLogService.logActivity({
+      user_id: (booking as any)?.driver_id,
+      action_type: 'booking_completed',
+      entity_type: 'booking',
+      entity_id: bookingId,
+      description: `Trip completed${(booking as any)?.total_fare ? ` • ₱${(booking as any).total_fare}` : ''}.`,
+      severity: 'success',
+    });
+    return booking;
   } catch (error: any) {
     return rejectWithValue(error.message);
   }
@@ -73,7 +110,15 @@ export const submitRating = createAsyncThunk(
 
 export const cancelBooking = createAsyncThunk('booking/cancel', async (bookingId: string, { rejectWithValue }) => {
   try {
-    return await bookingService.cancelBooking(bookingId);
+    const result = await bookingService.cancelBooking(bookingId);
+    void ActivityLogService.logActivity({
+      action_type: 'booking_cancelled',
+      entity_type: 'booking',
+      entity_id: bookingId,
+      description: 'A booking was cancelled.',
+      severity: 'warning',
+    });
+    return result;
   } catch (error: any) {
     return rejectWithValue(error.message);
   }

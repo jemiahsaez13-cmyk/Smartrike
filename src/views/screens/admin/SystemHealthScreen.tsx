@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, SafeAreaView, TouchableOpacity } from 'react-native';
-import { Text, Surface } from 'react-native-paper';
+import React, { useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, RefreshControl, SafeAreaView } from 'react-native';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, spacing, typography, radius, shadows } from '@/views/styles/theme';
+import { useFocusEffect } from '@react-navigation/native';
+import { AdminService } from '@/models/services/AdminService';
+import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
+
+const adminService = new AdminService();
 
 interface HealthMetric {
   name: string;
@@ -15,18 +19,40 @@ interface HealthMetric {
 
 export const SystemHealthScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
-  const [metrics, setMetrics] = useState<HealthMetric[]>([
-    { name: 'API Response Time', value: '45ms', status: 'healthy', icon: 'flash', description: 'Average API latency' },
-    { name: 'Active Users', value: '1,247', status: 'healthy', icon: 'account-group', description: 'Currently online' },
-    { name: 'System Uptime', value: '99.8%', status: 'healthy', icon: 'server', description: 'Last 30 days' },
-    { name: 'Error Rate', value: '0.02%', status: 'healthy', icon: 'alert-circle', description: 'Last 24 hours' },
-    { name: 'Database Load', value: '42%', status: 'healthy', icon: 'database', description: 'Current utilization' },
-    { name: 'Active Drivers', value: '89', status: 'healthy', icon: 'car', description: 'Currently online' },
-  ]);
+  const [reachable, setReachable] = useState(true);
+  const [metrics, setMetrics] = useState<HealthMetric[]>([]);
 
-  const onRefresh = async () => {
+  const load = useCallback(async () => {
+    try {
+      const h = await adminService.getHealth();
+      setReachable(h.reachable);
+      const latencyStatus: HealthMetric['status'] =
+        h.latency < 400 ? 'healthy' : h.latency < 1000 ? 'warning' : 'critical';
+      setMetrics([
+        { name: 'API Response Time', value: `${h.latency}ms`, status: latencyStatus, icon: 'flash', description: 'Live database round-trip' },
+        { name: 'Backend Status', value: h.reachable ? 'Online' : 'Down', status: h.reachable ? 'healthy' : 'critical', icon: 'server', description: 'Supabase connection' },
+        { name: 'Active Users', value: `${h.activeUsers}`, status: 'healthy', icon: 'account-group', description: 'Accounts in good standing' },
+        { name: 'Active Drivers', value: `${h.activeDrivers}`, status: 'healthy', icon: 'car', description: 'Online or on a trip' },
+        { name: 'Total Bookings', value: `${h.totalBookings}`, status: 'healthy', icon: 'map-marker-path', description: `${h.completedTrips} completed` },
+        { name: 'Pending MTOP', value: `${h.pendingFranchises}`, status: h.pendingFranchises > 0 ? 'warning' : 'healthy', icon: 'card-account-details', description: 'Franchises awaiting review' },
+      ]);
+    } catch (e) {
+      console.error('Health load failed:', e);
+      setReachable(false);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    load();
   };
 
   const getStatusColor = (status: string) => {
@@ -42,9 +68,11 @@ export const SystemHealthScreen = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Platform Health</Text>
-        <View style={styles.statusIndicator}>
-          <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
-          <Text style={styles.statusText}>ALL SYSTEMS OPERATIONAL</Text>
+        <View style={[styles.statusIndicator, !reachable && { backgroundColor: colors.errorLight }]}>
+          <View style={[styles.statusDot, { backgroundColor: reachable ? colors.success : colors.error }]} />
+          <Text style={[styles.statusText, !reachable && { color: colors.error }]}>
+            {reachable ? 'ALL SYSTEMS OPERATIONAL' : 'CONNECTION ISSUE'}
+          </Text>
         </View>
       </View>
 
@@ -76,7 +104,7 @@ export const SystemHealthScreen = () => {
         <Card variant="outlined" padding="md" style={styles.infoCard}>
           <MaterialCommunityIcons name="information-outline" size={20} color={colors.info} />
           <Text style={styles.infoText}>
-            Metrics are updated every 60 seconds. Pull down to refresh manually.
+            Live metrics from the database. Pull down to refresh.
           </Text>
         </Card>
       </ScrollView>
