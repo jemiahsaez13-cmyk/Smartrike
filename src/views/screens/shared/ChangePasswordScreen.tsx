@@ -50,7 +50,7 @@ export const ChangePasswordScreen = () => {
     try {
       await authService.sendPasswordChangeCode();
       setStep('verify');
-      notify('Code sent', `We emailed a 6-digit verification code to ${user?.email}.`);
+      notify('Code sent', `We emailed a verification code to ${user?.email}.`);
     } catch (e: any) {
       notify('Could not send code', e?.message || 'Please try again in a moment.');
     } finally {
@@ -60,7 +60,7 @@ export const ChangePasswordScreen = () => {
 
   const updatePassword = async () => {
     if (code.trim().length < 6) {
-      notify('Enter the code', 'Type the 6-digit code we sent to your email.');
+      notify('Enter the code', 'Type the verification code we sent to your email.');
       return;
     }
     setUpdating(true);
@@ -103,7 +103,7 @@ export const ChangePasswordScreen = () => {
             <Text style={styles.heroSub}>
               {step === 'form'
                 ? 'For your security, we’ll email a verification code before saving your new password.'
-                : `Enter the 6-digit code we sent to ${user?.email}.`}
+                : `Enter the code we sent to ${user?.email}.`}
             </Text>
           </View>
 
@@ -149,10 +149,10 @@ export const ChangePasswordScreen = () => {
               <Text style={styles.fieldLabel}>Verification Code</Text>
               <Input
                 value={code}
-                onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
-                placeholder="6-digit code"
+                onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 8))}
+                placeholder="Enter the code from your email"
                 keyboardType="number-pad"
-                maxLength={6}
+                maxLength={8}
               />
 
               <TouchableOpacity
