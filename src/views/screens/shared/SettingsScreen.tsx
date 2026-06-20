@@ -128,7 +128,7 @@ export const SettingsScreen = () => {
           <SettingRow
             label="Change Password"
             icon="lock-reset"
-            onPress={() => notify('Change Password', 'A password reset link will be sent to your email.')}
+            onPress={() => navigation.navigate('ChangePassword')}
           />
           <View style={styles.divider} />
           <SettingRow

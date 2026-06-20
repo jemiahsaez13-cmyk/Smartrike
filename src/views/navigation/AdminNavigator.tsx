@@ -11,6 +11,7 @@ import { EditProfileScreen } from '@/views/screens/shared/EditProfileScreen';
 import { HelpSupportScreen } from '@/views/screens/shared/HelpSupportScreen';
 import { AboutScreen } from '@/views/screens/shared/AboutScreen';
 import { LegalScreen } from '@/views/screens/shared/LegalScreen';
+import { ChangePasswordScreen } from '@/views/screens/shared/ChangePasswordScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
@@ -59,6 +60,7 @@ export const AdminNavigator = () => (
     <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
     <Stack.Screen name="About" component={AboutScreen} />
     <Stack.Screen name="Legal" component={LegalScreen} />
+    <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     <Stack.Screen name="Analytics" component={AnalyticsScreen} />
   </Stack.Navigator>
 );

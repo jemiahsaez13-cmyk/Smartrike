@@ -99,13 +99,25 @@ export const ProfileScreen = () => {
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textLight} />
         </TouchableOpacity>
 
-        {/* Stats */}
+        {/* Stats — admins don't have ratings/trips, so show role-appropriate stats */}
         <View style={styles.statsCard}>
-          <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
-          <View style={styles.statDivider} />
-          <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
-          <View style={styles.statDivider} />
-          <Stat icon="shield-check" value="Active" label="Status" />
+          {user?.user_type === 'admin' ? (
+            <>
+              <Stat icon="shield-account" value="Admin" label="Role" />
+              <View style={styles.statDivider} />
+              <Stat icon="lock-open-variant" value="Full" label="Access" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
+          ) : (
+            <>
+              <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
+              <View style={styles.statDivider} />
+              <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
+          )}
         </View>
 
         {/* Contact details */}

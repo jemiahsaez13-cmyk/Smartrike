@@ -291,15 +291,24 @@ export const UserManagementScreen = () => {
                     <Text style={styles.sheetStatLabel}>Role</Text>
                   </View>
                   <View style={styles.sheetDivider} />
-                  <View style={styles.sheetStat}>
-                    <Text style={styles.sheetStatValue}>{(selected.rating ?? 5).toFixed(1)}</Text>
-                    <Text style={styles.sheetStatLabel}>Rating</Text>
-                  </View>
-                  <View style={styles.sheetDivider} />
-                  <View style={styles.sheetStat}>
-                    <Text style={styles.sheetStatValue}>{selected.total_trips ?? 0}</Text>
-                    <Text style={styles.sheetStatLabel}>Trips</Text>
-                  </View>
+                  {selected.user_type === 'admin' ? (
+                    <View style={styles.sheetStat}>
+                      <Text style={styles.sheetStatValue}>{selected.status}</Text>
+                      <Text style={styles.sheetStatLabel}>Status</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.sheetStat}>
+                        <Text style={styles.sheetStatValue}>{(selected.rating ?? 5).toFixed(1)}</Text>
+                        <Text style={styles.sheetStatLabel}>Rating</Text>
+                      </View>
+                      <View style={styles.sheetDivider} />
+                      <View style={styles.sheetStat}>
+                        <Text style={styles.sheetStatValue}>{selected.total_trips ?? 0}</Text>
+                        <Text style={styles.sheetStatLabel}>Trips</Text>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {selected.user_type === 'driver' && (selected as any).verification_status !== 'verified' && (

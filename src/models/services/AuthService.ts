@@ -104,6 +104,22 @@ export class AuthService {
     if (error) throw error;
   }
 
+  // Sends a one-time verification code to the signed-in user's email. Required
+  // before a sensitive change like updating the password.
+  async sendPasswordChangeCode() {
+    const { error } = await supabase.auth.reauthenticate();
+    if (error) throw error;
+  }
+
+  // Updates the password, verifying the emailed code (nonce) first.
+  async changePassword(newPassword: string, code: string) {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+      nonce: code.trim(),
+    });
+    if (error) throw error;
+  }
+
   async getCurrentUser() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return null;
