@@ -65,6 +65,21 @@ export const advanceApplication = createAsyncThunk(
   }
 );
 
+// Patches fields (e.g. per-document review verdicts) without changing status.
+export const patchApplication = createAsyncThunk(
+  'franchise/patch',
+  async (
+    payload: { id: string; patch: Partial<FranchiseApplication> },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await service.patch(payload.id, payload.patch);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const upsert = (list: FranchiseApplication[], item: FranchiseApplication) => {
   const idx = list.findIndex((a) => a.id === item.id);
   if (idx >= 0) list[idx] = item;
@@ -100,6 +115,12 @@ const franchiseSlice = createSlice({
         upsert(state.applications, action.payload);
       })
       .addCase(advanceApplication.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) {
+          state.myApplication = action.payload;
+        }
+      })
+      .addCase(patchApplication.fulfilled, (state, action) => {
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) {
           state.myApplication = action.payload;

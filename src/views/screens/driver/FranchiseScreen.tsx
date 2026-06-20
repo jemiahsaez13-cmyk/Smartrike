@@ -8,7 +8,11 @@ import {
   REQUIRED_DOCUMENTS,
   FRANCHISE_FLOW,
   FRANCHISE_STATUS_LABEL,
+  DOCUMENT_REVIEW_LABEL,
   FranchiseType,
+  FranchiseDocument,
+  docReviewStatus,
+  anyDocumentRejected,
 } from '@/models/entities/Franchise';
 import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
@@ -22,7 +26,16 @@ export const FranchiseScreen = () => {
   const { myApplication, loading } = useAppSelector((state) => state.franchise);
   const driver = user as any;
 
-  const [docs, setDocs] = useState(REQUIRED_DOCUMENTS.map((name) => ({ name, uploaded: false })));
+  const [docs, setDocs] = useState<FranchiseDocument[]>(
+    REQUIRED_DOCUMENTS.map((name) => ({
+      name,
+      uploaded: false,
+      file_url: null,
+      uploaded_at: null,
+      review_status: 'pending' as const,
+      review_remarks: null,
+    }))
+  );
   const [plate, setPlate] = useState<string>(driver?.vehicle_details?.plate_number || 'ABC-1234');
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,7 +44,21 @@ export const FranchiseScreen = () => {
   }, [user?.id]);
 
   const toggleDoc = (idx: number) =>
-    setDocs((prev) => prev.map((d, i) => (i === idx ? { ...d, uploaded: !d.uploaded } : d)));
+    setDocs((prev) =>
+      prev.map((d, i) => {
+        if (i !== idx) return d;
+        const uploaded = !d.uploaded;
+        return {
+          ...d,
+          uploaded,
+          // Record submission metadata so the admin can review each document.
+          uploaded_at: uploaded ? new Date().toISOString() : null,
+          file_url: uploaded ? `document://${encodeURIComponent(d.name)}` : null,
+          review_status: 'pending' as const,
+          review_remarks: null,
+        };
+      })
+    );
 
   const allUploaded = docs.every((d) => d.uploaded);
 
@@ -193,6 +220,43 @@ export const FranchiseScreen = () => {
               );
             })}
           </View>
+
+          <Text style={styles.sectionTitle}>Document Review</Text>
+          <Card variant="outlined" padding="none" style={styles.docReviewCard}>
+            {myApplication!.documents.map((doc, idx) => {
+              const status = docReviewStatus(doc);
+              const color =
+                status === 'approved' ? colors.success : status === 'rejected' ? colors.error : colors.warning;
+              return (
+                <View
+                  key={doc.name}
+                  style={[styles.docReviewRow, idx === myApplication!.documents.length - 1 && { borderBottomWidth: 0 }]}
+                >
+                  <MaterialCommunityIcons
+                    name={status === 'approved' ? 'check-circle' : status === 'rejected' ? 'close-circle' : 'clock-outline'}
+                    size={18}
+                    color={color}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docReviewName}>{doc.name}</Text>
+                    {status === 'rejected' && doc.review_remarks ? (
+                      <Text style={styles.docReviewRemark}>{doc.review_remarks}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.docReviewStatus, { color }]}>{DOCUMENT_REVIEW_LABEL[status]}</Text>
+                </View>
+              );
+            })}
+          </Card>
+
+          {anyDocumentRejected(myApplication!.documents) ? (
+            <Card variant="outlined" padding="md" style={[styles.remarkCard, { borderColor: colors.error }]}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error} />
+              <Text style={styles.remarkText}>
+                Some documents were rejected. Please re-upload clear, valid copies to continue.
+              </Text>
+            </Card>
+          ) : null}
 
           {myApplication!.remarks ? (
             <Card variant="outlined" padding="md" style={styles.remarkCard}>
@@ -435,6 +499,36 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary, 
     marginTop: 2 
+  },
+  docReviewCard: {
+    overflow: 'hidden',
+    marginBottom: spacing.xl,
+  },
+  docReviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  docReviewName: {
+    ...typography.label,
+    fontSize: 13,
+    color: colors.text,
+  },
+  docReviewRemark: {
+    ...typography.bodySmall,
+    fontSize: 11,
+    color: colors.error,
+    marginTop: 2,
+  },
+  docReviewStatus: {
+    ...typography.labelSmall,
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   remarkCard: {
     flexDirection: 'row',
