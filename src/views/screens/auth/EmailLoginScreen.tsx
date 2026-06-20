@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, KeyboardAvoidingView,
-  Platform, Keyboard, ScrollView, SafeAreaView, Alert, Animated,
+  Platform, Keyboard, ScrollView, SafeAreaView, Animated,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 
 export const EmailLoginScreen = () => {
@@ -34,13 +35,13 @@ export const EmailLoginScreen = () => {
 
     const cleanEmail = email.trim();
     if (!cleanEmail || !password) {
-      Alert.alert('Validation', 'Please enter your email and password.');
+      notify('Missing details', 'Please enter your email and password.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      Alert.alert('Validation', 'Please enter a valid email address.');
+      notify('Invalid email', 'Please enter a valid email address.');
       return;
     }
 
@@ -48,7 +49,7 @@ export const EmailLoginScreen = () => {
       await login(cleanEmail, password);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Authentication failed.';
-      Alert.alert('Sign In Error', msg);
+      notify('Sign in error', msg);
     }
   };
 

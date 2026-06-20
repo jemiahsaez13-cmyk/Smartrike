@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Alert, Keyboard, KeyboardAvoidingView, Platform,
+  Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
   SafeAreaView, Animated,
 } from 'react-native';
@@ -10,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Input } from '@/views/components/common/Input';
@@ -45,7 +46,7 @@ export const LoginScreen = () => {
     const cleanPassword = password.trim();
 
     if (!cleanEmail || !cleanPassword) {
-      Alert.alert('Missing Info', 'Please enter both email and password to continue.');
+      notify('Missing info', 'Please enter both email and password to continue.');
       return;
     }
 
@@ -53,7 +54,7 @@ export const LoginScreen = () => {
       await login(cleanEmail, cleanPassword);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
-      Alert.alert('Sign In Failed', msg, [{ text: 'Try Again' }]);
+      notify('Sign in failed', msg);
     }
   };
 

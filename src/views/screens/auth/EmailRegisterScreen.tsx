@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, KeyboardAvoidingView,
-  Platform, Keyboard, ScrollView, SafeAreaView, Alert, Animated,
+  Platform, Keyboard, ScrollView, SafeAreaView, Animated,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 
 export const EmailRegisterScreen = () => {
@@ -41,28 +42,28 @@ export const EmailRegisterScreen = () => {
     const cleanEmail = email.trim();
 
     if (!cleanName || !cleanEmail || !password) {
-      Alert.alert('Validation', 'Please fill in all required fields.');
+      notify('Missing details', 'Please fill in all required fields.');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      Alert.alert('Validation', 'Please enter a valid email address.');
+      notify('Invalid email', 'Please enter a valid email address.');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Validation', 'Password must be at least 6 characters.');
+      notify('Weak password', 'Password must be at least 6 characters.');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Validation', 'Passwords do not match.');
+      notify('Passwords do not match', 'Please re-type the same password in both fields.');
       return;
     }
 
     if (!agreedToTerms) {
-      Alert.alert('Validation', 'Please agree to the terms and conditions.');
+      notify('Almost there', 'Please agree to the terms and conditions to continue.');
       return;
     }
 
@@ -72,17 +73,17 @@ export const EmailRegisterScreen = () => {
         user_type: userType,
       });
       if (result?.needsEmailConfirmation) {
-        Alert.alert(
+        notify(
           'Confirm your email',
-          'We sent a confirmation link to your email. Tap it, then sign in to continue.',
-          [{ text: 'Go to Sign In', onPress: () => navigation.navigate('Login') }]
+          'We sent a confirmation link to your email. Tap it, then sign in to continue.'
         );
+        navigation.navigate('EmailLogin');
         return;
       }
-      // Navigation is handled automatically by AppNavigator when isAuthenticated changes
+      // Success: AppNavigator auto-routes into the app when isAuthenticated flips.
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Registration failed.';
-      Alert.alert('Registration Error', msg);
+      notify('Registration error', msg);
     }
   };
 

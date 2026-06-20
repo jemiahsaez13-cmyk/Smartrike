@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, SafeAreaView, Animated, Keyboard,
+  Platform, TouchableOpacity, SafeAreaView, Animated, Keyboard,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 
 export const PassengerRegisterScreen = () => {
   const navigation = useNavigation<any>();
@@ -83,17 +84,17 @@ export const PassengerRegisterScreen = () => {
       // If the project requires email confirmation, no session is returned yet.
       if (result?.needsEmailConfirmation) {
         setLoading(false);
-        Alert.alert(
+        notify(
           'Confirm your email',
-          'We sent a confirmation link to your email. Tap it, then sign in to continue.',
-          [{ text: 'Go to Sign In', onPress: () => navigation.navigate('Login') }]
+          'We sent a confirmation link to your email. Tap it, then sign in to continue.'
         );
+        navigation.navigate('Login');
         return;
       }
       // Otherwise navigation happens automatically via Redux state change in AppNavigator
     } catch (error: any) {
       const msg = typeof error === 'string' ? error : error?.message || 'Registration failed. Please try again.';
-      Alert.alert('Registration Error', msg);
+      notify('Registration error', msg);
       setLoading(false);
     }
   };
