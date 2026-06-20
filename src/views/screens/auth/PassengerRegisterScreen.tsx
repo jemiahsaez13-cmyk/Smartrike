@@ -20,7 +20,9 @@ export const PassengerRegisterScreen = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
     email: '',
     phone: '',
     password: '',
@@ -42,8 +44,9 @@ export const PassengerRegisterScreen = () => {
     const newErrors: Record<string, string> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!formData.name.trim()) newErrors.name = 'Full name is required';
-    
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
+
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!emailRegex.test(formData.email.trim())) {
@@ -76,8 +79,12 @@ export const PassengerRegisterScreen = () => {
     
     setLoading(true);
     try {
+      const fullName = [formData.firstName, formData.middleName, formData.lastName]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(' ');
       const result: any = await register(formData.email.trim(), formData.password, {
-        name: formData.name.trim(),
+        name: fullName,
         phone: formData.phone.trim(),
         user_type: 'passenger',
       });
@@ -133,10 +140,29 @@ export const PassengerRegisterScreen = () => {
               </Text>
             </View>
 
+            <View style={styles.nameRow}>
+              <Input
+                label="First name"
+                placeholder="Juan"
+                containerStyle={styles.nameField}
+                autoCapitalize="words"
+                {...field('firstName')}
+                left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
+              />
+              <Input
+                label="Last name"
+                placeholder="Dela Cruz"
+                containerStyle={styles.nameField}
+                autoCapitalize="words"
+                {...field('lastName')}
+              />
+            </View>
+
             <Input
-              label="Full name"
-              placeholder="Juan Dela Cruz"
-              {...field('name')}
+              label="Middle name (optional)"
+              placeholder="Reyes"
+              autoCapitalize="words"
+              {...field('middleName')}
               left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
             />
 
@@ -248,6 +274,14 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  nameField: {
+    flex: 1,
+    width: undefined,
   },
   cta: {
     height: 54,

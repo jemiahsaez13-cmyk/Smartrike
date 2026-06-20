@@ -14,7 +14,9 @@ import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 
 export const EmailRegisterScreen = () => {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -38,11 +40,14 @@ export const EmailRegisterScreen = () => {
   const handleCreateAccount = async () => {
     Keyboard.dismiss();
 
-    const cleanName = fullName.trim();
+    const cleanName = [firstName, middleName, lastName]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(' ');
     const cleanEmail = email.trim();
 
-    if (!cleanName || !cleanEmail || !password) {
-      notify('Missing details', 'Please fill in all required fields.');
+    if (!firstName.trim() || !lastName.trim() || !cleanEmail || !password) {
+      notify('Missing details', 'Please fill in your first name, last name, email, and password.');
       return;
     }
 
@@ -119,11 +124,32 @@ export const EmailRegisterScreen = () => {
               </Text>
             </View>
 
+            <View style={styles.nameRow}>
+              <Input
+                label="First name"
+                placeholder="Juana"
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                containerStyle={styles.nameField}
+                left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
+              />
+              <Input
+                label="Last name"
+                placeholder="Dela Cruz"
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+                containerStyle={styles.nameField}
+              />
+            </View>
+
             <Input
-              label="Full name"
-              placeholder="Juana Dela Cruz"
-              value={fullName}
-              onChangeText={setFullName}
+              label="Middle name (optional)"
+              placeholder="Reyes"
+              value={middleName}
+              onChangeText={setMiddleName}
+              autoCapitalize="words"
               left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
             />
 
@@ -254,6 +280,14 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  nameField: {
+    flex: 1,
+    width: undefined,
   },
   sectionLabel: {
     ...typography.labelSmall,
