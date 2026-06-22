@@ -5,6 +5,7 @@ import { DriverDashboard } from '@/views/screens/driver/DriverDashboard';
 import { BookingRequestScreen } from '@/views/screens/driver/BookingRequestScreen';
 import { DriverTripScreen } from '@/views/screens/driver/DriverTripScreen';
 import { EarningsScreen } from '@/views/screens/driver/EarningsScreen';
+import { EMoneyWalletScreen } from '@/views/screens/driver/EMoneyWalletScreen';
 import { FranchiseScreen } from '@/views/screens/driver/FranchiseScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
@@ -46,6 +47,7 @@ export const DriverNavigator = () => (
     <Stack.Screen name="BookingRequests" component={BookingRequestScreen} />
     <Stack.Screen name="DriverTrip" component={DriverTripScreen} />
     <Stack.Screen name="Earnings" component={EarningsScreen} />
+    <Stack.Screen name="EMoneyWallet" component={EMoneyWalletScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
   </Stack.Navigator>

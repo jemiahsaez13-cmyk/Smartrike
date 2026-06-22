@@ -71,6 +71,18 @@ export const submitRating = createAsyncThunk(
   }
 );
 
+/** Driver rates a passenger after trip completion */
+export const submitDriverRating = createAsyncThunk(
+  'booking/rateByDriver',
+  async (payload: { bookingId: string; rating: Rating }, { rejectWithValue }) => {
+    try {
+      return await bookingService.rateTrip(payload.bookingId, payload.rating);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const cancelBooking = createAsyncThunk('booking/cancel', async (bookingId: string, { rejectWithValue }) => {
   try {
     return await bookingService.cancelBooking(bookingId);
@@ -125,6 +137,24 @@ const bookingSlice = createSlice({
       .addCase(cancelBooking.fulfilled, (state) => {
         state.currentBooking = null;
         state.searchingForDriver = false;
+      })
+      // Passenger rated driver — persist the rating back onto currentBooking
+      .addCase(submitRating.fulfilled, (state, action) => {
+        if (state.currentBooking && action.payload) {
+          state.currentBooking = {
+            ...state.currentBooking,
+            passenger_rating: (action.payload as Booking).passenger_rating ?? state.currentBooking.passenger_rating,
+          };
+        }
+      })
+      // Driver rated passenger
+      .addCase(submitDriverRating.fulfilled, (state, action) => {
+        if (state.currentBooking && action.payload) {
+          state.currentBooking = {
+            ...state.currentBooking,
+            driver_rating: (action.payload as Booking).driver_rating ?? state.currentBooking.driver_rating,
+          };
+        }
       });
   }
 });
