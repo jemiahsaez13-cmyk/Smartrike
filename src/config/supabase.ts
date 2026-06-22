@@ -20,3 +20,18 @@ export const supabase: any = isSupabaseConfigured
       },
     })
   : mockSupabase;
+
+// A throwaway client that never persists or refreshes a session. Used for
+// operations that must NOT disturb the currently signed-in user — e.g. an admin
+// inviting/creating another account (sign-up would otherwise hijack the admin's
+// own session). Falls back to the mock client when no real backend is set.
+export const createIsolatedClient = (): any =>
+  isSupabaseConfigured
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      })
+    : mockSupabase;

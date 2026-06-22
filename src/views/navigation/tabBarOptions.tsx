@@ -12,36 +12,46 @@ export const uberTabScreenOptions = {
   headerShown: false,
   tabBarActiveTintColor: colors.primary,
   tabBarInactiveTintColor: colors.textMuted,
-  tabBarActiveBackgroundColor: colors.surfaceHover,
-  // Floating, rounded "pill" bar that hovers above the content.
+  // Always stack the label directly beneath the icon (prevents the label from
+  // jumping beside the icon on wider items / larger fonts).
+  tabBarLabelPosition: 'below-icon' as const,
+  tabBarHideOnKeyboard: true,
+  // Floating, rounded bar that hovers above the content. Sized to comfortably
+  // fit an icon with its label underneath, even with 5 tabs (admin).
   tabBarStyle: {
     position: 'absolute' as const,
     left: 16,
     right: 16,
-    bottom: 22,
-    height: 66,
-    borderRadius: radius.pill,
+    bottom: 20,
+    height: 72,
+    borderRadius: 28,
     borderTopWidth: 0,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderLight,
-    paddingHorizontal: 10,
-    paddingTop: 0,
-    paddingBottom: 0,
+    paddingHorizontal: 6,
+    paddingTop: 10,
+    paddingBottom: 10,
     ...shadows.lg,
     elevation: 14,
   },
-  // Each item becomes a rounded pill; the active one gets the gray fill.
+  // Each item is a rounded cell; the active one gets a soft fill behind the
+  // icon+label stack.
   tabBarItemStyle: {
-    marginVertical: 11,
-    marginHorizontal: 5,
-    borderRadius: radius.pill,
+    marginHorizontal: 3,
+    borderRadius: 18,
+    paddingVertical: 4,
+  },
+  tabBarActiveBackgroundColor: colors.surfaceHover,
+  tabBarIconStyle: {
+    marginTop: 2,
   },
   tabBarLabelStyle: {
     ...fonts.poppins.medium,
-    fontSize: 11,
+    fontSize: 10.5,
     letterSpacing: 0.1,
-    marginTop: 1,
+    marginTop: 2,
+    marginBottom: 0,
   },
 } as const;
 
@@ -56,7 +66,7 @@ export const tabIcon =
     (
       <MaterialCommunityIcons
         name={(focused ? active : inactive ?? active) as any}
-        size={size + 3}
+        size={size + 1}
         color={color}
       />
     );

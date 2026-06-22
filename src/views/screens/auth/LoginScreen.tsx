@@ -69,8 +69,8 @@ export const LoginScreen = () => {
       profile_photo_url: null,
       created_at: new Date(),
       status: 'active',
-      rating: 5.0,
-      total_trips: 150,
+      rating: 0,
+      total_trips: 0,
     };
     dispatch(setDemoUserReducer(demoUser));
   };

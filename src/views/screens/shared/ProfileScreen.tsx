@@ -99,7 +99,8 @@ export const ProfileScreen = () => {
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textLight} />
         </TouchableOpacity>
 
-        {/* Stats — admins don't have ratings/trips, so show role-appropriate stats */}
+        {/* Stats — role-appropriate. Passengers don't carry a public rating, so
+            they see Trips + Status; drivers keep their rating. */}
         <View style={styles.statsCard}>
           {user?.user_type === 'admin' ? (
             <>
@@ -109,10 +110,16 @@ export const ProfileScreen = () => {
               <View style={styles.statDivider} />
               <Stat icon="shield-check" value="Active" label="Status" />
             </>
+          ) : user?.user_type === 'driver' ? (
+            <>
+              <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : 'New'} label="Rating" />
+              <View style={styles.statDivider} />
+              <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
           ) : (
             <>
-              <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
-              <View style={styles.statDivider} />
               <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
               <View style={styles.statDivider} />
               <Stat icon="shield-check" value="Active" label="Status" />

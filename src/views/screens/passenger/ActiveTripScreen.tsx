@@ -1,27 +1,43 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
-import { completeTrip, submitRating } from '@/controllers/slices/bookingSlice';
+import { submitRating, cancelBooking, updateBookingStatus, clearCurrentBooking } from '@/controllers/slices/bookingSlice';
+import { RealtimeService } from '@/models/services/RealtimeService';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { UserRepository } from '@/models/repositories/UserRepository';
+import { User } from '@/models/types';
 import { Button } from '@/views/components/common/Button';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { height } = Dimensions.get('window');
+const realtimeService = new RealtimeService();
+const bookingRepo = new BookingRepository();
+const userRepo = new UserRepository();
 
 export const ActiveTripScreen = () => {
   const { currentBooking } = useBooking();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
 
+  const [driver, setDriver] = useState<User | null>(null);
   const [ratingVisible, setRatingVisible] = useState(false);
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const status = currentBooking?.status || 'accepted';
+  const driverId = currentBooking?.driver_id || null;
+  const vehicle = (driver as any)?.vehicle_details || {};
+  const driverName = driver?.name || 'Your driver';
+  const plate = vehicle.plate_number || vehicle.plate || '—';
+  const vehicleDesc = [vehicle.color, vehicle.model].filter(Boolean).join(' ') || 'FEDTODAB Tricycle';
 
   // Animation for the tracking card
   const slideAnim = useRef(new Animated.Value(height * 0.3)).current;
@@ -35,12 +51,87 @@ export const ActiveTripScreen = () => {
     }).start();
   }, []);
 
+  // Load the real assigned driver's profile.
+  useEffect(() => {
+    let active = true;
+    if (!driverId) {
+      setDriver(null);
+      return;
+    }
+    userRepo
+      .findById(driverId)
+      .then((d) => {
+        if (active) setDriver(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [driverId]);
+
+  // Live booking updates (driver starts trip, completes, etc.) via realtime,
+  // with a polling fallback for environments where realtime isn't published.
+  const refresh = useCallback(async () => {
+    if (!currentBooking?.id) return;
+    try {
+      const fresh = await bookingRepo.findById(currentBooking.id);
+      if (fresh) dispatch(updateBookingStatus(fresh));
+    } catch {
+      /* ignore */
+    }
+  }, [currentBooking?.id, dispatch]);
+
+  useEffect(() => {
+    if (!currentBooking?.id) return;
+    const channelKey = realtimeService.subscribeToBooking(currentBooking.id, (payload) => {
+      if (payload?.new) dispatch(updateBookingStatus(payload.new));
+    });
+    const poll = setInterval(refresh, 8000);
+    return () => {
+      realtimeService.unsubscribe(channelKey);
+      clearInterval(poll);
+    };
+  }, [currentBooking?.id, dispatch, refresh]);
+
+  // When the driver completes the trip, prompt the passenger to rate it.
+  useEffect(() => {
+    if (status === 'completed') setRatingVisible(true);
+  }, [status]);
+
   const handleCallDriver = () => {
-    Alert.alert('Call Driver', 'Driver contact is ready for production phone linking.');
+    const phone = driver?.phone;
+    if (!phone) {
+      Alert.alert('Call Driver', 'No contact number is on file for this driver yet.');
+      return;
+    }
+    Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Call Driver', `Driver: ${phone}`));
   };
 
   const handleMessageDriver = () => {
-    Alert.alert('Message Driver', 'Send pickup instructions or landmark details from this trip screen.');
+    if (!currentBooking?.id) return;
+    navigation.navigate('Chat', { bookingId: currentBooking.id, otherName: driverName });
+  };
+
+  const handleCancel = () => {
+    if (!currentBooking?.id) return;
+    Alert.alert('Cancel Ride', 'Cancel this booking? Your driver will be notified.', [
+      { text: 'Keep Ride', style: 'cancel' },
+      {
+        text: 'Cancel Ride',
+        style: 'destructive',
+        onPress: async () => {
+          setCancelling(true);
+          try {
+            await dispatch(cancelBooking(currentBooking.id)).unwrap();
+          } catch {
+            /* fall through to navigation */
+          } finally {
+            setCancelling(false);
+            navigation.navigate('PassengerDashboard');
+          }
+        },
+      },
+    ]);
   };
 
   const handleSOS = () => {
@@ -62,24 +153,27 @@ export const ActiveTripScreen = () => {
           rating: { stars, comment, created_at: new Date().toISOString() } as any,
         })
       ).unwrap();
-      await dispatch(completeTrip(bookingId)).unwrap();
     } catch {
-      // Mock backend rarely fails; complete locally regardless.
+      // Driver already marked the trip complete; rating is best-effort.
     } finally {
       setSubmitting(false);
       setRatingVisible(false);
+      dispatch(clearCurrentBooking());
       navigation.navigate('PassengerDashboard');
     }
   };
 
   const StatusBadge = ({ status }: { status: string }) => {
-    const isAccepted = status === 'accepted';
+    const map: Record<string, { bg: string; dot: string; fg: string; label: string }> = {
+      accepted: { bg: '#DBEAFE', dot: '#2563EB', fg: '#1E40AF', label: 'Driver is arriving' },
+      'in-transit': { bg: '#DCFCE7', dot: '#16A34A', fg: '#166534', label: 'On your way' },
+      completed: { bg: '#DCFCE7', dot: '#16A34A', fg: '#166534', label: 'Trip completed' },
+    };
+    const s = map[status] || map.accepted;
     return (
-      <View style={[styles.statusBadge, { backgroundColor: isAccepted ? '#DBEAFE' : '#DCFCE7' }]}>
-        <View style={[styles.statusDot, { backgroundColor: isAccepted ? '#2563EB' : '#16A34A' }]} />
-        <Text style={[styles.statusText, { color: isAccepted ? '#1E40AF' : '#166534' }]}>
-          {isAccepted ? 'Driver is arriving' : 'On your way'}
-        </Text>
+      <View style={[styles.statusBadge, { backgroundColor: s.bg }]}>
+        <View style={[styles.statusDot, { backgroundColor: s.dot }]} />
+        <Text style={[styles.statusText, { color: s.fg }]}>{s.label}</Text>
       </View>
     );
   };
@@ -113,10 +207,12 @@ export const ActiveTripScreen = () => {
               <MaterialCommunityIcons name="account-tie" size={36} color={colors.primary} />
             </Surface>
             <View>
-              <Text style={styles.driverName}>Kuya Jojo</Text>
+              <Text style={styles.driverName}>{driverName}</Text>
               <View style={styles.ratingRow}>
                 <MaterialCommunityIcons name="star" size={14} color="#FBBF24" style={{ marginRight: 4 }} />
-                <Text style={styles.ratingText}>4.9 (124 trips)</Text>
+                <Text style={styles.ratingText}>
+                  {(driver?.rating ?? 5).toFixed(1)} ({driver?.total_trips ?? 0} trips)
+                </Text>
               </View>
             </View>
           </View>
@@ -132,8 +228,8 @@ export const ActiveTripScreen = () => {
 
         <View style={styles.vehicleCard}>
           <View style={styles.vehicleInfo}>
-            <Text style={styles.vehiclePlate}>ABC-1234</Text>
-            <Text style={styles.vehicleDesc}>Blue Tricycle • FEDTODAB</Text>
+            <Text style={styles.vehiclePlate}>{plate}</Text>
+            <Text style={styles.vehicleDesc}>{vehicleDesc} • FEDTODAB</Text>
           </View>
           <TricycleIcon size={56} color={colors.primaryDark} />
         </View>
@@ -141,8 +237,8 @@ export const ActiveTripScreen = () => {
         <View style={styles.routeProgress}>
           {[
             { label: 'Driver assigned', active: true },
-            { label: 'Pickup', active: currentBooking?.status === 'in-transit' },
-            { label: 'Drop-off', active: false },
+            { label: 'Pickup', active: status === 'in-transit' || status === 'completed' },
+            { label: 'Drop-off', active: status === 'completed' },
           ].map((step, index) => (
             <View key={step.label} style={styles.progressStep}>
               <View style={[styles.progressDot, step.active && styles.progressDotActive]}>
@@ -169,18 +265,38 @@ export const ActiveTripScreen = () => {
             <View style={styles.detailTextContainer}>
               <Text style={styles.detailLabel}>Estimated Fare</Text>
               <Text style={[styles.detailValue, typography.currency]}>
-                ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '45.00'}
+                ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '0.00'}
               </Text>
             </View>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.completeBtn} onPress={() => setRatingVisible(true)} activeOpacity={0.85}>
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-            <MaterialCommunityIcons name="flag-checkered" size={20} color="#fff" />
-            <Text style={styles.completeText}>Complete Trip</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {/* The driver marks the trip complete; the passenger just waits and is
+            prompted to rate afterwards. Before pickup the passenger may cancel. */}
+        {status === 'in-transit' ? (
+          <View style={styles.waitBanner}>
+            <MaterialCommunityIcons name="navigation-variant" size={20} color={colors.primary} />
+            <Text style={styles.waitText}>Enjoy your ride — your driver will end the trip on arrival.</Text>
+          </View>
+        ) : status === 'completed' ? (
+          <TouchableOpacity style={styles.completeBtn} onPress={() => setRatingVisible(true)} activeOpacity={0.85}>
+            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <MaterialCommunityIcons name="star" size={20} color="#fff" />
+              <Text style={styles.completeText}>Rate your trip</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ) : (
+          <Button
+            variant="outline"
+            icon="close-circle-outline"
+            onPress={handleCancel}
+            loading={cancelling}
+            disabled={cancelling}
+            style={styles.cancelBtn}
+          >
+            Cancel Ride
+          </Button>
+        )}
 
         <Button
           variant="outline"
@@ -199,7 +315,7 @@ export const ActiveTripScreen = () => {
               <MaterialCommunityIcons name="account-tie" size={36} color={colors.primary} />
             </View>
             <Text style={styles.ratingTitle}>Rate your trip</Text>
-            <Text style={styles.ratingSubtitle}>How was your ride with Kuya Jojo?</Text>
+            <Text style={styles.ratingSubtitle}>How was your ride with {driverName}?</Text>
 
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -324,6 +440,17 @@ const styles = StyleSheet.create({
   completeBtn: { height: 52, borderRadius: 14, overflow: 'hidden', marginBottom: spacing.md },
   completeGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   completeText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
+  cancelBtn: { borderColor: colors.error, borderRadius: 14, marginBottom: spacing.md },
+  waitBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryLight,
+    borderRadius: 14,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  waitText: { ...typography.body, fontSize: 13, color: colors.primaryDark, flex: 1 },
   sosBtn: { borderColor: colors.error, borderRadius: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', padding: spacing.lg },
   ratingCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },

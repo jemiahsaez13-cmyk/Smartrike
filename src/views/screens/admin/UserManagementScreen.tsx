@@ -23,15 +23,18 @@ import { Card } from '@/views/components/common/Card';
 
 const adminService = new AdminService();
 
-type Filter = 'all' | 'driver' | 'passenger' | 'pending' | 'suspended';
+type Filter = 'all' | 'driver' | 'passenger' | 'admin' | 'pending' | 'suspended';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'driver', label: 'Drivers' },
   { key: 'passenger', label: 'Passengers' },
+  { key: 'admin', label: 'Admins' },
   { key: 'pending', label: 'Pending' },
   { key: 'suspended', label: 'Suspended' },
 ];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const UserManagementScreen = () => {
   const navigation = useNavigation<any>();
@@ -43,6 +46,13 @@ export const UserManagementScreen = () => {
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<User | null>(null);
   const [working, setWorking] = useState(false);
+
+  // New-admin invite form
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -82,6 +92,8 @@ export const UserManagementScreen = () => {
         ? u.user_type === 'driver'
         : filter === 'passenger'
         ? u.user_type === 'passenger'
+        : filter === 'admin'
+        ? u.user_type === 'admin'
         : filter === 'pending'
         ? u.user_type === 'driver' && d.verification_status === 'pending'
         : filter === 'suspended'
@@ -127,6 +139,47 @@ export const UserManagementScreen = () => {
       notify('Action failed', e?.message || 'Could not update the driver.');
     } finally {
       setWorking(false);
+    }
+  };
+
+  const resetInvite = () => {
+    setInviteName('');
+    setInviteEmail('');
+    setInvitePhone('');
+  };
+
+  const submitInvite = async () => {
+    const email = inviteEmail.trim().toLowerCase();
+    if (!inviteName.trim()) {
+      notify('Name required', 'Enter the new administrator’s name.');
+      return;
+    }
+    if (!EMAIL_RE.test(email)) {
+      notify('Invalid email', 'Enter a valid email address.');
+      return;
+    }
+    setInviting(true);
+    try {
+      await adminService.inviteAdmin({ name: inviteName, email, phone: invitePhone });
+      void ActivityLogService.logActivity({
+        user_id: currentUser?.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        description: `Admin invited a new administrator: ${inviteName.trim()} (${email}).`,
+        severity: 'success',
+      });
+      setInviteVisible(false);
+      resetInvite();
+      notify(
+        'Administrator invited',
+        `${inviteName.trim()} was added as an admin. They can sign in via the emailed link, or use “Forgot Password” to set a password.`
+      );
+      // Give the DB trigger a moment to create the profile row, then refresh.
+      setTimeout(load, 1200);
+    } catch (e: any) {
+      notify('Invite failed', e?.message || 'Could not create the administrator.');
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -178,6 +231,15 @@ export const UserManagementScreen = () => {
           <Text style={styles.headerTitle}>User Operations</Text>
           <Text style={styles.headerSubtitle}>Manage platform access and roles</Text>
         </View>
+        <TouchableOpacity
+          style={styles.addAdminBtn}
+          onPress={() => setInviteVisible(true)}
+          activeOpacity={0.85}
+          hitSlop={8}
+        >
+          <MaterialCommunityIcons name="shield-plus" size={18} color="#fff" />
+          <Text style={styles.addAdminText}>New Admin</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -302,7 +364,7 @@ export const UserManagementScreen = () => {
                       <Text style={styles.sheetStatValue}>{selected.status}</Text>
                       <Text style={styles.sheetStatLabel}>Status</Text>
                     </View>
-                  ) : (
+                  ) : selected.user_type === 'driver' ? (
                     <>
                       <View style={styles.sheetStat}>
                         <Text style={styles.sheetStatValue}>{(selected.rating ?? 5).toFixed(1)}</Text>
@@ -312,6 +374,18 @@ export const UserManagementScreen = () => {
                       <View style={styles.sheetStat}>
                         <Text style={styles.sheetStatValue}>{selected.total_trips ?? 0}</Text>
                         <Text style={styles.sheetStatLabel}>Trips</Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.sheetStat}>
+                        <Text style={styles.sheetStatValue}>{selected.total_trips ?? 0}</Text>
+                        <Text style={styles.sheetStatLabel}>Trips</Text>
+                      </View>
+                      <View style={styles.sheetDivider} />
+                      <View style={styles.sheetStat}>
+                        <Text style={styles.sheetStatValue}>{selected.status}</Text>
+                        <Text style={styles.sheetStatLabel}>Status</Text>
                       </View>
                     </>
                   )}
@@ -356,6 +430,74 @@ export const UserManagementScreen = () => {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* New-admin invite form */}
+      <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => !inviting && setInviteVisible(false)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => !inviting && setInviteVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.inviteHeader}>
+              <View style={styles.inviteIcon}>
+                <MaterialCommunityIcons name="shield-account" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName}>Add Administrator</Text>
+                <Text style={styles.sheetEmail}>Create a new admin account with full access.</Text>
+              </View>
+            </View>
+
+            <Text style={styles.inviteLabel}>FULL NAME</Text>
+            <RNTextInput
+              style={styles.inviteInput}
+              placeholder="e.g. Maria Santos"
+              placeholderTextColor={colors.textMuted}
+              value={inviteName}
+              onChangeText={setInviteName}
+              autoCapitalize="words"
+              editable={!inviting}
+            />
+
+            <Text style={styles.inviteLabel}>EMAIL</Text>
+            <RNTextInput
+              style={styles.inviteInput}
+              placeholder="name@example.com"
+              placeholderTextColor={colors.textMuted}
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!inviting}
+            />
+
+            <Text style={styles.inviteLabel}>PHONE (OPTIONAL)</Text>
+            <RNTextInput
+              style={styles.inviteInput}
+              placeholder="+63 9XX XXX XXXX"
+              placeholderTextColor={colors.textMuted}
+              value={invitePhone}
+              onChangeText={setInvitePhone}
+              keyboardType="phone-pad"
+              editable={!inviting}
+            />
+
+            <Text style={styles.inviteHint}>
+              The new admin is created as an active account. They’ll receive a sign-in link by email, or can use “Forgot Password” to set a password.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.inviteSubmit, inviting && { opacity: 0.6 }]}
+              onPress={submitInvite}
+              disabled={inviting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.inviteSubmitText}>{inviting ? 'Creating…' : 'Create Administrator'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeBtn} disabled={inviting} onPress={() => setInviteVisible(false)}>
+              <Text style={styles.closeText}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -373,6 +515,16 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   headerCopy: { flex: 1 },
+  addAdminBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    height: 38,
+    borderRadius: radius.pill,
+  },
+  addAdminText: { ...typography.label, color: '#fff', fontSize: 13 },
   headerTitle: { ...typography.h1, fontSize: 28 },
   headerSubtitle: { ...typography.body, color: colors.textSecondary, fontSize: 14, marginTop: 2 },
   searchContainer: { flexDirection: 'row', paddingHorizontal: spacing.screen, paddingBottom: spacing.sm, gap: spacing.sm, alignItems: 'center' },
@@ -454,4 +606,20 @@ const styles = StyleSheet.create({
   actionLabel: { ...typography.label, fontSize: 15, color: colors.text },
   closeBtn: { height: 50, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', marginTop: spacing.lg },
   closeText: { ...typography.button, fontSize: 15, color: colors.text },
+  // Invite form
+  inviteHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+  inviteIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
+  inviteLabel: { ...typography.labelSmall, fontSize: 10, color: colors.textMuted, letterSpacing: 1, marginBottom: 6, marginTop: spacing.sm },
+  inviteInput: {
+    ...typography.body,
+    height: 50,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    color: colors.text,
+    fontSize: 15,
+  },
+  inviteHint: { ...typography.bodySmall, color: colors.textMuted, fontSize: 12, marginTop: spacing.md, lineHeight: 18 },
+  inviteSubmit: { height: 52, borderRadius: radius.md, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginTop: spacing.lg },
+  inviteSubmitText: { ...typography.button, color: '#fff', fontSize: 15 },
 });

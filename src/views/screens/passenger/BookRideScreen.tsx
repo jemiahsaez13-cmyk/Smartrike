@@ -10,7 +10,9 @@ import { useLocation } from '@/controllers/hooks/useLocation';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
+import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { Location } from '@/models/types';
+import { PopularPlace } from '@/config/constants';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
@@ -34,15 +36,14 @@ const UBER_MAP_STYLE = [
 
 const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
+const placeService = new PopularPlaceService();
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
-const DESTINATIONS: Location[] = [
-  { latitude: 13.4452, longitude: 121.8401, address: 'Boac Public Market' },
-  { latitude: 13.4101, longitude: 121.8456, address: 'Marinduque State College' },
-  { latitude: 13.4477, longitude: 121.8389, address: 'Boac Cathedral' },
-  { latitude: 13.4419, longitude: 121.8442, address: 'Provincial Hospital' },
-  { latitude: 13.5247, longitude: 121.8665, address: 'Cawit Port' },
-];
+const placeToLocation = (p: PopularPlace): Location => ({
+  latitude: p.lat,
+  longitude: p.lng,
+  address: p.name,
+});
 
 const RIDE_OPTIONS = [
   { id: 'standard', label: 'Standard', desc: 'Regular TODA queue', icon: 'rickshaw' },
@@ -55,7 +56,6 @@ export const BookRideScreen = () => {
   const { currentLocation, getLocation } = useLocation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const [pickupAddress, setPickupAddress] = useState('');
   const [dropoffAddress, setDropoffAddress] = useState('');
   const [dropoff, setDropoff] = useState<Location | null>(null);
   const [estimate, setEstimate] = useState<{ fare: number; distance: number; eta: number } | null>(null);
@@ -64,12 +64,29 @@ export const BookRideScreen = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash'>('cash');
   const [passengers, setPassengers] = useState(1);
   const [tripNote, setTripNote] = useState('');
+  const [destinations, setDestinations] = useState<PopularPlace[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [pinTarget, setPinTarget] = useState<'pickup' | 'dropoff'>('dropoff');
+  const [pickup, setPickup] = useState<Location | null>(null);
+  const [bookForOther, setBookForOther] = useState(false);
+  const [otherName, setOtherName] = useState('');
+  const [otherPhone, setOtherPhone] = useState('');
+
+  useEffect(() => {
+    placeService.listActive().then(setDestinations).catch(() => undefined);
+  }, []);
 
   const sheetAnim = useRef(new Animated.Value(height * 0.42)).current;
   const mapRef = useRef<any>(null);
+  const mapSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
-  const pickupCoord = currentLocation
-    ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
+  // react-native-maps only renders on native; on web we show the faux map.
+  const canUseNativeMap = !!MapView && Platform.OS !== 'web';
+
+  // The pickup defaults to the device location but can be re-pinned.
+  const effectivePickup = pickup || currentLocation;
+  const pickupCoord = effectivePickup
+    ? { latitude: effectivePickup.latitude, longitude: effectivePickup.longitude }
     : null;
   const dropCoord = dropoff ? { latitude: dropoff.latitude, longitude: dropoff.longitude } : null;
 
@@ -102,10 +119,6 @@ export const BookRideScreen = () => {
       });
   }, [getLocation, sheetAnim]);
 
-  useEffect(() => {
-    if (currentLocation) setPickupAddress(currentLocation.address || 'Current Location');
-  }, [currentLocation]);
-
   // Keep the native map framed on the active pickup/dropoff pair.
   useEffect(() => {
     if (mapRef.current?.animateToRegion) mapRef.current.animateToRegion(region, 650);
@@ -114,12 +127,13 @@ export const BookRideScreen = () => {
   useEffect(() => {
     let active = true;
     const compute = async () => {
-      if (!currentLocation || !dropoff) {
+      const ep = pickup || currentLocation;
+      if (!ep || !dropoff) {
         setEstimate(null);
         return;
       }
       try {
-        const distance = await fareService.calculateDistance(currentLocation, dropoff);
+        const distance = await fareService.calculateDistance(ep, dropoff);
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
         const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
         const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
@@ -133,14 +147,25 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [currentLocation, dropoff, rideType]);
+  }, [pickup, currentLocation, dropoff, rideType]);
 
   useEffect(() => {
     const destination = route.params?.destination;
     if (!destination) return;
-    const match = DESTINATIONS.find((item) => item.address.toLowerCase().includes(String(destination).toLowerCase()));
-    if (match) selectDestination(match);
-  }, [route.params?.destination]);
+    const q = String(destination).toLowerCase();
+    const match = destinations.find(
+      (p) => p.name.toLowerCase().includes(q) || p.address.toLowerCase().includes(q)
+    );
+    if (match) selectDestination(placeToLocation(match));
+  }, [route.params?.destination, destinations]);
+
+  // A popular place passed with full coordinates pre-fills the drop-off directly.
+  useEffect(() => {
+    const place = route.params?.place;
+    if (place?.latitude && place?.longitude) {
+      selectDestination({ latitude: place.latitude, longitude: place.longitude, address: place.address || 'Destination' });
+    }
+  }, [route.params?.place]);
 
   function selectDestination(dest: Location) {
     setDropoff(dest);
@@ -153,13 +178,64 @@ export const BookRideScreen = () => {
     }
   };
 
-  const handleBooking = async () => {
-    if (!currentLocation || !dropoff) {
-      Alert.alert('Choose Destination', 'Select a drop-off location before confirming your trip.');
+  // Enter full-screen tap-to-pin mode for either pickup or drop-off. The sheet
+  // slides away so the whole map is usable.
+  const openPickerFor = (target: 'pickup' | 'dropoff') => {
+    setPinTarget(target);
+    setPicking(true);
+    Animated.timing(sheetAnim, { toValue: height, duration: 240, useNativeDriver: true }).start();
+  };
+  const closePicker = () => {
+    setPicking(false);
+    Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }).start();
+  };
+
+  const applyPin = (coord: { latitude: number; longitude: number }) => {
+    const loc: Location = {
+      latitude: coord.latitude,
+      longitude: coord.longitude,
+      address: pinTarget === 'pickup' ? 'Pinned pickup' : 'Pinned destination',
+    };
+    if (pinTarget === 'pickup') setPickup(loc);
+    else selectDestination(loc);
+    closePicker();
+  };
+
+  // Works everywhere: a native map tap carries real coordinates; a tap on the
+  // web/faux map carries pixel offsets we convert to geo within the framed region.
+  const handleMapTap = (e: any) => {
+    const ne = e?.nativeEvent;
+    if (!ne) return;
+    if (ne.coordinate) {
+      applyPin(ne.coordinate);
       return;
     }
+    const { width, height: h } = mapSizeRef.current;
+    const x = ne.locationX;
+    const y = ne.locationY;
+    if (width && h && x != null && y != null) {
+      applyPin({
+        latitude: region.latitude + (0.5 - y / h) * region.latitudeDelta,
+        longitude: region.longitude + (x / width - 0.5) * region.longitudeDelta,
+      });
+    }
+  };
+
+  const handleBooking = async () => {
+    const ep = pickup || currentLocation;
+    if (!ep || !dropoff) {
+      Alert.alert('Choose Destination', 'Set a drop-off — pick a place, tap the map, or use “Set on map”.');
+      return;
+    }
+    const noteParts: string[] = [];
+    if (bookForOther && otherName.trim()) {
+      noteParts.push(`For: ${otherName.trim()}${otherPhone.trim() ? ` (${otherPhone.trim()})` : ''}`);
+    }
+    if (passengers > 1) noteParts.push(`${passengers} passengers`);
+    if (tripNote.trim()) noteParts.push(tripNote.trim());
+    const notes = noteParts.join(' • ') || undefined;
     try {
-      await bookRide(user!.id, currentLocation, dropoff);
+      await bookRide(user!.id, ep, dropoff, { notes, paymentMethod });
       navigation.navigate('ConfirmBooking');
     } catch {
       Alert.alert('Booking Failed', 'Unable to create booking. Please try again.');
@@ -170,14 +246,20 @@ export const BookRideScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.mapContainer}>
-        {MapView ? (
+      <View
+        style={styles.mapContainer}
+        onLayout={(e) => {
+          mapSizeRef.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height };
+        }}
+      >
+        {canUseNativeMap ? (
           <MapView
             ref={mapRef}
             style={StyleSheet.absoluteFill}
             provider={PROVIDER_GOOGLE}
             customMapStyle={UBER_MAP_STYLE}
             initialRegion={region}
+            onPress={picking ? handleMapTap : undefined}
             showsUserLocation
             showsMyLocationButton={false}
             showsCompass={false}
@@ -233,10 +315,36 @@ export const BookRideScreen = () => {
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
         </TouchableOpacity>
 
-        {MapView && (
+        {canUseNativeMap && !picking && (
           <TouchableOpacity style={styles.recenterBtn} onPress={recenter} activeOpacity={0.85} accessibilityLabel="Recenter map">
             <MaterialCommunityIcons name="crosshairs-gps" size={20} color={colors.text} />
           </TouchableOpacity>
+        )}
+
+        {/* Tap-to-pin mode overlay */}
+        {picking && (
+          <>
+            {/* On web / faux map there is no map onPress, so this transparent
+                responder captures the tap and converts it to coordinates. */}
+            {!canUseNativeMap && (
+              <View
+                style={StyleSheet.absoluteFill}
+                onStartShouldSetResponder={() => true}
+                onResponderRelease={handleMapTap}
+              />
+            )}
+            <View pointerEvents="none" style={styles.pinPickTop}>
+              <MaterialCommunityIcons name="gesture-tap" size={18} color="#fff" />
+              <Text style={styles.pinPickTopText}>
+                Tap the map to set your {pinTarget === 'pickup' ? 'pickup point' : 'destination'}
+              </Text>
+            </View>
+            <View style={styles.pinPickBar}>
+              <TouchableOpacity style={styles.pinPickConfirm} onPress={closePicker} activeOpacity={0.85}>
+                <Text style={styles.pinPickConfirmText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </View>
 
@@ -244,7 +352,7 @@ export const BookRideScreen = () => {
         <View style={styles.handle} />
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Plan your ride</Text>
-          <Text style={styles.sheetSubtitle}>Select a known Boac destination for an instant fare estimate.</Text>
+          <Text style={styles.sheetSubtitle}>Pick a saved place, tap the map, or pin your exact drop-off.</Text>
 
           <View style={styles.locationContainer}>
             <View style={styles.pathGraphic}>
@@ -254,17 +362,17 @@ export const BookRideScreen = () => {
             </View>
 
             <View style={styles.inputs}>
-              <View style={styles.inputWrapper}>
+              <TouchableOpacity style={styles.inputWrapper} onPress={() => openPickerFor('pickup')} activeOpacity={0.7}>
                 <Text style={styles.inputLabel}>PICKUP</Text>
-                <Text style={styles.inputValue} numberOfLines={1}>{pickupAddress || 'Current location'}</Text>
-              </View>
+                <Text style={styles.inputValue} numberOfLines={1}>{effectivePickup?.address || 'Tap to set pickup'}</Text>
+              </TouchableOpacity>
               <View style={styles.inputDivider} />
-              <View style={styles.inputWrapper}>
+              <TouchableOpacity style={styles.inputWrapper} onPress={() => openPickerFor('dropoff')} activeOpacity={0.7}>
                 <Text style={styles.inputLabel}>DROP OFF</Text>
                 <Text style={[styles.inputValue, !dropoffAddress && styles.inputMuted]} numberOfLines={1}>
-                  {dropoffAddress || 'Choose a destination below'}
+                  {dropoffAddress || 'Tap to set destination'}
                 </Text>
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -295,26 +403,38 @@ export const BookRideScreen = () => {
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destScroll} contentContainerStyle={styles.destRow}>
-            {DESTINATIONS.map((dest) => {
-              const selected = dropoff?.address === dest.address;
-              return (
-                <TouchableOpacity
-                  key={dest.address}
-                  style={[styles.destChip, selected && styles.destChipSelected]}
-                  onPress={() => selectDestination(dest)}
-                  activeOpacity={0.82}
-                >
-                  <MaterialCommunityIcons
-                    name={selected ? 'map-marker-check' : 'map-marker-outline'}
-                    size={16}
-                    color={selected ? '#FFFFFF' : colors.primary}
-                  />
-                  <Text style={[styles.destChipText, selected && styles.destChipTextSelected]}>{dest.address}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {destinations.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destScroll} contentContainerStyle={styles.destRow}>
+              {destinations.map((place) => {
+                const selected = dropoff?.address === place.name;
+                return (
+                  <TouchableOpacity
+                    key={place.id}
+                    style={[styles.destChip, selected && styles.destChipSelected]}
+                    onPress={() => selectDestination(placeToLocation(place))}
+                    activeOpacity={0.82}
+                  >
+                    <MaterialCommunityIcons
+                      name={selected ? 'map-marker-check' : (place.icon as any) || 'map-marker-outline'}
+                      size={16}
+                      color={selected ? '#FFFFFF' : colors.primary}
+                    />
+                    <Text style={[styles.destChipText, selected && styles.destChipTextSelected]}>{place.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View style={styles.tapHint}>
+              <MaterialCommunityIcons name="gesture-tap" size={16} color={colors.textMuted} />
+              <Text style={styles.tapHintText}>Use “Set destination on map” below to drop your pin.</Text>
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.pinMapBtn} onPress={() => openPickerFor('dropoff')} activeOpacity={0.85}>
+            <MaterialCommunityIcons name="map-marker-radius" size={18} color={colors.primary} />
+            <Text style={styles.pinMapText}>{dropoff ? 'Change destination on map' : 'Set destination on map'}</Text>
+          </TouchableOpacity>
 
           <View style={styles.tripControls}>
             <View style={styles.passengerStepper}>
@@ -367,6 +487,35 @@ export const BookRideScreen = () => {
               style={styles.noteInput}
             />
           </View>
+
+          {/* Book on behalf of another passenger */}
+          <TouchableOpacity style={styles.forOtherToggle} onPress={() => setBookForOther((v) => !v)} activeOpacity={0.8}>
+            <MaterialCommunityIcons
+              name={bookForOther ? 'checkbox-marked' : 'checkbox-blank-outline'}
+              size={22}
+              color={bookForOther ? colors.primary : colors.textMuted}
+            />
+            <Text style={styles.forOtherText}>I'm booking this ride for someone else</Text>
+          </TouchableOpacity>
+          {bookForOther && (
+            <View style={styles.forOtherFields}>
+              <RNTextInput
+                style={styles.forOtherInput}
+                value={otherName}
+                onChangeText={setOtherName}
+                placeholder="Passenger's name"
+                placeholderTextColor={colors.textMuted}
+              />
+              <RNTextInput
+                style={styles.forOtherInput}
+                value={otherPhone}
+                onChangeText={setOtherPhone}
+                placeholder="Passenger's phone (optional)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+              />
+            </View>
+          )}
 
           <Surface style={styles.fareCard} elevation={0}>
             <View style={styles.fareInfo}>
@@ -649,6 +798,107 @@ const styles = StyleSheet.create({
   },
   destScroll: {
     marginBottom: spacing.md,
+  },
+  tapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tapHintText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontSize: 12,
+    flex: 1,
+  },
+  pinMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    height: 46,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+    marginBottom: spacing.md,
+  },
+  pinMapText: { ...typography.label, color: colors.primary, fontSize: 14 },
+  // Pin-picker overlay
+  pinPickFixed: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // lift the marker tip to the exact centre
+    marginTop: -23,
+  },
+  pinPickTop: {
+    position: 'absolute',
+    top: layout.headerTop + 30,
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(13,27,42,0.85)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinPickTopText: { ...typography.label, color: '#fff', fontSize: 13, textAlign: 'center' },
+  pinPickBar: {
+    position: 'absolute',
+    bottom: 28,
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pinPickCancel: {
+    height: 52,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  pinPickCancelText: { ...typography.button, color: colors.text, fontSize: 14 },
+  pinPickConfirm: {
+    flex: 1,
+    height: 52,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  pinPickConfirmText: { ...typography.button, color: '#fff', fontSize: 15 },
+  // Book for someone else
+  forOtherToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  forOtherText: { ...typography.label, color: colors.text, fontSize: 14 },
+  forOtherFields: { gap: spacing.sm, marginBottom: spacing.md },
+  forOtherInput: {
+    ...typography.body,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.md,
+    color: colors.text,
+    fontSize: 14,
   },
   destRow: {
     gap: spacing.sm,

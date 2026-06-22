@@ -74,4 +74,17 @@ export class DriverMatchingService {
     const drivers = await this.findNearbyDrivers(location, radiusKm);
     return drivers.length;
   }
+
+  // Total drivers currently online & active in the service area (no location
+  // needed). Used for the passenger "drivers online" indicator.
+  async getOnlineCount(): Promise<number> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('user_type', 'driver')
+      .eq('current_status', 'online')
+      .eq('status', 'active');
+    if (error || !data) return 0;
+    return data.length;
+  }
 }

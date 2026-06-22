@@ -1,4 +1,5 @@
 import { Location } from '@/models/types';
+import { BOAC_CENTER, FARE } from '@/config/constants';
 
 export function haversineDistance(a: Location, b: Location): number {
   const R = 6371;
@@ -53,4 +54,27 @@ export function midpoint(a: Location, b: Location): Location {
     longitude: (a.longitude + b.longitude) / 2,
     address: '',
   };
+}
+
+export interface PlaceEstimate {
+  distanceKm: number;
+  etaMin: number;
+  fare: number;
+}
+
+// Quick estimate for a popular destination, measured from the Boac town center
+// (the typical pickup point). Fare uses the official Boac matrix: ₱base for the
+// first km, then ₱per-km for each succeeding km, distance rounded up.
+export function placeEstimate(
+  place: { lat: number; lng: number },
+  origin: { latitude: number; longitude: number } = BOAC_CENTER
+): PlaceEstimate {
+  const km = haversineDistance(
+    { latitude: origin.latitude, longitude: origin.longitude, address: '' },
+    { latitude: place.lat, longitude: place.lng, address: '' }
+  );
+  const whole = Math.max(1, Math.ceil(km));
+  const fare = FARE.BASE + (whole - 1) * FARE.PER_KM;
+  const etaMin = Math.max(3, estimateETA(km, 22)); // tricycle ~22 km/h average
+  return { distanceKm: km, etaMin, fare };
 }

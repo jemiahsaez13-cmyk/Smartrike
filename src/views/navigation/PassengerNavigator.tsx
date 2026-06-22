@@ -5,6 +5,7 @@ import { PassengerDashboard } from '@/views/screens/passenger/PassengerDashboard
 import { BookRideScreen } from '@/views/screens/passenger/BookRideScreen';
 import { ConfirmBookingScreen } from '@/views/screens/passenger/ConfirmBookingScreen';
 import { ActiveTripScreen } from '@/views/screens/passenger/ActiveTripScreen';
+import { PopularPlacesScreen } from '@/views/screens/passenger/PopularPlacesScreen';
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
 import { EditProfileScreen } from '@/views/screens/shared/EditProfileScreen';
@@ -12,6 +13,7 @@ import { HelpSupportScreen } from '@/views/screens/shared/HelpSupportScreen';
 import { AboutScreen } from '@/views/screens/shared/AboutScreen';
 import { LegalScreen } from '@/views/screens/shared/LegalScreen';
 import { ChangePasswordScreen } from '@/views/screens/shared/ChangePasswordScreen';
+import { ChatScreen } from '@/views/screens/shared/ChatScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
@@ -44,8 +46,10 @@ export const PassengerNavigator = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="PassengerDashboard" component={PassengerTabs} />
     <Stack.Screen name="BookRide" component={BookRideScreen} />
+    <Stack.Screen name="PopularPlaces" component={PopularPlacesScreen} />
     <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} />
     <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
+    <Stack.Screen name="Chat" component={ChatScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} />

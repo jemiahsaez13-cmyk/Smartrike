@@ -8,15 +8,18 @@ export const MAP_DELTA = {
   longitudeDelta: 0.05,
 };
 
+// Official Boac, Marinduque LGU tricycle fare matrix.
+//   • ₱120 base fare for the first kilometer
+//   • ₱10 for every succeeding kilometer
+//   • Distance is rounded UP to the next whole kilometer
+//   • No peak-hour surcharge (the published matrix has none)
+// Formula:  fare = 120 + (ceil(distanceKm) - 1) × 10
 export const FARE = {
-  BASE: 50,
-  PER_KM: 15,
-  MINIMUM: 50,
-  PEAK_MULTIPLIER: 1.5,
-  PEAK_START_HOUR: 6.5,
-  PEAK_END_HOUR: 9,
-  PEAK_START_HOUR_PM: 17,
-  PEAK_END_HOUR_PM: 19,
+  BASE: 120,
+  PER_KM: 10,
+  MINIMUM: 120,
+  PEAK_MULTIPLIER: 1, // matrix has no peak surcharge
+  PEAK_HOURS_ENABLED: false,
 };
 
 export const DRIVER_SEARCH_RADIUS_KM = 5;
@@ -84,7 +87,7 @@ export const LEGAL = {
       },
       {
         heading: 'Fares & Payments',
-        body: 'Fares follow the published computation: a base fare plus a per-kilometer rate, with a peak-hour multiplier where applicable. You agree to pay the correct fare for completed trips using cash, GCash, or PayMaya.',
+        body: 'Fares follow the official Boac LGU tricycle matrix: a ₱120 base fare for the first kilometer plus ₱10 for every succeeding kilometer, with the distance rounded up to the next whole kilometer. You agree to pay the correct fare for completed trips using cash, GCash, or PayMaya.',
       },
       {
         heading: 'Driver Franchises (MTOP)',
@@ -114,7 +117,7 @@ export const FAQS = [
   },
   {
     q: 'How is my fare calculated?',
-    a: 'Fares start at a ₱50 base plus ₱15 per kilometer. During peak hours (6:30–9:00 AM and 5:00–7:00 PM) a 1.5× multiplier applies. The minimum fare is ₱50.',
+    a: 'Fares follow the official Boac LGU tricycle matrix: ₱120 for the first kilometer, plus ₱10 for every succeeding kilometer, with the distance rounded up to the next whole kilometer. For example, a 5 km trip is ₱160. There is no peak-hour surcharge.',
   },
   {
     q: 'What payment methods are accepted?',
@@ -138,13 +141,23 @@ export const FAQS = [
   },
 ];
 
-export const POPULAR_PLACES = [
-  { id: '1', name: 'Boac Public Market', address: 'Boac town center', lat: 13.4452, lng: 121.8401 },
-  { id: '2', name: 'Marinduque State College', address: 'Tanza, Boac', lat: 13.4101, lng: 121.8456 },
-  { id: '3', name: 'Boac Cathedral', address: 'National Highway, Boac', lat: 13.4477, lng: 121.8389 },
-  { id: '4', name: 'Provincial Hospital', address: 'Emergency & outpatient', lat: 13.4419, lng: 121.8442 },
-  { id: '5', name: 'Cawit Port', address: 'Cawit, Boac', lat: 13.5247, lng: 121.8665 },
-];
+// A popular destination passengers can tap to book. These are now managed
+// entirely by admins in the database (public.popular_places, migration 018) —
+// there is no hardcoded list. This interface is the normalized shape the UI
+// and PopularPlaceService work with.
+export interface PopularPlace {
+  id: string;
+  name: string;
+  address: string;
+  category: string;
+  icon: string;
+  lat: number;
+  lng: number;
+  image: string;
+  details?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
 
 export const PAYMENT_METHODS = ['cash', 'gcash', 'paymaya'] as const;
 export type PaymentMethod = typeof PAYMENT_METHODS[number];

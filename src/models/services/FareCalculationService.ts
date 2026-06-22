@@ -10,11 +10,13 @@ export class FareCalculationService {
       .limit(1)
       .maybeSingle();
 
+    // Defaults match the official Boac LGU tricycle matrix (₱120 first km,
+    // ₱10 per succeeding km, no peak surcharge).
     const cfg = (!error && data) ? data : {
-      base_fare: 50.0,
-      per_km_rate: 15.0,
-      peak_hour_multiplier: 1.5,
-      peak_hours_enabled: true,
+      base_fare: 120.0,
+      per_km_rate: 10.0,
+      peak_hour_multiplier: 1.0,
+      peak_hours_enabled: false,
     };
 
     const now = new Date();
@@ -28,8 +30,14 @@ export class FareCalculationService {
     };
   }
 
-  calculateFare(distance: number, baseFare: number, perKmRate: number, multiplier: number): number {
-    return Math.round((baseFare + distance * perKmRate) * multiplier * 100) / 100;
+  // Boac LGU matrix: ₱120 covers the first kilometer, then ₱10 for every
+  // succeeding kilometer. Distance is rounded UP to the next whole kilometer,
+  // so a 4.2 km trip is billed as 5 km. `multiplier` is normally 1 (no peak
+  // surcharge) but is kept for forward-compatibility with a configurable matrix.
+  calculateFare(distance: number, baseFare: number, perKmRate: number, multiplier: number = 1): number {
+    const km = Math.max(1, Math.ceil(distance || 0));
+    const fare = baseFare + (km - 1) * perKmRate;
+    return Math.round(fare * (multiplier || 1) * 100) / 100;
   }
 
   async calculateDistance(pickup: Location, dropoff: Location): Promise<number> {

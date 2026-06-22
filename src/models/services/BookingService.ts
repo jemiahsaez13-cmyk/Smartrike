@@ -10,7 +10,12 @@ export class BookingService {
   fareService = new FareCalculationService();
   notificationService = new NotificationService();
 
-  async createBooking(passengerId: string, pickup: Location, dropoff: Location, scheduledTime?: Date): Promise<Booking> {
+  async createBooking(
+    passengerId: string,
+    pickup: Location,
+    dropoff: Location,
+    options: { scheduledTime?: Date; notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' } = {}
+  ): Promise<Booking> {
     const distance = await this.fareService.calculateDistance(pickup, dropoff);
     const { baseFare, perKmRate, multiplier } = await this.fareService.getFareConfig();
     const totalFare = this.fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
@@ -22,7 +27,7 @@ export class BookingService {
       pickup_location: pickup,
       dropoff_location: dropoff,
       status: 'pending',
-      scheduled_time: scheduledTime || null,
+      scheduled_time: options.scheduledTime || null,
       distance,
       estimated_duration: estimatedDuration,
       actual_duration: null,
@@ -30,11 +35,11 @@ export class BookingService {
       per_km_rate: perKmRate,
       total_fare: totalFare,
       peak_hour_multiplier: multiplier,
-      payment_method: 'cash',
+      payment_method: options.paymentMethod || 'cash',
       payment_status: 'pending',
       passenger_rating: null,
       driver_rating: null,
-      notes: null,
+      notes: options.notes || null,
       accepted_at: null,
       started_at: null,
       completed_at: null

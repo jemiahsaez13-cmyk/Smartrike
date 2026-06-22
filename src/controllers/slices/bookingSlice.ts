@@ -25,9 +25,23 @@ const initialState: BookingState = {
 
 export const createBooking = createAsyncThunk(
   'booking/create',
-  async (payload: { passengerId: string; pickup: Location; dropoff: Location; scheduledTime?: Date }, { rejectWithValue }) => {
+  async (
+    payload: {
+      passengerId: string;
+      pickup: Location;
+      dropoff: Location;
+      scheduledTime?: Date;
+      notes?: string;
+      paymentMethod?: 'cash' | 'gcash' | 'paymaya';
+    },
+    { rejectWithValue }
+  ) => {
     try {
-      const booking = await bookingService.createBooking(payload.passengerId, payload.pickup, payload.dropoff, payload.scheduledTime);
+      const booking = await bookingService.createBooking(payload.passengerId, payload.pickup, payload.dropoff, {
+        scheduledTime: payload.scheduledTime,
+        notes: payload.notes,
+        paymentMethod: payload.paymentMethod,
+      });
       void ActivityLogService.logActivity({
         user_id: payload.passengerId,
         action_type: 'booking_created',

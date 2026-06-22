@@ -98,7 +98,11 @@ export const TripHistoryScreen = () => {
 
   if (loading) return <Loading message="Loading trip history..." />;
 
-  const totalFares = filteredBookings.reduce((sum, b) => sum + (b.total_fare || 0), 0);
+  // Only completed trips contribute to fares — cancelled/pending rides were
+  // never paid, so they must not inflate the total.
+  const totalFares = filteredBookings
+    .filter((b) => b.status === 'completed')
+    .reduce((sum, b) => sum + (b.total_fare || 0), 0);
 
   return (
     <View style={styles.container}>
@@ -184,7 +188,9 @@ export const TripHistoryScreen = () => {
                     <MaterialCommunityIcons name={meta.icon} size={13} color={meta.color} />
                     <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
                   </View>
-                  <Text style={[styles.fareText, typography.currency]}>₱{(booking.total_fare || 0).toFixed(2)}</Text>
+                  <Text style={[styles.fareText, typography.currency, booking.status === 'cancelled' && styles.fareVoid]}>
+                    {booking.status === 'cancelled' ? '—' : `₱${(booking.total_fare || 0).toFixed(2)}`}
+                  </Text>
                 </View>
 
                 <View style={styles.route}>
@@ -337,6 +343,7 @@ const styles = StyleSheet.create({
   },
   statusText: { ...typography.labelSmall, fontWeight: '700' },
   fareText: { ...typography.number, fontSize: 18, color: colors.text },
+  fareVoid: { color: colors.textLight },
   route: {
     flexDirection: 'row',
   },

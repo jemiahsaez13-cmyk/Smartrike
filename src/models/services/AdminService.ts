@@ -1,4 +1,4 @@
-import { supabase } from '@/config/supabase';
+import { supabase, createIsolatedClient } from '@/config/supabase';
 import { User } from '@/models/types';
 
 export interface AdminStats {
@@ -30,6 +30,14 @@ export interface TopRoute {
   to: string;
   trips: number;
   pct: number;
+}
+
+export interface FareMatrix {
+  id?: string;
+  base_fare: number;
+  per_km_rate: number;
+  peak_hour_multiplier: number;
+  peak_hours_enabled: boolean;
 }
 
 export type AnalyticsPeriod = 'Daily' | 'Weekly' | 'Monthly';
@@ -89,6 +97,45 @@ export class AdminService {
     return data;
   }
 
+  // Invites a new administrator by email. We send a magic-link sign-up on an
+  // isolated client so the inviting admin's own session is never replaced. The
+  // `handle_new_user` DB trigger (migration 008) reads the `user_type: 'admin'`
+  // metadata and immediately creates an *active* admin profile — so the account
+  // appears in the user list right away. The invitee finishes by either opening
+  // the emailed link or using "Forgot Password" to set a password and sign in.
+  async inviteAdmin(input: { name: string; email: string; phone?: string }): Promise<void> {
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    const phone = input.phone?.trim() || null;
+
+    if (!name) throw new Error('Please enter the new administrator’s name.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Please enter a valid email address.');
+
+    // Guard against an existing account (friendlier than a raw auth error).
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (existing) throw new Error('An account with this email already exists.');
+
+    const client = createIsolatedClient();
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: { name, phone, user_type: 'admin' },
+      },
+    });
+    if (error) {
+      const msg = (error.message || '').toLowerCase();
+      if (msg.includes('already registered') || msg.includes('already been registered')) {
+        throw new Error('An account with this email already exists.');
+      }
+      throw new Error(error.message || 'Could not send the admin invitation.');
+    }
+  }
+
   // Permanently deletes a user's profile row. The admin "god mode" ALL policy
   // (migration 011) authorizes this; FKs cascade/null related rows.
   // Returns the deleted rows so we can detect a silent RLS block (0 rows, no
@@ -101,6 +148,43 @@ export class AdminService {
         'The account could not be deleted. You may not have admin permission, or it was already removed. Try signing out and back in as an administrator.'
       );
     }
+  }
+
+  // ── Fare matrix (pricing) ────────────────────────────────────────────────────
+  async getFareMatrix(): Promise<FareMatrix> {
+    const { data, error } = await supabase.from('fare_matrix').select('*').limit(1).maybeSingle();
+    if (error) throw error;
+    return (
+      data || {
+        base_fare: 120,
+        per_km_rate: 10,
+        peak_hour_multiplier: 1,
+        peak_hours_enabled: false,
+      }
+    );
+  }
+
+  // Updates the single fare_matrix row (or seeds one if the table is empty).
+  // Admin write access is granted by migration 017.
+  async updateFareMatrix(values: Omit<FareMatrix, 'id'>): Promise<FareMatrix> {
+    const payload = {
+      base_fare: Number(values.base_fare),
+      per_km_rate: Number(values.per_km_rate),
+      peak_hour_multiplier: Number(values.peak_hour_multiplier),
+      peak_hours_enabled: Boolean(values.peak_hours_enabled),
+    };
+
+    const { data: existing } = await supabase.from('fare_matrix').select('id').limit(1).maybeSingle();
+    const query = existing?.id
+      ? supabase.from('fare_matrix').update(payload).eq('id', existing.id)
+      : supabase.from('fare_matrix').insert(payload);
+
+    const { data, error } = await query.select().single();
+    if (error) throw error;
+    if (!data) {
+      throw new Error('The fare could not be saved. You may not have admin permission.');
+    }
+    return data;
   }
 
   // ── Aggregate stats for the dashboard ────────────────────────────────────────

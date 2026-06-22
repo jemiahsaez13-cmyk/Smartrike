@@ -13,12 +13,15 @@ import { Card } from '@/views/components/common/Card';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
+import { PopularPlace } from '@/config/constants';
+import { PlaceCard } from '@/views/components/booking/PlaceCard';
+import { PopularPlaceService } from '@/models/services/PopularPlaceService';
+import { DriverMatchingService } from '@/models/services/DriverMatchingService';
+import { FareCalculationService } from '@/models/services/FareCalculationService';
 
-const POPULAR_DESTINATIONS = [
-  { id: 1, title: 'Public Market', sub: 'Boac town center', icon: 'storefront-outline', eta: '4 min', fare: '₱45.00' },
-  { id: 2, title: 'Marinduque State College', sub: 'Tanza, Boac', icon: 'school-outline', eta: '9 min', fare: '₱68.00' },
-  { id: 3, title: 'Provincial Hospital', sub: 'Emergency and outpatient', icon: 'hospital-building', eta: '7 min', fare: '₱60.00' },
-];
+const placeService = new PopularPlaceService();
+const driverMatching = new DriverMatchingService();
+const fareService = new FareCalculationService();
 
 export const PassengerDashboard = () => {
   const { user } = useAuth();
@@ -26,6 +29,9 @@ export const PassengerDashboard = () => {
   const navigation = useNavigation<any>();
   const [recentTrips, setRecentTrips] = useState<Booking[]>([]);
   const [fetchingActivity, setFetchingActivity] = useState(true);
+  const [places, setPlaces] = useState<PopularPlace[]>([]);
+  const [driversOnline, setDriversOnline] = useState<number | null>(null);
+  const [fareInfo, setFareInfo] = useState<{ base: number; perKm: number } | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
@@ -48,6 +54,21 @@ export const PassengerDashboard = () => {
     if (user?.id) {
       loadActivity();
     }
+
+    placeService
+      .listActive()
+      .then(setPlaces)
+      .catch(() => undefined);
+
+    driverMatching
+      .getOnlineCount()
+      .then(setDriversOnline)
+      .catch(() => setDriversOnline(0));
+
+    fareService
+      .getFareConfig()
+      .then((c) => setFareInfo({ base: c.baseFare, perKm: c.perKmRate }))
+      .catch(() => undefined);
   }, [user?.id]);
 
   const loadActivity = async () => {
@@ -79,8 +100,10 @@ export const PassengerDashboard = () => {
     Alert.alert('Saved Places', 'Use a popular destination below or book a ride to save it after your trip.');
   };
 
-  const bookDestination = (destination: string) => {
-    navigation.navigate('BookRide', { destination });
+  const bookPlace = (place: PopularPlace) => {
+    navigation.navigate('BookRide', {
+      place: { latitude: place.lat, longitude: place.lng, address: place.name },
+    });
   };
 
   const QuickAction = ({ icon, label, onPress, color = colors.primary }: any) => (
@@ -130,9 +153,15 @@ export const PassengerDashboard = () => {
         </View>
 
         <View style={styles.bookingStatusPill}>
-          <View style={[styles.statusDot, { backgroundColor: currentBooking ? colors.success : colors.accent }]} />
+          <View style={[styles.statusDot, { backgroundColor: currentBooking ? colors.success : driversOnline ? colors.success : colors.accent }]} />
           <Text style={styles.statusText}>
-            {currentBooking ? 'TRIP ACTIVE' : 'DRIVERS NEARBY'}
+            {currentBooking
+              ? 'TRIP ACTIVE'
+              : driversOnline === null
+              ? 'CHECKING DRIVERS…'
+              : driversOnline > 0
+              ? `${driversOnline} DRIVER${driversOnline > 1 ? 'S' : ''} ONLINE`
+              : 'NO DRIVERS ONLINE'}
           </Text>
         </View>
       </LinearGradient>
@@ -184,16 +213,16 @@ export const PassengerDashboard = () => {
               
               <View style={styles.statsGrid}>
                 <View style={styles.statBox}>
-                  <Text style={styles.statNum}>42</Text>
-                  <Text style={styles.statLabel}>Drivers</Text>
+                  <Text style={styles.statNum}>{driversOnline === null ? '—' : driversOnline}</Text>
+                  <Text style={styles.statLabel}>Online</Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statNum}>4m</Text>
-                  <Text style={styles.statLabel}>ETA</Text>
+                  <Text style={styles.statNum}>{fareInfo ? `₱${fareInfo.base}` : '—'}</Text>
+                  <Text style={styles.statLabel}>Base fare</Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statNum}>Fixed</Text>
-                  <Text style={styles.statLabel}>Rates</Text>
+                  <Text style={styles.statNum}>{fareInfo ? `₱${fareInfo.perKm}` : '—'}</Text>
+                  <Text style={styles.statLabel}>Per km</Text>
                 </View>
               </View>
 
@@ -250,28 +279,22 @@ export const PassengerDashboard = () => {
           <QuickAction icon="account-cog-outline" label="Profile" onPress={() => navigation.navigate('Profile')} color={colors.primary500} />
         </View>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>POPULAR PLACES</Text>
-          <TouchableOpacity onPress={handleSavedPlaces}>
-            <Text style={styles.seeAll}>See All</Text>
-          </TouchableOpacity>
-        </View>
+        {places.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>POPULAR PLACES</Text>
+              {places.length > 4 && (
+                <TouchableOpacity onPress={() => navigation.navigate('PopularPlaces')}>
+                  <Text style={styles.seeAll}>See All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
-        {POPULAR_DESTINATIONS.map(item => (
-          <TouchableOpacity key={item.id} onPress={() => bookDestination(item.title)} activeOpacity={0.8}>
-            <Card variant="elevated" padding="md" style={styles.placeCard}>
-              <View style={styles.placeIconBox}>
-                <MaterialCommunityIcons name={item.icon as any} size={24} color={colors.primary} />
-              </View>
-              <View style={styles.placeInfo}>
-                <Text style={styles.placeTitle}>{item.title}</Text>
-                <Text style={styles.placeSub}>{item.sub}</Text>
-                <Text style={[styles.placeMeta, typography.currency, { color: colors.secondary }]}>{item.eta} • {item.fare}</Text>
-              </View>
-              <Button variant="secondary" compact style={styles.bookMiniBtn}>Book</Button>
-            </Card>
-          </TouchableOpacity>
-        ))}
+            {places.slice(0, 4).map((place) => (
+              <PlaceCard key={place.id} place={place} onPress={() => bookPlace(place)} />
+            ))}
+          </>
+        )}
       </View>
       </Animated.ScrollView>
     </View>

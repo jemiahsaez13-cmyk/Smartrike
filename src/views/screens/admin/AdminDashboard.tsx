@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { AdminService, AdminStats, Analytics } from '@/models/services/AdminService';
+import { AdminService, AdminStats, Analytics, FareMatrix } from '@/models/services/AdminService';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
@@ -32,18 +32,21 @@ export const AdminDashboard = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [fare, setFare] = useState<FareMatrix | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [s, a, l] = await Promise.all([
+      const [s, a, l, f] = await Promise.all([
         adminService.getStats(),
         adminService.getAnalytics(),
         ActivityLogService.getRecentLogs(4),
+        adminService.getFareMatrix(),
       ]);
       setStats(s);
       setAnalytics(a);
       setLogs(l);
+      setFare(f);
     } catch (e) {
       console.error('Dashboard load failed:', e);
     } finally {
@@ -126,6 +129,37 @@ export const AdminDashboard = () => {
           <View style={styles.grid}>
             {kpiData.map(item => <KPICard key={item.id} item={item} />)}
           </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>CONFIGURATION</Text>
+          </View>
+          <Card variant="elevated" padding="none" style={styles.queueCard}>
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('FareSettings')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="cash-edit" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>
+                  {fare ? `Fare · ₱${fare.base_fare} base + ₱${fare.per_km_rate}/km` : 'Fare matrix'}
+                </Text>
+                <Text style={styles.queueLevel}>
+                  {fare?.peak_hours_enabled ? `Peak surcharge ×${fare.peak_hour_multiplier}` : 'Tap to edit pricing'}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('PlaceManagement')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="map-marker-multiple-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Popular Places</Text>
+                <Text style={styles.queueLevel}>Add, edit & upload destination photos</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+          </Card>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>VOLUME OVERVIEW · LAST 7 DAYS</Text>

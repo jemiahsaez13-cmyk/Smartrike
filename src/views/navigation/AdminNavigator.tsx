@@ -3,6 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { AdminDashboard } from '@/views/screens/admin/AdminDashboard';
 import { UserManagementScreen } from '@/views/screens/admin/UserManagementScreen';
+import { FareSettingsScreen } from '@/views/screens/admin/FareSettingsScreen';
+import { PlaceManagementScreen } from '@/views/screens/admin/PlaceManagementScreen';
 import { ActivityLogsScreen } from '@/views/screens/admin/ActivityLogsScreen';
 import { SystemHealthScreen } from '@/views/screens/admin/SystemHealthScreen';
 import { FranchiseManagementScreen } from '@/views/screens/admin/FranchiseManagementScreen';
@@ -54,6 +56,8 @@ export const AdminNavigator = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="AdminMain" component={AdminTabs} />
     <Stack.Screen name="UserManagement" component={UserManagementScreen} />
+    <Stack.Screen name="FareSettings" component={FareSettingsScreen} />
+    <Stack.Screen name="PlaceManagement" component={PlaceManagementScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} />
