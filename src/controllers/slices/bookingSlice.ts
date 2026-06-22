@@ -127,7 +127,7 @@ export const submitDriverRating = createAsyncThunk(
   'booking/rateByDriver',
   async (payload: { bookingId: string; rating: Rating }, { rejectWithValue }) => {
     try {
-      return await bookingService.rateTrip(payload.bookingId, payload.rating);
+      return await bookingService.rateTrip(payload.bookingId, payload.rating, 'driver');
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

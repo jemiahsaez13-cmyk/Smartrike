@@ -74,8 +74,12 @@ export class BookingService {
     return booking;
   }
 
-  async rateTrip(bookingId: string, rating: Rating): Promise<Booking> {
-    return await this.bookingRepo.submitRating(bookingId, rating);
+  async rateTrip(
+    bookingId: string,
+    rating: Rating,
+    target: 'passenger' | 'driver' = 'passenger'
+  ): Promise<Booking> {
+    return await this.bookingRepo.submitRating(bookingId, rating, target);
   }
 
   async cancelBooking(bookingId: string): Promise<Booking> {
