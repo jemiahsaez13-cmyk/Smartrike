@@ -2,6 +2,13 @@
 
 A mobile application for booking tricycle rides in Boac, Marinduque following strict MVC architecture.
 
+> ⚠️ **Pending DB migrations (action required):** migrations `020` and `021`
+> (e-money wallet tables + trip-settlement RPC) are **not yet applied** to the
+> live Supabase project — the current env only has the anon key, which can't run
+> DDL. The next dev with Supabase access must apply them. See
+> [`supabase/migrations/README.md`](supabase/migrations/README.md). Until then,
+> e-money settlement silently falls back to cash.
+
 ## Architecture
 
 ### Model Layer (Data & Business Logic)
@@ -46,8 +53,9 @@ EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_maps_key
    - adaptive-icon.png (1024x1024)
 
 5. Set up Supabase:
-   - Run migrations in `supabase/migrations/`
-   - Execute SQL files in order (001-005)
+   - Run migrations in `supabase/migrations/` **in numeric order (001 → 021)**
+   - See [`supabase/migrations/README.md`](supabase/migrations/README.md) for how
+     to apply them and which are still pending
 
 6. Start the app:
 \`\`\`bash
