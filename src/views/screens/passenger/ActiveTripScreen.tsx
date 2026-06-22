@@ -242,7 +242,17 @@ export const ActiveTripScreen = () => {
         <View style={styles.handle} />
         
         <View style={styles.driverSection}>
-          <View style={styles.driverInfo}>
+          <TouchableOpacity
+            style={styles.driverInfo}
+            onPress={() =>
+              currentBooking?.driver_id &&
+              navigation.navigate('DriverProfile', {
+                driverId: currentBooking.driver_id,
+              })
+            }
+            activeOpacity={0.75}
+            accessibilityLabel="View driver profile"
+          >
             <Surface style={styles.driverAvatar} elevation={2}>
               <MaterialCommunityIcons name="account-tie" size={36} color={colors.primary} />
             </Surface>
@@ -254,8 +264,11 @@ export const ActiveTripScreen = () => {
                   {(driver?.rating ?? 5).toFixed(1)} ({driver?.total_trips ?? 0} trips)
                 </Text>
               </View>
+              <Text style={[styles.ratingText, { color: colors.accent, marginTop: 2 }]}>
+                View profile →
+              </Text>
             </View>
-          </View>
+          </TouchableOpacity>
           <View style={styles.driverActions}>
             <TouchableOpacity style={styles.actionBtn} onPress={handleCallDriver} activeOpacity={0.76} accessibilityLabel="Call driver">
               <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />

@@ -4,7 +4,9 @@ import {
   Animated,
   Dimensions,
   Linking,
+  Modal,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -13,7 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { startTrip, completeTrip } from '@/controllers/slices/bookingSlice';
+import { startTrip, completeTrip, submitDriverRating } from '@/controllers/slices/bookingSlice';
 import { updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
@@ -49,6 +51,10 @@ export const DriverTripScreen = () => {
   );
   const [completing, setCompleting] = useState(false);
   const [passenger, setPassenger] = useState<User | null>(null);
+  const [ratingVisible, setRatingVisible] = useState(false);
+  const [ratingStars, setRatingStars] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   const passengerId = currentBooking?.passenger_id || null;
   const passengerName = passenger?.name || 'Passenger';
@@ -132,10 +138,8 @@ export const DriverTripScreen = () => {
             if (user?.id) {
               await dispatch(updateDriverStatus({ driverId: user.id, status: 'online' }));
             }
-            dispatch(clearCurrentTrip());
-            Alert.alert('Trip Complete!', 'Payment will be settled with the passenger.', [
-              { text: 'OK', onPress: () => navigation.navigate('DriverDashboard') },
-            ]);
+            // Show rating modal instead of immediate navigation
+            setRatingVisible(true);
           } catch {
             Alert.alert('Error', 'Failed to complete trip. Try again.');
           } finally {
@@ -144,6 +148,33 @@ export const DriverTripScreen = () => {
         },
       },
     ]);
+  };
+
+  const handleSubmitPassengerRating = async () => {
+    setSubmittingRating(true);
+    try {
+      if (currentBooking?.id) {
+        await dispatch(
+          submitDriverRating({
+            bookingId: currentBooking.id,
+            rating: { stars: ratingStars, comment: ratingComment, created_at: new Date().toISOString() } as any,
+          })
+        ).unwrap();
+      }
+    } catch {
+      // best-effort; proceed regardless
+    } finally {
+      setSubmittingRating(false);
+      setRatingVisible(false);
+      dispatch(clearCurrentTrip());
+      navigation.navigate('DriverDashboard');
+    }
+  };
+
+  const handleSkipRating = () => {
+    setRatingVisible(false);
+    dispatch(clearCurrentTrip());
+    navigation.navigate('DriverDashboard');
   };
 
   const handleSOS = () => {
@@ -294,6 +325,86 @@ export const DriverTripScreen = () => {
           </Button>
         )}
       </Animated.View>
+
+      {/* ── Rate Passenger Modal ────────────────────────────────── */}
+      <Modal
+        visible={ratingVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSkipRating}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.ratingCard}>
+            {/* Avatar */}
+            <View style={styles.ratingAvatarWrap}>
+              <MaterialCommunityIcons name="account-circle" size={52} color={colors.primary} />
+            </View>
+
+            <Text style={styles.ratingTitle}>Rate your passenger</Text>
+            <Text style={styles.ratingSubtitle}>
+              How was the ride with this passenger?
+            </Text>
+
+            {/* Stars */}
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => setRatingStars(n)}
+                  activeOpacity={0.7}
+                  accessibilityLabel={`${n} star`}
+                >
+                  <MaterialCommunityIcons
+                    name={n <= ratingStars ? 'star' : 'star-outline'}
+                    size={42}
+                    color={n <= ratingStars ? '#FBBF24' : colors.border}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Star label */}
+            <Text style={styles.starLabel}>
+              {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'][ratingStars]}
+            </Text>
+
+            {/* Comment */}
+            <TextInput
+              placeholder="Any comments about this passenger? (optional)"
+              value={ratingComment}
+              onChangeText={setRatingComment}
+              style={styles.commentInput}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={200}
+            />
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[styles.submitBtn, submittingRating && { opacity: 0.6 }]}
+              onPress={handleSubmitPassengerRating}
+              disabled={submittingRating}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#000000', '#1F1F1F']}
+                style={styles.submitGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.submitText}>
+                  {submittingRating ? 'Submitting…' : 'Submit & Go Online'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Skip */}
+            <TouchableOpacity onPress={handleSkipRating} style={styles.skipBtn} activeOpacity={0.7}>
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -424,4 +535,63 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
   },
+
+  // ── Rating Modal ──────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(13,27,42,0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.screen,
+  },
+  ratingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: spacing.xl,
+    alignItems: 'center',
+    ...shadows.xl,
+  },
+  ratingAvatarWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  ratingTitle: { ...typography.title, fontSize: 22, color: colors.text, marginBottom: 4 },
+  ratingSubtitle: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  starsRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.sm },
+  starLabel: {
+    ...typography.label,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    letterSpacing: 0.5,
+  },
+  commentInput: {
+    width: '100%',
+    minHeight: 72,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: spacing.md,
+    ...typography.body,
+    fontSize: 14,
+    color: colors.text,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  submitBtn: { width: '100%', height: 52, borderRadius: 14, overflow: 'hidden', marginBottom: spacing.sm },
+  submitGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  submitText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
+  skipBtn: { paddingVertical: spacing.sm },
+  skipText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
 });
