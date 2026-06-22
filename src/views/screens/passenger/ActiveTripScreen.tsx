@@ -43,6 +43,12 @@ export const ActiveTripScreen = () => {
   const plate = vehicle.plate_number || vehicle.plate || '—';
   const vehicleDesc = [vehicle.color, vehicle.model].filter(Boolean).join(' ') || 'FEDTODAB Tricycle';
 
+  const paymentMethod = currentBooking?.payment_method || 'cash';
+  const isEMoney = paymentMethod !== 'cash';
+  const paidViaEMoney = isEMoney && currentBooking?.payment_status === 'completed';
+  const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : 'cash';
+  const fareText = `₱${(currentBooking?.total_fare ?? 0).toFixed(2)}`;
+
   // Animation for the tracking card
   const slideAnim = useRef(new Animated.Value(height * 0.3)).current;
 
@@ -332,12 +338,25 @@ export const ActiveTripScreen = () => {
             <Text style={styles.waitText}>Enjoy your ride — your driver will end the trip on arrival.</Text>
           </View>
         ) : status === 'completed' ? (
-          <TouchableOpacity style={styles.completeBtn} onPress={() => setRatingVisible(true)} activeOpacity={0.85}>
-            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <MaterialCommunityIcons name="star" size={20} color="#fff" />
-              <Text style={styles.completeText}>Rate your trip</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <>
+            {paidViaEMoney ? (
+              <View style={styles.paidBanner}>
+                <MaterialCommunityIcons name="check-decagram" size={20} color={colors.success} />
+                <Text style={styles.paidText}>Paid {fareText} via {providerLabel}</Text>
+              </View>
+            ) : isEMoney ? (
+              <View style={styles.waitBanner}>
+                <MaterialCommunityIcons name="cash" size={20} color={colors.primary} />
+                <Text style={styles.waitText}>Please pay {fareText} in cash to your driver.</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity style={styles.completeBtn} onPress={() => setRatingVisible(true)} activeOpacity={0.85}>
+              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.completeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <MaterialCommunityIcons name="star" size={20} color="#fff" />
+                <Text style={styles.completeText}>Rate your trip</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </>
         ) : (
           <Button
             variant="outline"
@@ -369,6 +388,13 @@ export const ActiveTripScreen = () => {
             </View>
             <Text style={styles.ratingTitle}>Rate your trip</Text>
             <Text style={styles.ratingSubtitle}>How was your ride with {driverName}?</Text>
+
+            {paidViaEMoney && (
+              <View style={styles.paidChip}>
+                <MaterialCommunityIcons name="check-decagram" size={14} color={colors.success} />
+                <Text style={styles.paidChipText}>Paid {fareText} via {providerLabel}</Text>
+              </View>
+            )}
 
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -507,6 +533,28 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   waitText: { ...typography.body, fontSize: 13, color: colors.primaryDark, flex: 1 },
+  paidBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.successLight,
+    borderRadius: 14,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  paidText: { ...typography.label, fontSize: 13, color: colors.success, flex: 1 },
+  paidChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    backgroundColor: colors.successLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginBottom: spacing.md,
+  },
+  paidChipText: { ...typography.label, fontSize: 12, color: colors.success },
   sosBtn: { borderColor: colors.error, borderRadius: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', padding: spacing.lg },
   ratingCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
