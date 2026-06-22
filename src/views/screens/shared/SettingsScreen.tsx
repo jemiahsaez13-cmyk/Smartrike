@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -13,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
 import { Card } from '@/views/components/common/Card';
+import { notify } from '@/utils/confirm';
 import { colors, gradients, spacing, typography } from '@/views/styles/theme';
 
 interface SettingToggle {
@@ -45,7 +45,7 @@ export const SettingsScreen = () => {
     else if (key === 'vibration') setVibrationEnabled(val);
     else if (key === 'location') {
       if (!val) {
-        Alert.alert('Location Required', 'The app needs location access to match you with drivers. This cannot be disabled.');
+        notify('Location Required', 'The app needs location access to match you with drivers. This cannot be disabled.');
         return;
       }
       setLocationEnabled(val);
@@ -110,7 +110,7 @@ export const SettingsScreen = () => {
           <SettingRow
             label="Change Password"
             icon="lock-reset"
-            onPress={() => Alert.alert('Change Password', 'A password reset link will be sent to your email.')}
+            onPress={() => navigation.navigate('ChangePassword')}
           />
           <View style={styles.divider} />
           <SettingRow
@@ -126,19 +126,19 @@ export const SettingsScreen = () => {
           <SettingRow
             label="Help & FAQ"
             icon="help-circle-outline"
-            onPress={() => Alert.alert('Help', 'Contact FEDTODAB at the TODA dispatch office in Boac.')}
+            onPress={() => navigation.navigate('HelpSupport')}
           />
           <View style={styles.divider} />
           <SettingRow
             label="Report a Problem"
             icon="flag-outline"
-            onPress={() => Alert.alert('Report', 'Report issues to the dispatch office or use the in-app message on your active trip.')}
+            onPress={() => navigation.navigate('HelpSupport')}
           />
           <View style={styles.divider} />
           <SettingRow
             label="Privacy Policy"
             icon="shield-check-outline"
-            onPress={() => Alert.alert('Privacy Policy', 'Smart Trike collects location and booking data to provide services. Data is never sold to third parties.')}
+            onPress={() => notify('Privacy Policy', 'Smart Trike collects location and booking data to provide services. Data is never sold to third parties.')}
           />
         </Card>
 

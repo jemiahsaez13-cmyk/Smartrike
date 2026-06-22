@@ -3,6 +3,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Linking,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -16,11 +17,14 @@ import { startTrip, completeTrip } from '@/controllers/slices/bookingSlice';
 import { updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
+import { UserRepository } from '@/models/repositories/UserRepository';
+import { User } from '@/models/types';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatETA, formatDistance } from '@/utils/locationUtils';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 
 const { height } = Dimensions.get('window');
+const userRepo = new UserRepository();
 
 const UBER_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
@@ -44,6 +48,38 @@ export const DriverTripScreen = () => {
     currentBooking?.status === 'in-transit' ? 'in_trip' : 'to_pickup'
   );
   const [completing, setCompleting] = useState(false);
+  const [passenger, setPassenger] = useState<User | null>(null);
+
+  const passengerId = currentBooking?.passenger_id || null;
+  const passengerName = passenger?.name || 'Passenger';
+
+  useEffect(() => {
+    let active = true;
+    if (!passengerId) return;
+    userRepo
+      .findById(passengerId)
+      .then((p) => {
+        if (active) setPassenger(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [passengerId]);
+
+  const handleCallPassenger = () => {
+    const phone = passenger?.phone;
+    if (!phone) {
+      Alert.alert('Call Passenger', 'No contact number is on file for this passenger.');
+      return;
+    }
+    Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Call Passenger', `Passenger: ${phone}`));
+  };
+
+  const handleMessagePassenger = () => {
+    if (!currentBooking?.id) return;
+    navigation.navigate('Chat', { bookingId: currentBooking.id, otherName: passengerName });
+  };
 
   const slideAnim = useRef(new Animated.Value(height * 0.4)).current;
 
@@ -185,20 +221,20 @@ export const DriverTripScreen = () => {
         {/* Passenger info */}
         <View style={styles.passengerRow}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>P</Text>
+            <Text style={styles.avatarText}>{passengerName.charAt(0).toUpperCase()}</Text>
           </View>
           <View style={styles.passengerInfo}>
-            <Text style={styles.passengerName}>Passenger</Text>
+            <Text style={styles.passengerName}>{passengerName}</Text>
             <View style={styles.ratingRow}>
-              <MaterialCommunityIcons name="star" size={14} color={colors.warning} />
-              <Text style={styles.ratingText}>4.8</Text>
+              <MaterialCommunityIcons name="map-marker-distance" size={14} color={colors.textSecondary} />
+              <Text style={styles.ratingText}>{formatDistance(currentBooking.distance ?? 0)} trip</Text>
             </View>
           </View>
           <View style={styles.contactRow}>
-            <TouchableOpacity style={styles.contactBtn}>
+            <TouchableOpacity style={styles.contactBtn} onPress={handleCallPassenger} activeOpacity={0.8}>
               <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.contactBtn}>
+            <TouchableOpacity style={styles.contactBtn} onPress={handleMessagePassenger} activeOpacity={0.8}>
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>

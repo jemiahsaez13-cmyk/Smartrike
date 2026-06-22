@@ -55,4 +55,20 @@ export class FranchiseService {
     if (error) throw error;
     return data;
   }
+
+  // Patches arbitrary fields (e.g. document review state) without forcing a
+  // lifecycle status change — used by the admin document review flow.
+  async patch(
+    id: string,
+    patch: Partial<FranchiseApplication>
+  ): Promise<FranchiseApplication> {
+    const { data, error } = await supabase
+      .from('franchise_applications')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
 }

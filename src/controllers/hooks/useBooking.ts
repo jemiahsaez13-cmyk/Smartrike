@@ -8,8 +8,15 @@ export const useBooking = () => {
   const { currentBooking, loading, error, searchingForDriver } = useAppSelector(state => state.booking);
 
   const bookRide = useCallback(
-    async (passengerId: string, pickup: Location, dropoff: Location) => {
-      return dispatch(createBooking({ passengerId, pickup, dropoff })).unwrap();
+    async (
+      passengerId: string,
+      pickup: Location,
+      dropoff: Location,
+      options?: { notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' }
+    ) => {
+      return dispatch(
+        createBooking({ passengerId, pickup, dropoff, notes: options?.notes, paymentMethod: options?.paymentMethod })
+      ).unwrap();
     },
     [dispatch]
   );

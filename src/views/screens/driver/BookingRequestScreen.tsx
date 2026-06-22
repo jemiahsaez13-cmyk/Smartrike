@@ -71,15 +71,15 @@ export const BookingRequestScreen = () => {
             <View style={styles.requestMetaRow}>
               <View style={styles.requestMeta}>
                 <MaterialCommunityIcons name="clock-outline" size={16} color={colors.secondary} />
-                <Text style={styles.requestMetaText}>Pickup in 4 min</Text>
+                <Text style={styles.requestMetaText}>~{request.estimated_duration ?? Math.max(1, Math.round((request.distance ?? 0) / 22 * 60))} min trip</Text>
               </View>
               <View style={styles.requestMeta}>
                 <MaterialCommunityIcons name="map-marker-distance" size={16} color={colors.primary} />
-                <Text style={styles.requestMetaText}>{request.distance.toFixed(1)} km route</Text>
+                <Text style={styles.requestMetaText}>{(request.distance ?? 0).toFixed(1)} km route</Text>
               </View>
               <View style={styles.requestMeta}>
                 <MaterialCommunityIcons name="cash" size={16} color={colors.success} />
-                <Text style={styles.requestMetaText}>Cash fare</Text>
+                <Text style={styles.requestMetaText}>{(request.payment_method || 'cash')} fare</Text>
               </View>
             </View>
 

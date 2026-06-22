@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Alert, Keyboard, KeyboardAvoidingView, Platform,
+  Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
   SafeAreaView, Animated, Linking,
 } from 'react-native';
@@ -11,6 +11,7 @@ import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Input } from '@/views/components/common/Input';
@@ -47,7 +48,7 @@ export const LoginScreen = () => {
     const cleanPassword = password.trim();
 
     if (!cleanEmail || !cleanPassword) {
-      Alert.alert('Missing Info', 'Please enter both email and password to continue.');
+      notify('Missing info', 'Please enter both email and password to continue.');
       return;
     }
 
@@ -55,7 +56,7 @@ export const LoginScreen = () => {
       await login(cleanEmail, cleanPassword);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
-      Alert.alert('Sign In Failed', msg, [{ text: 'Try Again' }]);
+      notify('Sign in failed', msg);
     }
   };
 
@@ -74,7 +75,7 @@ export const LoginScreen = () => {
         if (canOpen) await Linking.openURL(data.url);
       }
     } catch {
-      Alert.alert(
+      notify(
         'Google Sign-In Unavailable',
         'Google login isn’t configured yet. Please sign in with email or phone.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
       );
@@ -94,8 +95,8 @@ export const LoginScreen = () => {
       profile_photo_url: null,
       created_at: new Date(),
       status: 'active',
-      rating: 5.0,
-      total_trips: 150,
+      rating: 0,
+      total_trips: 0,
     };
     dispatch(setDemoUserReducer(demoUser));
   };

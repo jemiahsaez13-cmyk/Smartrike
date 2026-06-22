@@ -1,49 +1,92 @@
-import React from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
-import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { AdminService, AdminStats, Analytics, FareMatrix } from '@/models/services/AdminService';
+import { ActivityLogService } from '@/models/services/ActivityLogService';
+import { ActivityLog } from '@/models/entities/ActivityLog';
+import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
-const kpiData = [
-  { id: '1', title: 'Total Revenue', value: '₱45,230', trend: '+12.5%', isPositive: true, icon: 'cash-multiple' },
-  { id: '2', title: 'Active Drivers', value: '42', trend: '+4', isPositive: true, icon: 'car-hatchback' },
-  { id: '3', title: 'Completed Trips', value: '1,284', trend: '+8.2%', isPositive: true, icon: 'check-circle-outline' },
-  { id: '4', title: 'Avg. Wait Time', value: '4.2m', trend: '-1.5m', isPositive: true, icon: 'timer-outline' },
-];
+const adminService = new AdminService();
 
-const recentActivity = [
-  { id: '1', action: 'System Alert', details: 'High demand in Boac Market area', time: '2 mins ago', type: 'alert' },
-  { id: '2', action: 'Driver Onboarded', details: 'Juan Dela Cruz (Plate: XYZ-123) verified', time: '15 mins ago', type: 'success' },
-  { id: '3', action: 'Trip Cancelled', details: 'User cancelled booking #1029', time: '45 mins ago', type: 'warning' },
-];
+const peso = (n: number) =>
+  `₱${Math.round(n).toLocaleString('en-PH')}`;
 
-const operationalQueue = [
-  { id: '1', title: '3 driver renewals need MTOP review', level: 'Compliance', icon: 'shield-alert-outline', color: colors.warning },
-  { id: '2', title: 'Market zone queue exceeded 10 minutes', level: 'Dispatch', icon: 'map-clock-outline', color: colors.coral },
-  { id: '3', title: '2 cancelled trips require audit', level: 'Support', icon: 'clipboard-search-outline', color: colors.secondary },
-];
+const relativeTime = (iso: any): string => {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return '';
+  const diff = Date.now() - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
 
 export const AdminDashboard = () => {
   const navigation = useNavigation<any>();
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [fare, setFare] = useState<FareMatrix | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [s, a, l, f] = await Promise.all([
+        adminService.getStats(),
+        adminService.getAnalytics(),
+        ActivityLogService.getRecentLogs(4),
+        adminService.getFareMatrix(),
+      ]);
+      setStats(s);
+      setAnalytics(a);
+      setLogs(l);
+      setFare(f);
+    } catch (e) {
+      console.error('Dashboard load failed:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
+  };
+
+  const kpiData = [
+    { id: '1', title: 'Total Revenue', value: stats ? peso(stats.revenue) : '—', icon: 'cash-multiple' },
+    { id: '2', title: 'Active Drivers', value: stats ? `${stats.activeDrivers}` : '—', icon: 'car-hatchback' },
+    { id: '3', title: 'Completed Trips', value: stats ? `${stats.completedTrips}` : '—', icon: 'check-circle-outline' },
+    { id: '4', title: 'Total Users', value: stats ? `${stats.totalUsers}` : '—', icon: 'account-group-outline' },
+  ];
+
+  // Operations queue derived from live counts; only show what needs attention.
+  const queue: { id: string; title: string; level: string; icon: string; route: string }[] = [];
+  if (stats?.pendingFranchises) queue.push({ id: 'f', title: `${stats.pendingFranchises} franchise request${stats.pendingFranchises > 1 ? 's' : ''} need review`, level: 'Compliance · MTOP', icon: 'shield-alert-outline', route: 'MTOP' });
+  if (stats?.pendingDrivers) queue.push({ id: 'd', title: `${stats.pendingDrivers} driver${stats.pendingDrivers > 1 ? 's' : ''} awaiting verification`, level: 'Onboarding', icon: 'account-clock-outline', route: 'UserManagement' });
+  if (stats?.cancelledTrips) queue.push({ id: 'c', title: `${stats.cancelledTrips} cancelled trip${stats.cancelledTrips > 1 ? 's' : ''} on record`, level: 'Support · Audit', icon: 'clipboard-search-outline', route: 'Logs' });
+
+  const weekBars = analytics?.bars.Weekly ?? [];
+  const weekLabels = analytics?.labels.Weekly ?? [];
+  const maxBar = Math.max(1, ...weekBars);
 
   const KPICard = ({ item }: { item: typeof kpiData[0] }) => (
     <Card variant="elevated" padding="md" style={styles.kpiCard}>
       <View style={styles.kpiHeader}>
         <View style={styles.iconBox}>
           <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
-        </View>
-        <View style={[styles.trendBadge, { backgroundColor: item.isPositive ? colors.successLight : colors.errorLight }]}>
-          <MaterialCommunityIcons
-            name={item.isPositive ? 'arrow-up-right' : 'arrow-down-right'}
-            size={12}
-            color={item.isPositive ? colors.success : colors.error}
-          />
-          <Text style={[styles.trendText, { color: item.isPositive ? colors.success : colors.error }]}>
-            {item.trend}
-          </Text>
         </View>
       </View>
       <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
@@ -53,13 +96,18 @@ export const AdminDashboard = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+      >
         <LinearGradient colors={gradients.admin} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>Command Center</Text>
             <View style={styles.liveIndicatorRow}>
               <View style={styles.liveDot} />
-              <Text style={styles.liveText}>Live data syncing</Text>
+              <Text style={styles.liveText}>Live · {stats ? `${stats.totalUsers} users` : 'syncing'}</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -83,28 +131,67 @@ export const AdminDashboard = () => {
           </View>
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>VOLUME OVERVIEW</Text>
+            <Text style={styles.sectionLabel}>CONFIGURATION</Text>
+          </View>
+          <Card variant="elevated" padding="none" style={styles.queueCard}>
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('FareSettings')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="cash-edit" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>
+                  {fare ? `Fare · ₱${fare.base_fare} base + ₱${fare.per_km_rate}/km` : 'Fare matrix'}
+                </Text>
+                <Text style={styles.queueLevel}>
+                  {fare?.peak_hours_enabled ? `Peak surcharge ×${fare.peak_hour_multiplier}` : 'Tap to edit pricing'}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('PlaceManagement')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="map-marker-multiple-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Popular Places</Text>
+                <Text style={styles.queueLevel}>Add, edit & upload destination photos</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+          </Card>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>VOLUME OVERVIEW · LAST 7 DAYS</Text>
           </View>
           <Card variant="elevated" padding="lg" style={styles.chartCard}>
             <View style={styles.chartHeader}>
               <View>
-                <Text style={[styles.chartTotal, typography.number]}>342</Text>
-                <Text style={styles.chartSubtitle}>Total rides completed today</Text>
+                <Text style={[styles.chartTotal, typography.number]}>{analytics?.metrics.Daily.trips ?? 0}</Text>
+                <Text style={styles.chartSubtitle}>Trips completed today</Text>
               </View>
               <View style={styles.chartBadge}>
                 <MaterialCommunityIcons name="trending-up" size={14} color={colors.success} />
-                <Text style={styles.chartBadgeText}>HEALTHY</Text>
+                <Text style={styles.chartBadgeText}>LIVE</Text>
               </View>
             </View>
             <View style={styles.chartBars}>
-              {[40, 60, 45, 80, 50, 70, 90].map((barHeight, idx) => (
+              {weekBars.map((value, idx) => (
                 <View key={idx} style={styles.barColumn}>
                   <View style={[styles.barTrack, { height: 100 }]}>
-                    <View style={[styles.bar, { height: `${barHeight}%` }]} />
+                    <View style={[styles.bar, { height: `${Math.max(4, (value / maxBar) * 100)}%` }]} />
                   </View>
-                  <Text style={styles.barLabel}>{idx * 2 + 8}h</Text>
+                  <Text style={styles.barLabel}>{weekLabels[idx]}</Text>
                 </View>
               ))}
+              {weekBars.length === 0 &&
+                [0, 1, 2, 3, 4, 5, 6].map((idx) => (
+                  <View key={idx} style={styles.barColumn}>
+                    <View style={[styles.barTrack, { height: 100 }]}>
+                      <View style={[styles.bar, { height: '4%' }]} />
+                    </View>
+                  </View>
+                ))}
             </View>
           </Card>
 
@@ -115,21 +202,33 @@ export const AdminDashboard = () => {
             </TouchableOpacity>
           </View>
           <Card variant="elevated" padding="none" style={styles.queueCard}>
-            {operationalQueue.map((item, index) => (
-              <View key={item.id}>
-                <TouchableOpacity style={styles.queueItem} activeOpacity={0.76}>
-                  <View style={[styles.queueIcon, { backgroundColor: `${item.color}12` }]}>
-                    <MaterialCommunityIcons name={item.icon as any} size={20} color={item.color} />
-                  </View>
-                  <View style={styles.queueCopy}>
-                    <Text style={styles.queueTitle}>{item.title}</Text>
-                    <Text style={styles.queueLevel}>{item.level}</Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
-                </TouchableOpacity>
-                {index < operationalQueue.length - 1 && <View style={styles.divider} />}
+            {queue.length === 0 ? (
+              <View style={styles.queueItem}>
+                <View style={[styles.queueIcon, { backgroundColor: colors.successLight }]}>
+                  <MaterialCommunityIcons name="check-circle-outline" size={20} color={colors.success} />
+                </View>
+                <View style={styles.queueCopy}>
+                  <Text style={styles.queueTitle}>All clear</Text>
+                  <Text style={styles.queueLevel}>No pending operations</Text>
+                </View>
               </View>
-            ))}
+            ) : (
+              queue.map((item, index) => (
+                <View key={item.id}>
+                  <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate(item.route)}>
+                    <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                      <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
+                    </View>
+                    <View style={styles.queueCopy}>
+                      <Text style={styles.queueTitle}>{item.title}</Text>
+                      <Text style={styles.queueLevel}>{item.level}</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+                  </TouchableOpacity>
+                  {index < queue.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))
+            )}
           </Card>
 
           <View style={styles.sectionHeader}>
@@ -139,27 +238,41 @@ export const AdminDashboard = () => {
             </TouchableOpacity>
           </View>
           <Card variant="elevated" padding="none" style={styles.logCard}>
-            {recentActivity.map((log, index) => {
-              const statusColor = log.type === 'success' ? colors.success : log.type === 'alert' ? colors.warning : colors.error;
-              const statusBg = log.type === 'success' ? colors.successLight : log.type === 'alert' ? colors.warningLight : colors.errorLight;
-              return (
-                <View key={log.id}>
-                  <View style={styles.logItem}>
-                    <View style={[styles.logIndicator, { backgroundColor: statusBg }]}>
-                      <View style={[styles.logDot, { backgroundColor: statusColor }]} />
-                    </View>
-                    <View style={styles.logContent}>
-                      <View style={styles.logTitleRow}>
-                        <Text style={styles.logAction}>{log.action}</Text>
-                        <Text style={styles.logTime}>{log.time}</Text>
-                      </View>
-                      <Text style={styles.logDetails}>{log.details}</Text>
-                    </View>
-                  </View>
-                  {index < recentActivity.length - 1 && <View style={styles.divider} />}
+            {logs.length === 0 ? (
+              <View style={styles.logItem}>
+                <View style={[styles.logIndicator, { backgroundColor: colors.surfaceAlt }]}>
+                  <View style={[styles.logDot, { backgroundColor: colors.textLight }]} />
                 </View>
-              );
-            })}
+                <View style={styles.logContent}>
+                  <Text style={styles.logAction}>No recent activity</Text>
+                  <Text style={styles.logDetails}>Events will appear here as they happen.</Text>
+                </View>
+              </View>
+            ) : (
+              logs.map((log, index) => {
+                const statusColor =
+                  log.severity === 'success' ? colors.success : log.severity === 'warning' ? colors.warning : log.severity === 'error' ? colors.error : colors.info;
+                const statusBg =
+                  log.severity === 'success' ? colors.successLight : log.severity === 'warning' ? colors.warningLight : log.severity === 'error' ? colors.errorLight : colors.infoLight;
+                return (
+                  <View key={log.id || index}>
+                    <View style={styles.logItem}>
+                      <View style={[styles.logIndicator, { backgroundColor: statusBg }]}>
+                        <View style={[styles.logDot, { backgroundColor: statusColor }]} />
+                      </View>
+                      <View style={styles.logContent}>
+                        <View style={styles.logTitleRow}>
+                          <Text style={styles.logAction}>{log.action_type.replace(/_/g, ' ')}</Text>
+                          <Text style={styles.logTime}>{relativeTime(log.created_at)}</Text>
+                        </View>
+                        <Text style={styles.logDetails} numberOfLines={2}>{log.description}</Text>
+                      </View>
+                    </View>
+                    {index < logs.length - 1 && <View style={styles.divider} />}
+                  </View>
+                );
+              })
+            )}
           </Card>
         </View>
       </ScrollView>

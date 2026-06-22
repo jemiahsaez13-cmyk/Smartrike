@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { addIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { addIncomingRequest, removeIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { RealtimeService } from '@/models/services/RealtimeService';
@@ -13,12 +13,8 @@ import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
-
-const DEMAND_ZONES = [
-  { area: 'Boac Public Market', demand: 'High', eta: '4 min', color: colors.error },
-  { area: 'Terminal / Town Plaza', demand: 'Moderate', eta: '6 min', color: colors.warning },
-  { area: 'MSC Tanza Gate', demand: 'Steady', eta: '9 min', color: colors.success },
-];
+import { DRIVER_GOAL_DAILY } from '@/config/constants';
+import { formatDistance } from '@/utils/locationUtils';
 
 export const DriverDashboard = () => {
   const dispatch = useAppDispatch();
@@ -29,6 +25,20 @@ export const DriverDashboard = () => {
   const realtimeRef = useRef<RealtimeService | null>(null);
   if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
+
+  // Real goal progress + a status-appropriate message (no canned copy).
+  const goalPct = Math.min(100, ((dailyEarnings || 0) / DRIVER_GOAL_DAILY) * 100);
+  const remaining = Math.max(0, DRIVER_GOAL_DAILY - (dailyEarnings || 0));
+  const goalMessage =
+    remaining <= 0
+      ? 'Goal reached — great work today!'
+      : dailyEarnings > 0
+      ? `₱${remaining.toFixed(0)} more to hit today's goal.`
+      : 'Complete trips to start earning toward your goal.';
+  const ratingLabel = user?.rating ? user.rating.toFixed(1) : 'New';
+
+  // Live ride requests, newest first (populated by realtime + polling).
+  const liveRequests = useMemo(() => incomingRequests.slice(0, 4), [incomingRequests]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -51,21 +61,33 @@ export const DriverDashboard = () => {
     if (user?.id) dispatch(fetchCompletedTrips(user.id));
   }, [dispatch, user?.id]);
 
+  // While online, keep the incoming-request queue in sync with the backend:
+  // an immediate fetch + lightweight polling, plus a realtime subscription so
+  // new bookings appear the instant a passenger requests one. Requests that get
+  // taken by another driver (or cancelled) are pruned from the queue.
   useEffect(() => {
     if (!isOnline || !user?.id) return;
     let cancelled = false;
     const realtime = realtimeRef.current!;
+    const repo = new BookingRepository();
 
-    // 1. Seed the list with any already-pending requests.
-    new BookingRepository()
-      .findActiveBookings()
-      .then((bookings) => {
-        if (cancelled) return;
-        bookings
-          .filter((booking) => booking.status === 'pending')
-          .forEach((booking) => dispatch(addIncomingRequest(booking)));
-      })
-      .catch(() => undefined);
+    // Keep the incoming-request queue in sync with the backend: add new pending
+    // requests and prune any that were taken by another driver or cancelled.
+    const sync = () =>
+      repo
+        .findActiveBookings()
+        .then((bookings) => {
+          if (cancelled) return;
+          bookings.forEach((b) => {
+            if (b.status === 'pending' && !b.driver_id) dispatch(addIncomingRequest(b));
+            else dispatch(removeIncomingRequest(b.id));
+          });
+        })
+        .catch(() => undefined);
+
+    // 1. Seed + lightweight polling so taken/cancelled requests fall off.
+    sync();
+    const poll = setInterval(sync, 10000);
 
     // 2. Push new pending bookings as they are created (no re-toggle needed).
     const bookingsKey = realtime.subscribeToNewBookings((payload) => {
@@ -77,6 +99,7 @@ export const DriverDashboard = () => {
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
       realtime.unsubscribe(bookingsKey);
       stopWatchingLocation();
     };
@@ -145,18 +168,18 @@ export const DriverDashboard = () => {
       <View style={styles.body}>
         <View style={styles.statsRow}>
           <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(2)}`} icon="cash" color={colors.success} />
-          <StatBox label="Rating" value={(user?.rating || 5.0).toFixed(1)} icon="star" color={colors.warning} />
+          <StatBox label="Rating" value={ratingLabel} icon="star" color={colors.warning} />
         </View>
 
         <Card variant="elevated" padding="lg" style={styles.goalCard}>
           <View style={styles.goalHeader}>
             <Text style={styles.goalTitle}>Daily Goal</Text>
-            <Text style={[styles.goalValue, typography.currency]}>₱{(dailyEarnings || 0).toFixed(2)} / ₱800.00</Text>
+            <Text style={[styles.goalValue, typography.currency]}>₱{(dailyEarnings || 0).toFixed(2)} / ₱{DRIVER_GOAL_DAILY.toFixed(2)}</Text>
           </View>
           <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${Math.min(100, ((dailyEarnings || 0) / 800) * 100)}%` }]} />
+            <View style={[styles.progressFill, { width: `${goalPct}%` }]} />
           </View>
-          <Text style={styles.goalSubtitle}>You're almost there! Just a few more rides.</Text>
+          <Text style={styles.goalSubtitle}>{goalMessage}</Text>
         </Card>
 
         {incomingRequests.length > 0 && (
@@ -172,21 +195,47 @@ export const DriverDashboard = () => {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.sectionLabel}>DEMAND HEATMAP</Text>
-        {DEMAND_ZONES.map((zone) => (
-          <Card key={zone.area} variant="outlined" padding="md" style={styles.zoneCard}>
-            <View style={[styles.zoneIcon, { backgroundColor: zone.color + '15' }]}>
-              <MaterialCommunityIcons name="map-marker-radius" size={24} color={zone.color} />
+        <Text style={styles.sectionLabel}>LIVE RIDE REQUESTS</Text>
+        {!isOnline ? (
+          <Card variant="outlined" padding="md" style={styles.zoneCard}>
+            <View style={[styles.zoneIcon, { backgroundColor: colors.textMuted + '15' }]}>
+              <MaterialCommunityIcons name="power" size={24} color={colors.textMuted} />
             </View>
             <View style={styles.zoneInfo}>
-              <Text style={styles.zoneArea}>{zone.area}</Text>
-              <Text style={styles.zoneMeta}>{zone.demand} Demand • {zone.eta} Away</Text>
+              <Text style={styles.zoneArea}>You're offline</Text>
+              <Text style={styles.zoneMeta}>Go online to receive ride requests</Text>
             </View>
-            <TouchableOpacity style={styles.goBtn}>
-              <Text style={styles.goText}>GO</Text>
-            </TouchableOpacity>
           </Card>
-        ))}
+        ) : liveRequests.length === 0 ? (
+          <Card variant="outlined" padding="md" style={styles.zoneCard}>
+            <View style={[styles.zoneIcon, { backgroundColor: colors.success + '15' }]}>
+              <MaterialCommunityIcons name="radar" size={24} color={colors.success} />
+            </View>
+            <View style={styles.zoneInfo}>
+              <Text style={styles.zoneArea}>Waiting for requests</Text>
+              <Text style={styles.zoneMeta}>No ride requests nearby right now</Text>
+            </View>
+          </Card>
+        ) : (
+          liveRequests.map((req) => (
+            <TouchableOpacity key={req.id} activeOpacity={0.85} onPress={() => navigation.navigate('BookingRequests')}>
+              <Card variant="outlined" padding="md" style={styles.zoneCard}>
+                <View style={[styles.zoneIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <MaterialCommunityIcons name="map-marker-radius" size={24} color={colors.primary} />
+                </View>
+                <View style={styles.zoneInfo}>
+                  <Text style={styles.zoneArea} numberOfLines={1}>{req.dropoff_location?.address || 'Drop-off'}</Text>
+                  <Text style={styles.zoneMeta} numberOfLines={1}>
+                    {req.pickup_location?.address || 'Pickup'} • {formatDistance(req.distance ?? 0)} • ₱{(req.total_fare ?? 0).toFixed(0)}
+                  </Text>
+                </View>
+                <View style={styles.goBtn}>
+                  <Text style={styles.goText}>VIEW</Text>
+                </View>
+              </Card>
+            </TouchableOpacity>
+          ))
+        )}
 
         <View style={styles.earningsSectionHeader}>
           <Text style={styles.sectionLabel}>RECENT EARNINGS</Text>

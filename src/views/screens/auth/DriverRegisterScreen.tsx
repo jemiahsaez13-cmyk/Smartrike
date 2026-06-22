@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, KeyboardAvoidingView,
-  Platform, TouchableOpacity, Alert, SafeAreaView, Animated, Keyboard,
+  Platform, TouchableOpacity, SafeAreaView, Animated, Keyboard,
 } from 'react-native';
 import { Text, TextInput, Divider } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { colors, spacing, typography, radius, shadows } from '@/views/styles/the
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { notify } from '@/utils/confirm';
 
 export const DriverRegisterScreen = () => {
   const navigation = useNavigation<any>();
@@ -17,7 +18,9 @@ export const DriverRegisterScreen = () => {
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
     email: '',
     phone: '',
     password: '',
@@ -44,7 +47,8 @@ export const DriverRegisterScreen = () => {
     const newErrors: Record<string, string> = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!formData.name.trim()) newErrors.name = 'Full name is required';
+    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
     
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -72,14 +76,18 @@ export const DriverRegisterScreen = () => {
   const handleRegister = async () => {
     Keyboard.dismiss();
     if (!validate()) {
-      Alert.alert('Validation Error', 'Please check the highlighted fields.');
+      notify('Check your details', 'Please complete the highlighted fields.');
       return;
     }
 
     setLoading(true);
     try {
-      await register(formData.email.trim(), formData.password, {
-        name: formData.name.trim(),
+      const fullName = [formData.firstName, formData.middleName, formData.lastName]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(' ');
+      const result: any = await register(formData.email.trim(), formData.password, {
+        name: fullName,
         phone: formData.phone.trim(),
         user_type: 'driver',
         license_number: formData.license_number.trim(),
@@ -90,9 +98,18 @@ export const DriverRegisterScreen = () => {
           model: formData.vehicle_model.trim(),
         },
       });
+      if (result?.needsEmailConfirmation) {
+        setLoading(false);
+        notify(
+          'Confirm your email',
+          'Your driver application was submitted. We sent a confirmation link to your email — tap it, then sign in to continue.'
+        );
+        navigation.navigate('Login');
+        return;
+      }
     } catch (error: any) {
       const msg = typeof error === 'string' ? error : error?.message || 'Application submission failed.';
-      Alert.alert('Registration Failed', msg);
+      notify('Registration failed', msg);
       setLoading(false);
     }
   };
@@ -143,10 +160,28 @@ export const DriverRegisterScreen = () => {
             {/* Personal Info */}
             <View style={styles.formCard}>
               <SectionHeader title="Personal Information" icon="account-details" />
+              <View style={styles.nameRow}>
+                <Input
+                  label="First name"
+                  placeholder="Juan"
+                  containerStyle={styles.nameField}
+                  autoCapitalize="words"
+                  {...field('firstName')}
+                  left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
+                />
+                <Input
+                  label="Last name"
+                  placeholder="Dela Cruz"
+                  containerStyle={styles.nameField}
+                  autoCapitalize="words"
+                  {...field('lastName')}
+                />
+              </View>
               <Input
-                label="Full name"
-                placeholder="Juan Dela Cruz"
-                {...field('name')}
+                label="Middle name (optional)"
+                placeholder="Reyes"
+                autoCapitalize="words"
+                {...field('middleName')}
                 left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
               />
               <Input
@@ -281,6 +316,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.lg,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  nameField: {
+    flex: 1,
+    width: undefined,
   },
   title: {
     ...typography.h1,

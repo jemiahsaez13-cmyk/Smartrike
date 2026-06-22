@@ -1,10 +1,10 @@
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
-import { confirmDialog } from '@/utils/dialog';
+import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
@@ -12,8 +12,7 @@ export const ProfileScreen = () => {
   const navigation = useNavigation<any>();
 
   const handleLogout = async () => {
-    // confirmDialog works on web too (Alert.alert is a no-op there).
-    const ok = await confirmDialog('Log Out', 'Are you sure you want to log out?', {
+    const ok = await confirm('Log Out', 'Are you sure you want to log out?', {
       confirmText: 'Log Out',
       destructive: true,
     });
@@ -21,7 +20,7 @@ export const ProfileScreen = () => {
     try {
       await logout();
     } catch {
-      // Best-effort: signOut clears local auth state regardless of remote result.
+      // Best-effort: logout clears local auth state regardless of remote result.
     }
   };
 
@@ -82,11 +81,15 @@ export const ProfileScreen = () => {
         <TouchableOpacity
           style={styles.identity}
           activeOpacity={0.7}
-          onPress={() => Alert.alert('Edit Profile', 'Coming soon')}
+          onPress={() => navigation.navigate('EditProfile')}
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
-          </View>
+          {user?.profile_photo_url ? (
+            <Image source={{ uri: user.profile_photo_url }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</Text>
+            </View>
+          )}
           <View style={styles.identityCopy}>
             <Text style={styles.name} numberOfLines={1}>{user?.name || 'User'}</Text>
             <View style={styles.roleBadge}>
@@ -96,13 +99,32 @@ export const ProfileScreen = () => {
           <MaterialCommunityIcons name="chevron-right" size={24} color={colors.textLight} />
         </TouchableOpacity>
 
-        {/* Stats */}
+        {/* Stats — role-appropriate. Passengers don't carry a public rating, so
+            they see Trips + Status; drivers keep their rating. */}
         <View style={styles.statsCard}>
-          <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : '5.0'} label="Rating" />
-          <View style={styles.statDivider} />
-          <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
-          <View style={styles.statDivider} />
-          <Stat icon="shield-check" value="Active" label="Status" />
+          {user?.user_type === 'admin' ? (
+            <>
+              <Stat icon="shield-account" value="Admin" label="Role" />
+              <View style={styles.statDivider} />
+              <Stat icon="lock-open-variant" value="Full" label="Access" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
+          ) : user?.user_type === 'driver' ? (
+            <>
+              <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : 'New'} label="Rating" />
+              <View style={styles.statDivider} />
+              <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
+          ) : (
+            <>
+              <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
+              <View style={styles.statDivider} />
+              <Stat icon="shield-check" value="Active" label="Status" />
+            </>
+          )}
         </View>
 
         {/* Contact details */}
@@ -112,13 +134,13 @@ export const ProfileScreen = () => {
             icon="email-outline"
             label="Email"
             value={user?.email || 'Not set'}
-            onPress={() => Alert.alert('Email', user?.email || 'Not set')}
+            onPress={() => notify('Email', user?.email || 'Not set')}
           />
           <MenuItem
             icon="phone-outline"
             label="Phone"
             value={user?.phone || 'Not set'}
-            onPress={() => Alert.alert('Phone', user?.phone || 'Not set')}
+            onPress={() => notify('Phone', user?.phone || 'Not set')}
             last
           />
         </View>
@@ -131,7 +153,7 @@ export const ProfileScreen = () => {
           <MenuItem
             icon="account-edit-outline"
             label="Edit Profile"
-            onPress={() => Alert.alert('Edit Profile', 'Profile editing coming in next update.')}
+            onPress={() => navigation.navigate('EditProfile')}
             last={user?.user_type !== 'passenger'}
           />
           {user?.user_type === 'passenger' && (
@@ -218,6 +240,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.primary,
     marginRight: spacing.md,
+  },
+  avatarImg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: spacing.md,
+    backgroundColor: colors.surfaceAlt,
   },
   avatarText: {
     color: '#FFFFFF',

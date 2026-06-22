@@ -1,8 +1,11 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { AuthService } from '@/models/services/AuthService';
-import { User } from '@/models/types';
+import { UserRepository } from '@/models/repositories/UserRepository';
+import { ActivityLogService } from '@/models/services/ActivityLogService';
+import { User, Driver } from '@/models/types';
 
 const authService = new AuthService();
+const userRepo = new UserRepository();
 
 interface AuthState {
   user: User | null;
@@ -52,7 +55,16 @@ export const signIn = createAsyncThunk(
   'auth/signIn',
   async (payload: { email: string; password: string }, { rejectWithValue }) => {
     try {
-      return await authService.signIn(payload.email, payload.password);
+      const result = await authService.signIn(payload.email, payload.password);
+      void ActivityLogService.logActivity({
+        user_id: result.user.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        entity_id: result.user.id,
+        description: `${result.user.name} signed in.`,
+        severity: 'info',
+      });
+      return result;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -100,6 +112,35 @@ export const verifyOtp = createAsyncThunk(
   }
 );
 
+// Persists profile edits (name, phone, photo, vehicle, bank account, etc.).
+// Demo sessions have no DB row, so they update locally only.
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (updates: Partial<Driver>, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as any;
+      const current = state.auth.user as User | null;
+      if (!current) throw new Error('You are not signed in.');
+      const isDemo = Boolean(state.auth.session?.demo) || current.id?.startsWith('demo-');
+      if (isDemo) {
+        return { ...current, ...updates } as User;
+      }
+      const updated = await userRepo.update(current.id, updates as Partial<User>);
+      void ActivityLogService.logActivity({
+        user_id: current.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        entity_id: current.id,
+        description: `${updated.name} updated their profile.`,
+        severity: 'info',
+      });
+      return updated;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -125,9 +166,13 @@ const authSlice = createSlice({
       })
       .addCase(signUp.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload.user;
-        state.session = action.payload.session;
-        state.isAuthenticated = true;
+        // Email-confirmation flow returns no user/session yet — stay logged out
+        // and let the screen prompt the user to confirm their email.
+        if (action.payload?.user && action.payload?.session) {
+          state.user = action.payload.user;
+          state.session = action.payload.session;
+          state.isAuthenticated = true;
+        }
       })
       .addCase(signUp.rejected, (state, action) => {
         state.loading = false;
@@ -169,6 +214,18 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
       })
       .addCase(verifyOtp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload as User;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })
