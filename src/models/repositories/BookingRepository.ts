@@ -86,6 +86,18 @@ export class BookingRepository {
     return data;
   }
 
+  // The driver's rating of the passenger (stored in driver_rating).
+  async submitDriverRating(id: string, rating: Rating): Promise<Booking> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ driver_rating: rating })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   async findActiveBookings(): Promise<Booking[]> {
     const { data, error } = await supabase
       .from('bookings')

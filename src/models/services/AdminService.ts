@@ -1,5 +1,15 @@
 import { supabase, createIsolatedClient } from '@/config/supabase';
-import { User } from '@/models/types';
+import { User, Message } from '@/models/types';
+
+export interface AdminConversation {
+  bookingId: string;
+  passengerName: string;
+  driverName: string;
+  route: string;
+  lastMessage: string;
+  lastAt: string;
+  count: number;
+}
 
 export interface AdminStats {
   totalUsers: number;

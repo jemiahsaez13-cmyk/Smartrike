@@ -78,6 +78,11 @@ export class BookingService {
     return await this.bookingRepo.submitRating(bookingId, rating);
   }
 
+  // Driver rates the passenger after a completed trip.
+  async ratePassenger(bookingId: string, rating: Rating): Promise<Booking> {
+    return await this.bookingRepo.submitDriverRating(bookingId, rating);
+  }
+
   async cancelBooking(bookingId: string): Promise<Booking> {
     const booking = await this.bookingRepo.findById(bookingId);
     if (!booking) throw new Error('Booking not found');

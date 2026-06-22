@@ -122,6 +122,17 @@ export const submitRating = createAsyncThunk(
   }
 );
 
+export const submitDriverRating = createAsyncThunk(
+  'booking/rateDriverSide',
+  async (payload: { bookingId: string; rating: Rating }, { rejectWithValue }) => {
+    try {
+      return await bookingService.ratePassenger(payload.bookingId, payload.rating);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const cancelBooking = createAsyncThunk('booking/cancel', async (bookingId: string, { rejectWithValue }) => {
   try {
     const result = await bookingService.cancelBooking(bookingId);
