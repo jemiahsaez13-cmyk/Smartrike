@@ -71,7 +71,15 @@ export class BookingService {
 
   async completeTrip(bookingId: string): Promise<Booking> {
     const booking = await this.bookingRepo.updateStatus(bookingId, 'completed');
-    if (booking.driver_id) await this.userRepo.updateDriverStatus(booking.driver_id, 'online');
+    // Best-effort: flipping the driver back to "online" must never block the
+    // trip from completing. (The booking-completion DB trigger also does this.)
+    if (booking.driver_id) {
+      try {
+        await this.userRepo.updateDriverStatus(booking.driver_id, 'online');
+      } catch (e) {
+        console.warn('driver status update skipped:', e);
+      }
+    }
 
     // For e-money fares (gcash / paymaya), settle the trip atomically: debit the
     // passenger's wallet and credit the driver's via the SECURITY DEFINER RPC

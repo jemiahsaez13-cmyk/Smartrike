@@ -140,8 +140,9 @@ export const DriverTripScreen = () => {
             }
             // Show rating modal instead of immediate navigation
             setRatingVisible(true);
-          } catch {
-            Alert.alert('Error', 'Failed to complete trip. Try again.');
+          } catch (err: any) {
+            const msg = typeof err === 'string' ? err : err?.message || 'Please try again.';
+            Alert.alert('Could not complete trip', msg);
           } finally {
             setCompleting(false);
           }
