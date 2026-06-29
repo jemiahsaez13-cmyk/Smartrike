@@ -7,6 +7,8 @@ import {
   View,
   FlatList,
   ActivityIndicator,
+  Modal,
+  TextInput as RNTextInput,
 } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,6 +20,9 @@ import { Rating } from '@/models/entities/Booking';
 import { Button } from '@/views/components/common/Button';
 import { colors, radius, shadows, spacing, typography, layout } from '@/views/styles/theme';
 import { formatDate } from '@/utils/dateUtils';
+import { useAppSelector, useAppDispatch } from '@/controllers/store';
+import { submitRating } from '@/controllers/slices/bookingSlice';
+import { notify } from '@/utils/confirm';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,11 +79,23 @@ export const DriverProfileScreen = () => {
   const route = useRoute<any>();
   const { driverId, driverSnapshot } = (route.params ?? {}) as DriverProfileRouteParams;
 
+  const me = useAppSelector((s) => s.auth.user);
+  const dispatch = useAppDispatch();
+  const isPassenger = me?.user_type !== 'driver';
+
   const [driver, setDriver] = useState<Partial<Driver> | null>(driverSnapshot ?? null);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(!driverSnapshot);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
+
+  // The passenger's own latest completed trip with THIS driver (the one they
+  // can rate / edit). null = they've never completed a trip with this driver.
+  const [myTrip, setMyTrip] = useState<{ id: string; rating: Rating | null } | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewStars, setReviewStars] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
 
   // Header parallax
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -100,7 +117,51 @@ export const DriverProfileScreen = () => {
     if (!driverId) return;
     if (!driverSnapshot) fetchDriver();
     fetchReviews();
+    if (isPassenger && me?.id) fetchMyTrip();
   }, [driverId]);
+
+  /** The passenger's most recent completed trip with this driver. */
+  const fetchMyTrip = async () => {
+    try {
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, passenger_rating, status, created_at')
+        .eq('driver_id', driverId)
+        .eq('passenger_id', me!.id)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      const b = data && data[0];
+      setMyTrip(b ? { id: b.id, rating: (b as any).passenger_rating ?? null } : null);
+    } catch {
+      /* silent */
+    }
+  };
+
+  const openMyReview = () => {
+    setReviewStars(myTrip?.rating?.stars ?? 5);
+    setReviewComment(myTrip?.rating?.comment ?? '');
+    setReviewOpen(true);
+  };
+
+  const submitMyReview = async () => {
+    if (!myTrip) return;
+    setSavingReview(true);
+    try {
+      await dispatch(
+        submitRating({
+          bookingId: myTrip.id,
+          rating: { stars: reviewStars, comment: reviewComment, created_at: new Date().toISOString() } as any,
+        })
+      ).unwrap();
+      setReviewOpen(false);
+      await Promise.all([fetchMyTrip(), fetchReviews()]);
+    } catch {
+      await notify('Could not save review', 'Please try again.');
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   const fetchDriver = async () => {
     setLoading(true);
@@ -278,6 +339,37 @@ export const DriverProfileScreen = () => {
           </Surface>
         )}
 
+        {/* ── Your review (passenger can rate / edit their rating of driver) ── */}
+        {isPassenger && myTrip && (
+          <Surface style={styles.card} elevation={1}>
+            <Text style={styles.cardTitle}>Your Review</Text>
+            <View style={styles.yourReviewRow}>
+              <View style={{ flex: 1 }}>
+                {myTrip.rating ? (
+                  <>
+                    <StarRow stars={myTrip.rating.stars} size={18} />
+                    {myTrip.rating.comment ? (
+                      <Text style={styles.yourReviewComment}>"{myTrip.rating.comment}"</Text>
+                    ) : (
+                      <Text style={styles.yourReviewEmpty}>No comment added.</Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.yourReviewEmpty}>You haven't rated this driver yet.</Text>
+                )}
+              </View>
+              <TouchableOpacity style={styles.editReviewBtn} onPress={openMyReview} activeOpacity={0.85}>
+                <MaterialCommunityIcons
+                  name={myTrip.rating ? 'pencil-outline' : 'star-plus-outline'}
+                  size={15}
+                  color={colors.primary}
+                />
+                <Text style={styles.editReviewText}>{myTrip.rating ? 'Edit' : 'Rate'}</Text>
+              </TouchableOpacity>
+            </View>
+          </Surface>
+        )}
+
         {/* ── Ratings breakdown ── */}
         <Surface style={styles.card} elevation={1}>
           <Text style={styles.cardTitle}>Ratings & Reviews</Text>
@@ -359,6 +451,50 @@ export const DriverProfileScreen = () => {
 
         <View style={{ height: spacing.xxl }} />
       </Animated.ScrollView>
+
+      {/* ── Edit-your-rating modal ── */}
+      <Modal visible={reviewOpen} transparent animationType="fade" onRequestClose={() => setReviewOpen(false)}>
+        <View style={styles.reviewOverlay}>
+          <View style={styles.reviewModalCard}>
+            <Text style={styles.reviewModalTitle}>Rate {driver?.name ?? 'your driver'}</Text>
+            <Text style={styles.reviewModalSub}>How was your trip with this driver?</Text>
+
+            <View style={styles.reviewStarsRow}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <TouchableOpacity key={n} onPress={() => setReviewStars(n)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons
+                    name={n <= reviewStars ? 'star' : 'star-outline'}
+                    size={40}
+                    color={n <= reviewStars ? '#FBBF24' : colors.border}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <RNTextInput
+              placeholder="Share details about your ride (optional)"
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              style={styles.reviewInput}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={300}
+            />
+
+            <TouchableOpacity
+              style={[styles.reviewSaveBtn, savingReview && { opacity: 0.6 }]}
+              onPress={submitMyReview}
+              disabled={savingReview}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.reviewSaveText}>{savingReview ? 'Saving…' : 'Save Review'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setReviewOpen(false)} style={styles.reviewCancelBtn} activeOpacity={0.7}>
+              <Text style={styles.reviewCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -518,6 +654,46 @@ const styles = StyleSheet.create({
 
   emptyReviews: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
   emptyReviewsText: { ...typography.body, color: colors.textSecondary },
+
+  // Your review
+  yourReviewRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  yourReviewComment: { ...typography.body, color: colors.textSecondary, fontSize: 13, fontStyle: 'italic', marginTop: 6 },
+  yourReviewEmpty: { ...typography.body, color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  editReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+  },
+  editReviewText: { ...typography.label, color: colors.primary, fontSize: 13 },
+
+  // Edit-rating modal
+  reviewOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  reviewModalCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center', ...shadows.xl },
+  reviewModalTitle: { ...typography.h2, fontSize: 22, color: colors.text },
+  reviewModalSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },
+  reviewStarsRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.lg },
+  reviewInput: {
+    width: '100%',
+    minHeight: 64,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: spacing.md,
+    ...typography.body,
+    fontSize: 14,
+    color: colors.text,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  reviewSaveBtn: { width: '100%', height: 52, borderRadius: 14, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  reviewSaveText: { ...typography.label, color: '#fff', fontSize: 16 },
+  reviewCancelBtn: { paddingVertical: spacing.sm, marginTop: spacing.xs },
+  reviewCancelText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
 
   showMoreBtn: {
     flexDirection: 'row',
