@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Modal,
   TextInput,
-  Alert,
 } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -33,6 +32,7 @@ import {
 import { Button } from '@/views/components/common/Button';
 import { colors, radius, shadows, spacing, typography, layout } from '@/views/styles/theme';
 import { formatDate } from '@/utils/dateUtils';
+import { confirm, notify } from '@/utils/confirm';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,14 +77,14 @@ export const EMoneyWalletScreen = () => {
 
   useEffect(() => {
     if (error) {
-      Alert.alert('Error', error);
+      void notify('Error', error);
       dispatch(clearPaymentError());
     }
   }, [error]);
 
   useEffect(() => {
     if (successMessage) {
-      Alert.alert('Success', successMessage);
+      void notify('Success', successMessage);
       dispatch(clearPaymentSuccess());
       closeModal();
     }
@@ -112,7 +112,7 @@ export const EMoneyWalletScreen = () => {
   const handleLinkAccount = () => {
     if (!user?.id) return;
     if (!linkAccountNumber || !linkAccountName) {
-      Alert.alert('Error', 'Please fill all fields');
+      void notify('Error', 'Please fill all fields');
       return;
     }
     dispatch(
@@ -129,7 +129,7 @@ export const EMoneyWalletScreen = () => {
     if (!user?.id || !selectedAccount) return;
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      void notify('Error', 'Please enter a valid amount');
       return;
     }
     dispatch(
@@ -146,11 +146,11 @@ export const EMoneyWalletScreen = () => {
     if (!user?.id || !selectedAccount) return;
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      void notify('Error', 'Please enter a valid amount');
       return;
     }
     if (amountNum > selectedAccount.balance) {
-      Alert.alert('Error', 'Insufficient balance');
+      void notify('Error', 'Insufficient balance');
       return;
     }
     dispatch(
@@ -168,15 +168,13 @@ export const EMoneyWalletScreen = () => {
     dispatch(setDefaultAccount({ userId: user.id, accountId }));
   };
 
-  const handleRemoveAccount = (accountId: string) => {
-    Alert.alert(
-      'Remove Account',
-      'Are you sure you want to remove this account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => dispatch(removeAccount(accountId)) },
-      ]
-    );
+  const handleRemoveAccount = async (accountId: string) => {
+    const yes = await confirm('Remove Account', 'Are you sure you want to remove this account?', {
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (yes) dispatch(removeAccount(accountId));
   };
 
   const openCashInModal = (account: EMoneyAccount) => {
@@ -244,7 +242,7 @@ export const EMoneyWalletScreen = () => {
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => defaultAccount ? openCashInModal(defaultAccount) : Alert.alert('Error', 'Please link an account first')}
+            onPress={() => defaultAccount ? openCashInModal(defaultAccount) : notify('Error', 'Please link an account first')}
             disabled={loading}
           >
             <View style={[styles.actionIconWrap, { backgroundColor: colors.secondaryLight }]}>
@@ -255,7 +253,7 @@ export const EMoneyWalletScreen = () => {
 
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => defaultAccount ? openCashOutModal(defaultAccount) : Alert.alert('Error', 'Please link an account first')}
+            onPress={() => defaultAccount ? openCashOutModal(defaultAccount) : notify('Error', 'Please link an account first')}
             disabled={loading}
           >
             <View style={[styles.actionIconWrap, { backgroundColor: colors.infoLight }]}>

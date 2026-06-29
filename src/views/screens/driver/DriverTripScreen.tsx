@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Linking,
@@ -23,6 +22,7 @@ import { UserRepository } from '@/models/repositories/UserRepository';
 import { User } from '@/models/types';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatETA, formatDistance } from '@/utils/locationUtils';
+import { confirm, notify } from '@/utils/confirm';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 
 const { height } = Dimensions.get('window');
@@ -76,10 +76,10 @@ export const DriverTripScreen = () => {
   const handleCallPassenger = () => {
     const phone = passenger?.phone;
     if (!phone) {
-      Alert.alert('Call Passenger', 'No contact number is on file for this passenger.');
+      void notify('Call Passenger', 'No contact number is on file for this passenger.');
       return;
     }
-    Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Call Passenger', `Passenger: ${phone}`));
+    Linking.openURL(`tel:${phone}`).catch(() => notify('Call Passenger', `Passenger: ${phone}`));
   };
 
   const handleMessagePassenger = () => {
@@ -122,33 +122,32 @@ export const DriverTripScreen = () => {
       await dispatch(startTrip(currentBooking.id)).unwrap();
       setPhase('in_trip');
     } catch {
-      Alert.alert('Error', 'Could not update trip status. Try again.');
+      await notify('Error', 'Could not update trip status. Try again.');
     }
   };
 
-  const handleDropOff = () => {
-    Alert.alert('Complete Trip', 'Confirm passenger drop-off at destination?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm',
-        onPress: async () => {
-          setCompleting(true);
-          try {
-            await dispatch(completeTrip(currentBooking.id)).unwrap();
-            if (user?.id) {
-              await dispatch(updateDriverStatus({ driverId: user.id, status: 'online' }));
-            }
-            // Show rating modal instead of immediate navigation
-            setRatingVisible(true);
-          } catch (err: any) {
-            const msg = typeof err === 'string' ? err : err?.message || 'Please try again.';
-            Alert.alert('Could not complete trip', msg);
-          } finally {
-            setCompleting(false);
-          }
-        },
-      },
-    ]);
+  const handleDropOff = async () => {
+    // Web-safe confirm (Alert.alert is a no-op on react-native-web, so the old
+    // popup never appeared and the trip never completed).
+    const proceed = await confirm('Complete Trip', 'Confirm passenger drop-off at destination?', {
+      confirmText: 'Complete Trip',
+      cancelText: 'Not yet',
+    });
+    if (!proceed) return;
+
+    setCompleting(true);
+    try {
+      await dispatch(completeTrip(currentBooking.id)).unwrap();
+      if (user?.id) {
+        await dispatch(updateDriverStatus({ driverId: user.id, status: 'online' }));
+      }
+      setRatingVisible(true); // prompt the driver to rate the passenger
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Please try again.';
+      await notify('Could not complete trip', msg);
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const handleSubmitPassengerRating = async () => {
@@ -179,11 +178,7 @@ export const DriverTripScreen = () => {
   };
 
   const handleSOS = () => {
-    Alert.alert('Emergency SOS', 'Choose an action:', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Call TODA Dispatch', onPress: () => undefined },
-      { text: 'Flag Emergency', style: 'destructive', onPress: () => undefined },
-    ]);
+    void notify('Emergency SOS', 'Contact the TODA dispatch desk immediately for urgent help during this trip.');
   };
 
   const isToPickup = phase === 'to_pickup';

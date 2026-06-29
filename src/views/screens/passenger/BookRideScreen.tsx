@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,6 +9,7 @@ import { useBooking } from '@/controllers/hooks/useBooking';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { useAppDispatch } from '@/controllers/store';
 import { fetchEMoneyAccounts } from '@/controllers/slices/paymentSlice';
+import { confirm, notify } from '@/utils/confirm';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
@@ -227,7 +228,7 @@ export const BookRideScreen = () => {
   const handleBooking = async () => {
     const ep = pickup || currentLocation;
     if (!ep || !dropoff) {
-      Alert.alert('Choose Destination', 'Set a drop-off — pick a place, tap the map, or use “Set on map”.');
+      void notify('Choose Destination', 'Set a drop-off — pick a place, tap the map, or use “Set on map”.');
       return;
     }
     const noteParts: string[] = [];
@@ -243,7 +244,7 @@ export const BookRideScreen = () => {
         await bookRide(user!.id, ep, dropoff, { notes, paymentMethod: method });
         navigation.navigate('ConfirmBooking');
       } catch {
-        Alert.alert('Booking Failed', 'Unable to create booking. Please try again.');
+        await notify('Booking Failed', 'Unable to create booking. Please try again.');
       }
     };
 
@@ -258,27 +259,25 @@ export const BookRideScreen = () => {
       } catch {
         acct = null;
       }
-      if (!acct) {
-        Alert.alert('No GCash Wallet', 'Link a GCash wallet and cash in first, or pay with cash.', [
-          { text: 'Use Cash', onPress: () => { setPaymentMethod('cash'); proceed('cash'); } },
-          { text: 'Open Wallet', onPress: () => navigation.navigate('EMoneyWallet') },
-        ]);
-        return;
-      }
-      if (Number(acct.balance) < fare) {
-        Alert.alert(
-          'Insufficient GCash Balance',
-          `Your GCash balance is ₱${Number(acct.balance).toFixed(2)} but the fare is ₱${fare.toFixed(2)}. Cash in first, or pay with cash.`,
-          [
-            { text: 'Use Cash', onPress: () => { setPaymentMethod('cash'); proceed('cash'); } },
-            { text: 'Cash In', onPress: () => navigation.navigate('EMoneyWallet') },
-          ]
-        );
+      if (!acct || Number(acct.balance) < fare) {
+        const detail = !acct
+          ? 'You have no funded GCash wallet yet.'
+          : `Your GCash balance is ₱${Number(acct.balance).toFixed(2)} but the fare is ₱${fare.toFixed(2)}.`;
+        const useCash = await confirm('GCash not ready', `${detail} Pay with cash instead, or open your wallet to cash in.`, {
+          confirmText: 'Pay with Cash',
+          cancelText: 'Open Wallet',
+        });
+        if (useCash) {
+          setPaymentMethod('cash');
+          await proceed('cash');
+        } else {
+          navigation.navigate('EMoneyWallet');
+        }
         return;
       }
     }
 
-    proceed(paymentMethod);
+    await proceed(paymentMethod);
   };
 
   if (loadingLocation) return <Loading message="Finding your location..." />;

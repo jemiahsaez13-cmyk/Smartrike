@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
@@ -16,6 +16,7 @@ import { colors, layout, radius, spacing, shadows, typography } from '@/views/st
 import { LinearGradient } from 'expo-linear-gradient';
 import { LocationService } from '@/models/services/LocationService';
 import { haversineDistance, estimateETA, formatETA } from '@/utils/locationUtils';
+import { confirm, notify } from '@/utils/confirm';
 import { Location } from '@/models/types';
 
 const { height } = Dimensions.get('window');
@@ -139,10 +140,10 @@ export const ActiveTripScreen = () => {
   const handleCallDriver = () => {
     const phone = driver?.phone;
     if (!phone) {
-      Alert.alert('Call Driver', 'No contact number is on file for this driver yet.');
+      void notify('Call Driver', 'No contact number is on file for this driver yet.');
       return;
     }
-    Linking.openURL(`tel:${phone}`).catch(() => Alert.alert('Call Driver', `Driver: ${phone}`));
+    Linking.openURL(`tel:${phone}`).catch(() => notify('Call Driver', `Driver: ${phone}`));
   };
 
   const handleMessageDriver = () => {
@@ -150,34 +151,27 @@ export const ActiveTripScreen = () => {
     navigation.navigate('Chat', { bookingId: currentBooking.id, otherName: driverName });
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!currentBooking?.id) return;
-    Alert.alert('Cancel Ride', 'Cancel this booking? Your driver will be notified.', [
-      { text: 'Keep Ride', style: 'cancel' },
-      {
-        text: 'Cancel Ride',
-        style: 'destructive',
-        onPress: async () => {
-          setCancelling(true);
-          try {
-            await dispatch(cancelBooking(currentBooking.id)).unwrap();
-          } catch {
-            /* fall through to navigation */
-          } finally {
-            setCancelling(false);
-            navigation.navigate('PassengerDashboard');
-          }
-        },
-      },
-    ]);
+    const yes = await confirm('Cancel Ride', 'Cancel this booking? Your driver will be notified.', {
+      confirmText: 'Cancel Ride',
+      cancelText: 'Keep Ride',
+      destructive: true,
+    });
+    if (!yes) return;
+    setCancelling(true);
+    try {
+      await dispatch(cancelBooking(currentBooking.id)).unwrap();
+    } catch {
+      /* fall through to navigation */
+    } finally {
+      setCancelling(false);
+      navigation.navigate('PassengerDashboard');
+    }
   };
 
   const handleSOS = () => {
-    Alert.alert('Emergency SOS', 'Choose the fastest support path for this trip.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Call TODA Desk', onPress: () => undefined },
-      { text: 'Flag Emergency', style: 'destructive', onPress: () => undefined },
-    ]);
+    void notify('Emergency SOS', 'For urgent help, contact the TODA dispatch desk right away.');
   };
 
   const handleSubmitRating = async () => {

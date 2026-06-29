@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Alert, Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +16,7 @@ import { MessagesButton } from '@/views/components/common/MessagesButton';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { DRIVER_GOAL_DAILY, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 import { formatDistance } from '@/utils/locationUtils';
+import { notify } from '@/utils/confirm';
 
 export const DriverDashboard = () => {
   const dispatch = useAppDispatch();
@@ -122,7 +123,7 @@ export const DriverDashboard = () => {
   const toggleStatus = async () => {
     if (!user?.id) return;
     if (!isVerified) {
-      Alert.alert(
+      void notify(
         'Account Pending Approval',
         'Your driver account is still under review. An admin must verify your documents before you can go online and accept rides.'
       );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector, useAppDispatch } from '@/controllers/store';
@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { notify } from '@/utils/confirm';
 
 export const BookingRequestScreen = () => {
   const dispatch = useAppDispatch();
@@ -19,9 +20,9 @@ export const BookingRequestScreen = () => {
     try {
       await dispatch(acceptBooking({ bookingId, driverId: user!.id })).unwrap();
       navigation.navigate('DriverTrip');
-      Alert.alert('Ride Accepted!', 'Head to the pickup location.');
+      void notify('Ride Accepted!', 'Head to the pickup location.');
     } catch (error: any) {
-      Alert.alert('Error', error || 'Failed to accept ride');
+      await notify('Error', error || 'Failed to accept ride');
     }
   };
 
