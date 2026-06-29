@@ -73,16 +73,29 @@ export class LocationService {
   // foreground permission. Any previous watch is stopped first so we never leak
   // two subscriptions. Returns false if permission was denied.
   async startWatching(callback: (location: Location) => void): Promise<boolean> {
-    const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return false;
-    this.stopWatching();
-    this.watchSub = await this.watchPosition(callback);
-    return true;
+    try {
+      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return false;
+      this.stopWatching();
+      this.watchSub = await this.watchPosition(callback);
+      return true;
+    } catch (e) {
+      // expo-location can be flaky on web; location streaming is non-critical.
+      console.warn('startWatching skipped:', e);
+      return false;
+    }
   }
 
   stopWatching(): void {
     if (this.watchSub) {
-      this.watchSub.remove();
+      // expo-location's web build throws on .remove() (it calls a removed
+      // LocationEventEmitter.removeSubscription). Guard it so cleanup never
+      // crashes the screen; the watch is dropped either way.
+      try {
+        this.watchSub.remove();
+      } catch (e) {
+        console.warn('stopWatching remove skipped:', e);
+      }
       this.watchSub = null;
     }
   }
