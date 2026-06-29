@@ -169,6 +169,10 @@ export const USER_TYPES = ['passenger', 'driver', 'admin'] as const;
 export type UserType = typeof USER_TYPES[number];
 
 export const DRIVER_GOAL_DAILY = 800;
+
+// Ride requests older than this are treated as stale (the rider has likely
+// given up or closed the app) and are hidden from drivers' incoming queue.
+export const REQUEST_FRESHNESS_MINUTES = 20;
 export const DRIVER_RATING_DEFAULT = 4.8;
 
 export const NOTIFICATION_TYPES = {

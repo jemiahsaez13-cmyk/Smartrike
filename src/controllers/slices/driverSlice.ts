@@ -1,11 +1,13 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { BookingService } from '@/models/services/BookingService';
 import { Driver, Booking } from '@/models/types';
 import { startTrip } from './bookingSlice';
 
 const userRepo = new UserRepository();
 const bookingRepo = new BookingRepository();
+const bookingService = new BookingService();
 
 interface DriverState {
   driverInfo: Driver | null;
@@ -47,9 +49,9 @@ export const acceptBooking = createAsyncThunk(
   'driver/acceptBooking',
   async (payload: { bookingId: string; driverId: string }, { rejectWithValue }) => {
     try {
-      const booking = await bookingRepo.assignDriver(payload.bookingId, payload.driverId);
-      await userRepo.updateDriverStatus(payload.driverId, 'on-trip');
-      return booking;
+      // Routed through BookingService so the passenger gets the "Driver on the
+      // way" notification (the bare repo call used to skip it entirely).
+      return await bookingService.acceptBooking(payload.bookingId, payload.driverId);
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

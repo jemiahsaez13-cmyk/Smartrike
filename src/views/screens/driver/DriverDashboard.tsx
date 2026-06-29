@@ -14,7 +14,7 @@ import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 import { MessagesButton } from '@/views/components/common/MessagesButton';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
-import { DRIVER_GOAL_DAILY } from '@/config/constants';
+import { DRIVER_GOAL_DAILY, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 import { formatDistance } from '@/utils/locationUtils';
 
 export const DriverDashboard = () => {
@@ -64,49 +64,56 @@ export const DriverDashboard = () => {
     if (user?.id) dispatch(fetchCompletedTrips(user.id));
   }, [dispatch, user?.id]);
 
-  // While online, keep the incoming-request queue in sync with the backend:
-  // an immediate fetch + lightweight polling, plus a realtime subscription so
-  // new bookings appear the instant a passenger requests one. Requests that get
-  // taken by another driver (or cancelled) are pruned from the queue.
+  // Incoming requests: only while genuinely AVAILABLE (online, not already on a
+  // trip). Reconciles the queue against the backend each poll so the list is
+  // exactly the still-open, FRESH requests — taken/cancelled/stale ones drop
+  // off. A request older than REQUEST_FRESHNESS_MINUTES is treated as abandoned
+  // and hidden. Going on-trip clears the queue (cleanup runs on status change).
   useEffect(() => {
-    if (!isOnline || !user?.id) return;
+    if (currentStatus !== 'online' || !user?.id) return;
     let cancelled = false;
     const realtime = realtimeRef.current!;
     const repo = new BookingRepository();
 
-    // Reconcile the queue against the backend each poll: the incoming list
-    // becomes exactly the still-open requests (pending + unassigned). Anything
-    // the passenger cancelled, another driver took, or that already started is
-    // no longer in that set, so it drops off automatically.
     const sync = () =>
       repo
         .findActiveBookings()
         .then((bookings) => {
           if (cancelled) return;
-          const open = bookings.filter((b) => b.status === 'pending' && !b.driver_id);
+          const freshAfter = Date.now() - REQUEST_FRESHNESS_MINUTES * 60 * 1000;
+          const open = bookings.filter(
+            (b) =>
+              b.status === 'pending' &&
+              !b.driver_id &&
+              new Date(b.created_at as any).getTime() >= freshAfter
+          );
           dispatch(syncIncomingRequests(open));
         })
         .catch(() => undefined);
 
-    // 1. Seed + lightweight polling so taken/cancelled requests fall off.
     sync();
     const poll = setInterval(sync, 10000);
 
-    // 2. Push new pending bookings as they are created (no re-toggle needed).
+    // New bookings appear instantly (they're fresh by definition).
     const bookingsKey = realtime.subscribeToNewBookings((payload) => {
       if (payload?.new) dispatch(addIncomingRequest(payload.new));
     });
-
-    // 3. Stream this driver's GPS position to driver_locations for live tracking.
-    startWatchingLocation(user.id);
 
     return () => {
       cancelled = true;
       clearInterval(poll);
       realtime.unsubscribe(bookingsKey);
-      stopWatchingLocation();
+      dispatch(syncIncomingRequests([])); // clear queue when no longer available
     };
-  }, [dispatch, isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
+  }, [dispatch, currentStatus, user?.id]);
+
+  // Stream GPS whenever the driver is online OR on a trip, so passengers see a
+  // live, moving driver during pickup and the ride itself.
+  useEffect(() => {
+    if (!isOnline || !user?.id) return;
+    startWatchingLocation(user.id);
+    return () => stopWatchingLocation();
+  }, [isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
 
   const toggleStatus = async () => {
     if (!user?.id) return;

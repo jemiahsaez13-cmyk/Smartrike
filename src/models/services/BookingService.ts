@@ -59,9 +59,18 @@ export class BookingService {
   }
 
   async acceptBooking(bookingId: string, driverId: string): Promise<Booking> {
-    await this.userRepo.updateDriverStatus(driverId, 'on-trip');
     const booking = await this.bookingRepo.assignDriver(bookingId, driverId);
-    await this.notificationService.notifyPassenger(booking.passenger_id, 'Driver Accepted', 'Your driver is on the way!');
+    await this.userRepo.updateDriverStatus(driverId, 'on-trip');
+    // Best-effort: notifying the passenger must never roll back the accept.
+    try {
+      await this.notificationService.notifyPassenger(
+        booking.passenger_id,
+        'Driver on the way! 🛺',
+        'A driver accepted your ride and is heading to your pickup point.'
+      );
+    } catch (e) {
+      console.warn('passenger accept notification skipped:', e);
+    }
     return booking;
   }
 
