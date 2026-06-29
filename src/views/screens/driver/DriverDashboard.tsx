@@ -81,11 +81,15 @@ export const DriverDashboard = () => {
         .then((bookings) => {
           if (cancelled) return;
           const freshAfter = Date.now() - REQUEST_FRESHNESS_MINUTES * 60 * 1000;
+          // Parse defensively: if a timestamp ever arrives without a timezone,
+          // treat it as UTC instead of device-local (which would skew freshness).
+          const toMs = (v: any) => {
+            const s = String(v);
+            const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s.replace(' ', 'T') + 'Z';
+            return new Date(iso).getTime();
+          };
           const open = bookings.filter(
-            (b) =>
-              b.status === 'pending' &&
-              !b.driver_id &&
-              new Date(b.created_at as any).getTime() >= freshAfter
+            (b) => b.status === 'pending' && !b.driver_id && toMs(b.created_at) >= freshAfter
           );
           dispatch(syncIncomingRequests(open));
         })

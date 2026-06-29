@@ -33,12 +33,18 @@ export class LocationService {
   }
 
   async updateDriverLocation(driverId: string, location: Location): Promise<void> {
-    const { error } = await supabase.from('driver_locations').upsert({
-      driver_id: driverId,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      timestamp: new Date().toISOString()
-    });
+    // driver_locations.driver_id is UNIQUE, so upsert must conflict-target it —
+    // otherwise every ping tries to INSERT a new row and hits a 409 on the
+    // unique constraint. With onConflict it updates the driver's single row.
+    const { error } = await supabase.from('driver_locations').upsert(
+      {
+        driver_id: driverId,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        timestamp: new Date().toISOString(),
+      },
+      { onConflict: 'driver_id' }
+    );
     if (error) throw error;
   }
 
