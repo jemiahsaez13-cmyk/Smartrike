@@ -82,6 +82,12 @@ const driverSlice = createSlice({
     removeIncomingRequest: (state, action: PayloadAction<string>) => {
       state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload);
     },
+    // Reconcile the queue against the backend's current still-open requests.
+    // Anything no longer pending (cancelled by the passenger, taken by another
+    // driver, or already started) simply isn't in the payload, so it drops off.
+    syncIncomingRequests: (state, action: PayloadAction<Booking[]>) => {
+      state.incomingRequests = action.payload;
+    },
     updateDailyEarnings: (state, action: PayloadAction<number>) => {
       state.dailyEarnings += action.payload;
     },
@@ -126,5 +132,5 @@ const driverSlice = createSlice({
   }
 });
 
-export const { setDriverInfo, addIncomingRequest, removeIncomingRequest, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
+export const { setDriverInfo, addIncomingRequest, removeIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
 export default driverSlice.reducer;

@@ -7,6 +7,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useLocation } from '@/controllers/hooks/useLocation';
+import { useAppDispatch } from '@/controllers/store';
+import { fetchEMoneyAccounts } from '@/controllers/slices/paymentSlice';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
@@ -54,6 +56,7 @@ export const BookRideScreen = () => {
   const { user } = useAuth();
   const { bookRide, loading } = useBooking();
   const { currentLocation, getLocation } = useLocation();
+  const dispatch = useAppDispatch();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const [dropoffAddress, setDropoffAddress] = useState('');
@@ -234,12 +237,48 @@ export const BookRideScreen = () => {
     if (passengers > 1) noteParts.push(`${passengers} passengers`);
     if (tripNote.trim()) noteParts.push(tripNote.trim());
     const notes = noteParts.join(' • ') || undefined;
-    try {
-      await bookRide(user!.id, ep, dropoff, { notes, paymentMethod });
-      navigation.navigate('ConfirmBooking');
-    } catch {
-      Alert.alert('Booking Failed', 'Unable to create booking. Please try again.');
+
+    const proceed = async (method: 'cash' | 'gcash') => {
+      try {
+        await bookRide(user!.id, ep, dropoff, { notes, paymentMethod: method });
+        navigation.navigate('ConfirmBooking');
+      } catch {
+        Alert.alert('Booking Failed', 'Unable to create booking. Please try again.');
+      }
+    };
+
+    // For GCash, confirm the rider has a funded wallet first — otherwise the
+    // fare can never be collected and the trip would silently fall back to cash.
+    if (paymentMethod === 'gcash') {
+      const fare = estimate?.fare ?? 0;
+      let acct: any = null;
+      try {
+        const accounts: any[] = await dispatch(fetchEMoneyAccounts(user!.id)).unwrap();
+        acct = accounts.find((a) => a.is_default) ?? accounts[0] ?? null;
+      } catch {
+        acct = null;
+      }
+      if (!acct) {
+        Alert.alert('No GCash Wallet', 'Link a GCash wallet and cash in first, or pay with cash.', [
+          { text: 'Use Cash', onPress: () => { setPaymentMethod('cash'); proceed('cash'); } },
+          { text: 'Open Wallet', onPress: () => navigation.navigate('EMoneyWallet') },
+        ]);
+        return;
+      }
+      if (Number(acct.balance) < fare) {
+        Alert.alert(
+          'Insufficient GCash Balance',
+          `Your GCash balance is ₱${Number(acct.balance).toFixed(2)} but the fare is ₱${fare.toFixed(2)}. Cash in first, or pay with cash.`,
+          [
+            { text: 'Use Cash', onPress: () => { setPaymentMethod('cash'); proceed('cash'); } },
+            { text: 'Cash In', onPress: () => navigation.navigate('EMoneyWallet') },
+          ]
+        );
+        return;
+      }
     }
+
+    proceed(paymentMethod);
   };
 
   if (loadingLocation) return <Loading message="Finding your location..." />;

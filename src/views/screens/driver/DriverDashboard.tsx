@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Alert, Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { addIncomingRequest, removeIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { RealtimeService } from '@/models/services/RealtimeService';
@@ -26,6 +26,8 @@ export const DriverDashboard = () => {
   const realtimeRef = useRef<RealtimeService | null>(null);
   if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
+  // A driver can only go online / accept rides once an admin has verified them.
+  const isVerified = (user as any)?.verification_status === 'verified';
 
   // Real goal progress + a status-appropriate message (no canned copy).
   const goalPct = Math.min(100, ((dailyEarnings || 0) / DRIVER_GOAL_DAILY) * 100);
@@ -72,17 +74,17 @@ export const DriverDashboard = () => {
     const realtime = realtimeRef.current!;
     const repo = new BookingRepository();
 
-    // Keep the incoming-request queue in sync with the backend: add new pending
-    // requests and prune any that were taken by another driver or cancelled.
+    // Reconcile the queue against the backend each poll: the incoming list
+    // becomes exactly the still-open requests (pending + unassigned). Anything
+    // the passenger cancelled, another driver took, or that already started is
+    // no longer in that set, so it drops off automatically.
     const sync = () =>
       repo
         .findActiveBookings()
         .then((bookings) => {
           if (cancelled) return;
-          bookings.forEach((b) => {
-            if (b.status === 'pending' && !b.driver_id) dispatch(addIncomingRequest(b));
-            else dispatch(removeIncomingRequest(b.id));
-          });
+          const open = bookings.filter((b) => b.status === 'pending' && !b.driver_id);
+          dispatch(syncIncomingRequests(open));
         })
         .catch(() => undefined);
 
@@ -108,6 +110,13 @@ export const DriverDashboard = () => {
 
   const toggleStatus = async () => {
     if (!user?.id) return;
+    if (!isVerified) {
+      Alert.alert(
+        'Account Pending Approval',
+        'Your driver account is still under review. An admin must verify your documents before you can go online and accept rides.'
+      );
+      return;
+    }
     const newStatus = isOnline ? 'offline' : 'online';
     await dispatch(updateDriverStatus({ driverId: user.id, status: newStatus }));
   };
@@ -159,13 +168,21 @@ export const DriverDashboard = () => {
 
         <Card variant="elevated" padding="md" style={styles.statusCard}>
           <View style={styles.statusInfo}>
-            <View style={[styles.statusDot, { backgroundColor: isOnline ? colors.success : colors.textMuted }]} />
-            <View>
-              <Text style={styles.statusTitle}>{isOnline ? 'Online & Ready' : 'Currently Offline'}</Text>
-              <Text style={styles.statusSub}>{isOnline ? 'Waiting for passengers...' : 'Go online to start earning'}</Text>
+            <View style={[styles.statusDot, { backgroundColor: !isVerified ? colors.warning : isOnline ? colors.success : colors.textMuted }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.statusTitle}>
+                {!isVerified ? 'Pending Approval' : isOnline ? 'Online & Ready' : 'Currently Offline'}
+              </Text>
+              <Text style={styles.statusSub}>
+                {!isVerified
+                  ? 'An admin must verify your documents first'
+                  : isOnline
+                  ? 'Waiting for passengers...'
+                  : 'Go online to start earning'}
+              </Text>
             </View>
           </View>
-          <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} />
+          <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} disabled={!isVerified} />
         </Card>
       </LinearGradient>
 
