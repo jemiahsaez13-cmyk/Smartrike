@@ -1,5 +1,5 @@
 import { MessageRepository } from '@/models/repositories/MessageRepository';
-import { Message } from '@/models/types';
+import { Conversation, Message } from '@/models/types';
 
 const repo = new MessageRepository();
 
@@ -34,5 +34,9 @@ export class MessageService {
 
   async getUnreadCount(userId: string): Promise<number> {
     return repo.getUnreadCount(userId);
+  }
+
+  async getConversations(userId: string): Promise<Conversation[]> {
+    return repo.getConversations(userId);
   }
 }

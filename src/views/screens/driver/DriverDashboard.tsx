@@ -12,6 +12,7 @@ import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
+import { MessagesButton } from '@/views/components/common/MessagesButton';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { DRIVER_GOAL_DAILY } from '@/config/constants';
 import { formatDistance } from '@/utils/locationUtils';
@@ -143,14 +144,17 @@ export const DriverDashboard = () => {
             <Text style={styles.greeting}>DRIVER CONSOLE</Text>
             <Text style={styles.name}>{user?.name?.split(' ')[0] || 'Driver'}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <LinearGradient colors={['#fff', '#f0f0f0']} style={styles.avatarGradient}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <MessagesButton />
+            <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <LinearGradient colors={['#fff', '#f0f0f0']} style={styles.avatarGradient}>
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Card variant="elevated" padding="md" style={styles.statusCard}>
@@ -286,6 +290,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 24,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   greeting: {
     ...typography.label,

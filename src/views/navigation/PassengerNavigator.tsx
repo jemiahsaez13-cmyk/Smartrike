@@ -14,6 +14,7 @@ import { AboutScreen } from '@/views/screens/shared/AboutScreen';
 import { LegalScreen } from '@/views/screens/shared/LegalScreen';
 import { ChangePasswordScreen } from '@/views/screens/shared/ChangePasswordScreen';
 import { ChatScreen } from '@/views/screens/shared/ChatScreen';
+import { InboxScreen } from '@/views/screens/shared/InboxScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
@@ -51,6 +52,7 @@ export const PassengerNavigator = () => (
     <Stack.Screen name="PopularPlaces" component={PopularPlacesScreen} />
     <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} />
     <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
+    <Stack.Screen name="Inbox" component={InboxScreen} />
     <Stack.Screen name="Chat" component={ChatScreen} />
     <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
     <Stack.Screen name="EMoneyWallet" component={EMoneyWalletScreen} />

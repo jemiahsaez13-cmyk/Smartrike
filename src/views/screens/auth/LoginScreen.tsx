@@ -142,6 +142,9 @@ export const LoginScreen = () => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
                 left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
               />
               <Input
@@ -150,6 +153,10 @@ export const LoginScreen = () => {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="password"
+                textContentType="password"
                 left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
                 right={
                   <TextInput.Icon

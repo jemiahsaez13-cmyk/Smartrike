@@ -1,7 +1,7 @@
 # Supabase Migrations
 
 SQL migrations for the Smart Trike backend. Apply them **in numeric order**
-(`001` → `021`) against the linked Supabase project (`ref: dauehvjvypzeouxxviom`).
+(`001` → `024`) against the linked Supabase project (`ref: dauehvjvypzeouxxviom`).
 
 ---
 
@@ -14,13 +14,18 @@ SQL migrations for the Smart Trike backend. Apply them **in numeric order**
 
 | Migration | Purpose | Status |
 |-----------|---------|--------|
-| `020_create_emoney_tables.sql` | E-money wallet tables (`emoney_accounts`, `emoney_transactions`) + RLS + triggers | ⬜ NOT APPLIED |
-| `021_emoney_trip_payment.sql` | `pay_trip_with_emoney()` RPC — atomic fare debit + driver payout on trip completion | ⬜ NOT APPLIED |
+| `020_create_emoney_tables.sql` | E-money wallet tables (`emoney_accounts`, `emoney_transactions`) + RLS + triggers | ✅ APPLIED 2026-06-29 |
+| `021_emoney_trip_payment.sql` | `pay_trip_with_emoney()` RPC — atomic fare debit + driver payout on trip completion | ✅ APPLIED 2026-06-29 |
+| `022_chat_participants_view_profiles.sql` | RLS so a booking's passenger & driver can read each other's profile (real names/photos in chat + Messages inbox) | ✅ APPLIED 2026-06-29 |
+| `023_fix_users_policy_recursion.sql` | HOTFIX: 022's policy recursed (users→bookings→users) and broke ALL logins ("profile not found"); moved the check into a SECURITY DEFINER fn | ✅ APPLIED 2026-06-29 |
+| `024_fix_booking_completion_payment_status.sql` | BUGFIX: completion trigger set `payment_status='paid'` (violates CHECK → every trip-complete failed 400) and pre-settled e-money so the wallet never debited. Now: 'completed', cash-only auto-settle | ✅ APPLIED 2026-06-29 |
 
 **Until these are applied:** the e-money wallet screens and trip settlement will
 silently fail / fall back to cash (`BookingService.completeTrip` swallows the
 error on purpose so trip completion never blocks). The passenger "Paid ₱X via
-GCash" confirmation will not appear.
+GCash" confirmation will not appear. The Messages inbox & chat still work
+without `022`, but the other party shows as "Your Driver" / "Your Passenger"
+instead of their real name until it is applied.
 
 After applying, tick the boxes above and commit.
 

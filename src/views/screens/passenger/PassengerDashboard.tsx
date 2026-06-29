@@ -10,6 +10,7 @@ import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Card } from '@/views/components/common/Card';
+import { MessagesButton } from '@/views/components/common/MessagesButton';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
@@ -96,10 +97,6 @@ export const PassengerDashboard = () => {
     );
   };
 
-  const handleSavedPlaces = () => {
-    Alert.alert('Saved Places', 'Use a popular destination below or book a ride to save it after your trip.');
-  };
-
   const bookPlace = (place: PopularPlace) => {
     navigation.navigate('BookRide', {
       place: { latitude: place.lat, longitude: place.lng, address: place.name },
@@ -139,17 +136,20 @@ export const PassengerDashboard = () => {
             <Text style={styles.greeting}>GOOD DAY,</Text>
             <Text style={styles.name}>{user?.name?.split(' ')[0] || 'Passenger'}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <LinearGradient
-              colors={['#fff', '#f0f0f0']}
-              style={styles.avatarGradient}
+          <View style={styles.headerActions}>
+            <MessagesButton />
+            <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => navigation.navigate('Profile')}
             >
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#fff', '#f0f0f0']}
+                style={styles.avatarGradient}
+              >
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'P'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.bookingStatusPill}>
@@ -274,8 +274,8 @@ export const PassengerDashboard = () => {
         <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
         <View style={styles.actionsGrid}>
           <QuickAction icon="history" label="History" onPress={() => navigation.navigate('History')} />
-          <QuickAction icon="bookmark-outline" label="Saved" onPress={handleSavedPlaces} color={colors.secondary} />
-          <QuickAction icon="message-text-outline" label="Support" onPress={handleSupport} color={colors.info} />
+          <QuickAction icon="message-text-outline" label="Messages" onPress={() => navigation.navigate('Inbox')} color={colors.secondary} />
+          <QuickAction icon="lifebuoy" label="Support" onPress={handleSupport} color={colors.info} />
           <QuickAction icon="account-cog-outline" label="Profile" onPress={() => navigation.navigate('Profile')} color={colors.primary500} />
         </View>
 
@@ -315,6 +315,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   greeting: {
     ...typography.label,
