@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   ScrollView,
   StyleSheet,
@@ -18,6 +17,7 @@ import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatDate, formatTime } from '@/utils/dateUtils';
+import { notify } from '@/utils/confirm';
 import { PAYMENT_METHODS } from '@/config/constants';
 
 const METHOD_META: Record<string, { icon: string; label: string; color: string }> = {
@@ -64,7 +64,7 @@ export const PaymentScreen = () => {
 
   const handleSetDefault = (method: string) => {
     setSelectedMethod(method);
-    Alert.alert('Payment Method Updated', `${METHOD_META[method]?.label} set as your default payment method.`);
+    void notify('Payment Method Updated', `${METHOD_META[method]?.label} set as your default payment method.`);
   };
 
   if (loading) return <Loading message="Loading payment info..." />;

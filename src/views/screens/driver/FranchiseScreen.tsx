@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
@@ -15,6 +15,7 @@ import {
   anyDocumentRejected,
 } from '@/models/entities/Franchise';
 import { colors, spacing, shadows, typography, radius, layout } from '@/views/styles/theme';
+import { confirm, notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
@@ -64,7 +65,7 @@ export const FranchiseScreen = () => {
 
   const handleSubmit = async (type: FranchiseType) => {
     if (!allUploaded) {
-      Alert.alert('Incomplete', 'Please upload all required documents first.');
+      void notify('Incomplete', 'Please upload all required documents first.');
       return;
     }
     setSubmitting(true);
@@ -81,19 +82,20 @@ export const FranchiseScreen = () => {
           remarks: null,
         })
       ).unwrap();
-      Alert.alert('Submitted', 'Your franchise application has been submitted for review.');
+      await notify('Submitted', 'Your franchise application has been submitted for review.');
     } catch {
-      Alert.alert('Error', 'Failed to submit application.');
+      await notify('Error', 'Failed to submit application.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleRenew = () => {
-    Alert.alert('Renew Franchise', 'Submit a renewal application for your MTOP?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Renew', onPress: () => handleSubmit('renewal') },
-    ]);
+  const handleRenew = async () => {
+    const yes = await confirm('Renew Franchise', 'Submit a renewal application for your MTOP?', {
+      confirmText: 'Renew',
+      cancelText: 'Cancel',
+    });
+    if (yes) handleSubmit('renewal');
   };
 
   if (loading && !myApplication) return <Loading message="Loading franchise records..." />;

@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, KeyboardAvoidingView,
-  Platform, Keyboard, ScrollView, SafeAreaView, Alert, Animated,
+  Platform, Keyboard, ScrollView, SafeAreaView, Animated,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
+import { notify } from '@/utils/confirm';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
@@ -31,7 +32,7 @@ export const PhoneLoginScreen = () => {
     Keyboard.dismiss();
     const cleanPhone = phone.trim();
     if (!cleanPhone) {
-      Alert.alert('Validation', 'Please enter your phone number.');
+      void notify('Validation', 'Please enter your phone number.');
       return;
     }
     
@@ -40,7 +41,7 @@ export const PhoneLoginScreen = () => {
       navigation.navigate('OTPVerification', { phone: cleanPhone });
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Failed to send OTP.';
-      Alert.alert('Error', msg);
+      void notify('Error', msg);
     }
   };
 

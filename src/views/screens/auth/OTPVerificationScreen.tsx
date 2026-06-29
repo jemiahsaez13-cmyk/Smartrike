@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, TextInput as RNTextInput,
-  KeyboardAvoidingView, Platform, Keyboard, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, Keyboard, ScrollView,
   SafeAreaView, Animated,
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
+import { notify } from '@/utils/confirm';
 import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { Loading } from '@/views/components/common/Loading';
@@ -82,7 +83,7 @@ export const OTPVerificationScreen = () => {
     Keyboard.dismiss();
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
-      Alert.alert('Incomplete', 'Please enter all 6 digits.');
+      void notify('Incomplete', 'Please enter all 6 digits.');
       return;
     }
 
@@ -91,7 +92,7 @@ export const OTPVerificationScreen = () => {
       // Navigation is automatic when isAuthenticated changes
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Verification failed.';
-      Alert.alert('Error', msg);
+      void notify('Error', msg);
     }
   };
 
@@ -102,9 +103,9 @@ export const OTPVerificationScreen = () => {
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-      Alert.alert('Sent', `A new code has been sent to ${route.params?.phone}`);
+      void notify('Sent', `A new code has been sent to ${route.params?.phone}`);
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to resend code.');
+      void notify('Error', 'Failed to resend code.');
     }
   };
 
