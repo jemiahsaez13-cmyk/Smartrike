@@ -118,7 +118,7 @@ export const InboxScreen = () => {
           </View>
           <View style={styles.rowBottom}>
             <Text style={[styles.preview, hasUnread && styles.previewUnread]} numberOfLines={1}>
-              {item.lastMessage ?? `${item.otherType === 'driver' ? 'Your driver is assigned' : 'New passenger'} — say hello 👋`}
+              {item.lastMessage ?? `${item.otherType === 'driver' ? 'Your driver is assigned' : 'New passenger'} — say hello`}
             </Text>
             {hasUnread ? (
               <View style={styles.badge}>

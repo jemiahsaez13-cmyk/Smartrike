@@ -65,7 +65,7 @@ export class BookingService {
     try {
       await this.notificationService.notifyPassenger(
         booking.passenger_id,
-        'Driver on the way! 🛺',
+        'Driver on the way',
         'A driver accepted your ride and is heading to your pickup point.'
       );
     } catch (e) {

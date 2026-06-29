@@ -125,7 +125,7 @@ export const EarningsScreen = () => {
             </View>
             <Text style={styles.goalNote}>
               {goalProgress >= 100
-                ? '🎉 Goal achieved! Great work today.'
+                ? 'Goal achieved! Great work today.'
                 : `₱${(DRIVER_GOAL_DAILY - todayEarnings).toFixed(2)} more to reach your daily goal.`}
             </Text>
           </Card>

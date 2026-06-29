@@ -408,7 +408,7 @@ export const DriverTripScreen = () => {
             <View style={styles.celebrateWrap}>
               <MaterialCommunityIcons name="check-decagram" size={48} color={colors.success} />
             </View>
-            <Text style={styles.ratingTitle}>Trip Completed! 🎉</Text>
+            <Text style={styles.ratingTitle}>Trip Completed</Text>
             <Text style={styles.celebrateFare}>You earned ₱{completedFare.toFixed(2)}</Text>
             <Text style={styles.ratingSubtitle}>Now rate your trip with {passengerName}</Text>
 
