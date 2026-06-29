@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { startTrip, completeTrip, submitDriverRating } from '@/controllers/slices/bookingSlice';
-import { updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
+import { clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
 import { UserRepository } from '@/models/repositories/UserRepository';
@@ -57,6 +57,7 @@ export const DriverTripScreen = () => {
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingComment, setRatingComment] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
+  const [completedFare, setCompletedFare] = useState(0);
   const [reportVisible, setReportVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportDetails, setReportDetails] = useState('');
@@ -166,10 +167,12 @@ export const DriverTripScreen = () => {
     setCompleting(true);
     try {
       await dispatch(completeTrip(currentBooking.id)).unwrap();
-      if (user?.id) {
-        await dispatch(updateDriverStatus({ driverId: user.id, status: 'online' }));
-      }
-      setRatingVisible(true); // prompt the driver to rate the passenger
+      // Keep `currentTrip` set so this screen stays mounted and shows the
+      // completion sheet. (The trip-complete service + DB trigger already put
+      // the driver back online server-side; clearCurrentTrip — fired when the
+      // driver finishes rating/skipping — flips Redux to online at that point.)
+      setCompletedFare(currentBooking.total_fare ?? 0);
+      setRatingVisible(true);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Please try again.';
       await notify('Could not complete trip', msg);
@@ -401,15 +404,13 @@ export const DriverTripScreen = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.ratingCard}>
-            {/* Avatar */}
-            <View style={styles.ratingAvatarWrap}>
-              <MaterialCommunityIcons name="account-circle" size={52} color={colors.primary} />
+            {/* Completion celebration */}
+            <View style={styles.celebrateWrap}>
+              <MaterialCommunityIcons name="check-decagram" size={48} color={colors.success} />
             </View>
-
-            <Text style={styles.ratingTitle}>Rate your passenger</Text>
-            <Text style={styles.ratingSubtitle}>
-              How was the ride with this passenger?
-            </Text>
+            <Text style={styles.ratingTitle}>Trip Completed! 🎉</Text>
+            <Text style={styles.celebrateFare}>You earned ₱{completedFare.toFixed(2)}</Text>
+            <Text style={styles.ratingSubtitle}>Now rate your trip with {passengerName}</Text>
 
             {/* Stars */}
             <View style={styles.starsRow}>
@@ -724,6 +725,16 @@ const styles = StyleSheet.create({
   submitText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
   skipBtn: { paddingVertical: spacing.sm },
   skipText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
+  celebrateWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.successLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  celebrateFare: { ...typography.h2, color: colors.success, fontSize: 24, marginTop: 2, marginBottom: 4 },
   ratingActionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   reportLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: spacing.sm },
   reportLinkText: { ...typography.label, fontSize: 13, color: colors.error },
