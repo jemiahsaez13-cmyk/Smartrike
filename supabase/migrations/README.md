@@ -1,7 +1,7 @@
 # Supabase Migrations
 
 SQL migrations for the Smart Trike backend. Apply them **in numeric order**
-(`001` → `027`) against the linked Supabase project (`ref: dauehvjvypzeouxxviom`).
+(`001` → `028`) against the linked Supabase project (`ref: dauehvjvypzeouxxviom`).
 
 ---
 
@@ -22,6 +22,7 @@ SQL migrations for the Smart Trike backend. Apply them **in numeric order**
 | `025_require_verified_driver_to_accept.sql` | RLS: only `verified` drivers can view/accept pending bookings | ✅ APPLIED 2026-06-29 |
 | `026_timestamps_to_timestamptz.sql` | Convert all time columns to `timestamptz` (fixes timezone-skewed freshness / "vanishing requests" + all displayed times) | ✅ APPLIED 2026-06-29 |
 | `027_create_reports.sql` | `reports` table + RLS (driver/passenger file & view own reports, admins manage all) | ✅ APPLIED 2026-06-29 |
+| `028_fix_double_counted_driver_stats.sql` | BUGFIX: two completion triggers double-counted driver trips/earnings; dropped the redundant `update_driver_stats` | ✅ APPLIED 2026-06-29 |
 
 **Until these are applied:** the e-money wallet screens and trip settlement will
 silently fail / fall back to cash (`BookingService.completeTrip` swallows the
