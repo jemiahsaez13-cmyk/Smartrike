@@ -61,6 +61,28 @@ export const DriverTripScreen = () => {
   const [reportReason, setReportReason] = useState('');
   const [reportDetails, setReportDetails] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
+  // True when the report was opened from the post-trip rating sheet (so we know
+  // to wrap the trip up afterwards instead of returning to the live trip).
+  const [reportFromRating, setReportFromRating] = useState(false);
+
+  // Open the report sheet without ever stacking it on top of the rating sheet.
+  const openReport = (fromRating: boolean) => {
+    setReportFromRating(fromRating);
+    if (fromRating) setRatingVisible(false);
+    setReportVisible(true);
+  };
+
+  const closeReport = () => {
+    setReportVisible(false);
+    setReportReason('');
+    setReportDetails('');
+    // Cancelled from the post-trip flow → bring the rating sheet back so the
+    // driver can still rate or skip to finish the trip.
+    if (reportFromRating) {
+      setReportFromRating(false);
+      setRatingVisible(true);
+    }
+  };
 
   const passengerId = currentBooking?.passenger_id || null;
   const passengerName = passenger?.name || 'Passenger';
@@ -202,7 +224,14 @@ export const DriverTripScreen = () => {
       setReportVisible(false);
       setReportReason('');
       setReportDetails('');
+      const wrapUp = reportFromRating;
+      setReportFromRating(false);
       await notify('Report submitted', 'Thanks — our team will review this passenger. Safe trips!');
+      if (wrapUp) {
+        // Reported from the post-trip sheet → the trip is done, return home.
+        dispatch(clearCurrentTrip());
+        navigation.navigate('DriverDashboard');
+      }
     } catch (e: any) {
       await notify('Could not submit report', e?.message || 'Please try again.');
     } finally {
@@ -299,7 +328,7 @@ export const DriverTripScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.contactBtn, styles.reportBtn]}
-              onPress={() => setReportVisible(true)}
+              onPress={() => openReport(false)}
               activeOpacity={0.8}
               accessibilityLabel="Report passenger"
             >
@@ -441,7 +470,7 @@ export const DriverTripScreen = () => {
                 <Text style={styles.skipText}>Skip</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setReportVisible(true)}
+                onPress={() => openReport(true)}
                 style={styles.reportLink}
                 activeOpacity={0.7}
               >
@@ -454,7 +483,7 @@ export const DriverTripScreen = () => {
       </Modal>
 
       {/* ── Report Passenger Modal ──────────────────────────────── */}
-      <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={() => setReportVisible(false)}>
+      <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={closeReport}>
         <View style={styles.modalOverlay}>
           <View style={styles.ratingCard}>
             <View style={[styles.ratingAvatarWrap, { backgroundColor: colors.errorLight }]}>
@@ -499,7 +528,7 @@ export const DriverTripScreen = () => {
                 <Text style={styles.submitText}>{submittingReport ? 'Submitting…' : 'Submit Report'}</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setReportVisible(false)} style={styles.skipBtn} activeOpacity={0.7}>
+            <TouchableOpacity onPress={closeReport} style={styles.skipBtn} activeOpacity={0.7}>
               <Text style={styles.skipText}>Cancel</Text>
             </TouchableOpacity>
           </View>
