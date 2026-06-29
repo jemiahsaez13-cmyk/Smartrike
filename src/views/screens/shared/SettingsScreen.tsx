@@ -1,6 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,10 +10,9 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
-import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { signOut } from '@/controllers/slices/authSlice';
+import { useAppSelector } from '@/controllers/store';
 import { Card } from '@/views/components/common/Card';
-import { confirm, notify } from '@/utils/confirm';
+import { notify } from '@/utils/confirm';
 import { colors, gradients, spacing, typography } from '@/views/styles/theme';
 
 interface SettingToggle {
@@ -27,28 +25,12 @@ interface SettingToggle {
 
 export const SettingsScreen = () => {
   const navigation = useNavigation<any>();
-  const dispatch = useAppDispatch();
   const { user } = useAppSelector(state => state.auth);
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [locationEnabled, setLocationEnabled] = useState(true);
-
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-
-  const handleSignOut = async () => {
-    const ok = await confirm('Sign Out', 'Are you sure you want to sign out?', {
-      confirmText: 'Sign Out',
-      destructive: true,
-    });
-    if (!ok) return;
-    try {
-      await dispatch(signOut()).unwrap();
-    } catch {
-      notify('Error', 'Failed to sign out. Try again.');
-    }
-  };
 
   const toggles: SettingToggle[] = [
     { key: 'push', label: 'Push Notifications', desc: 'Booking updates and alerts', icon: 'bell-outline', value: pushEnabled },
@@ -178,12 +160,7 @@ export const SettingsScreen = () => {
             <Text style={styles.appInfoValue}>FEDTODAB</Text>
           </View>
         </Card>
-
-        {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.8}>
-          <MaterialCommunityIcons name="logout" size={20} color={colors.error} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* Sign out lives on the Account tab to avoid duplicating it here. */}
       </ScrollView>
     </View>
   );
@@ -263,15 +240,4 @@ const styles = StyleSheet.create({
   },
   appInfoLabel: { ...typography.body, color: colors.textSecondary },
   appInfoValue: { ...typography.label, color: colors.text, fontSize: 13 },
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 36,
-    padding: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.errorLight,
-    gap: 10,
-  },
-  signOutText: { ...typography.label, color: colors.error, fontSize: 15 },
 });

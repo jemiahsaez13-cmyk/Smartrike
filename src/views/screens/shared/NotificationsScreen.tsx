@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -11,7 +12,15 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { markNotificationRead, markAllRead, fetchNotifications } from '@/controllers/slices/notificationSlice';
+import {
+  addNotification,
+  markNotificationRead,
+  markAllRead,
+  markReadAndPersist,
+  markAllReadAndPersist,
+  fetchNotifications,
+} from '@/controllers/slices/notificationSlice';
+import { RealtimeService } from '@/models/services/RealtimeService';
 import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
@@ -41,23 +50,55 @@ export const NotificationsScreen = () => {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const realtime = useRef(new RealtimeService()).current;
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    if (user?.id) {
-      dispatch(fetchNotifications(user.id));
-    }
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 30, friction: 8, useNativeDriver: true }),
     ]).start();
+  }, []);
+
+  // Load + live-subscribe whenever the signed-in user changes. New rows inserted
+  // for this user (by drivers, the system, etc.) appear without a manual refresh.
+  useEffect(() => {
+    if (!user?.id) return;
+    dispatch(fetchNotifications(user.id));
+    // Realtime is best-effort: a failed channel/WebSocket must never blank the
+    // list, so guard subscribe/unsubscribe and just log on failure.
+    let key: string | undefined;
+    try {
+      key = realtime.subscribeToNotifications(user.id, (payload: any) => {
+        if (payload?.new) dispatch(addNotification(payload.new));
+      });
+    } catch (err) {
+      console.warn('Notification realtime subscribe failed:', err);
+    }
+    return () => {
+      try {
+        if (key) realtime.unsubscribe(key);
+      } catch {
+        // ignore teardown errors
+      }
+    };
   }, [user?.id]);
 
+  const onRefresh = async () => {
+    if (!user?.id) return;
+    setRefreshing(true);
+    await dispatch(fetchNotifications(user.id));
+    setRefreshing(false);
+  };
+
   const handleMarkRead = (id: string) => {
-    dispatch(markNotificationRead(id));
+    dispatch(markNotificationRead(id)); // optimistic
+    dispatch(markReadAndPersist(id));   // persist to backend
   };
 
   const handleMarkAll = () => {
-    dispatch(markAllRead());
+    dispatch(markAllRead()); // optimistic
+    if (user?.id) dispatch(markAllReadAndPersist(user.id));
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -86,7 +127,13 @@ export const NotificationsScreen = () => {
           </View>
         </LinearGradient>
 
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.body}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
+        >
           {notifications.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="bell-off-outline" size={72} color={colors.textLight} />

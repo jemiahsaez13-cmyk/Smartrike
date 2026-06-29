@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
-  SafeAreaView, Animated,
+  SafeAreaView, Animated, Linking,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
 import { setDemoUserReducer } from '@/controllers/slices/authSlice';
+import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
@@ -25,6 +26,7 @@ export const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const panelY = useRef(new Animated.Value(80)).current;
@@ -55,6 +57,30 @@ export const LoginScreen = () => {
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
       notify('Sign in failed', msg);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    try {
+      // On web Supabase handles the full redirect; on native we get the auth URL
+      // back and open it in the system browser ourselves.
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { skipBrowserRedirect: Platform.OS !== 'web' },
+      });
+      if (error) throw error;
+      if (Platform.OS !== 'web' && data?.url) {
+        const canOpen = await Linking.canOpenURL(data.url);
+        if (canOpen) await Linking.openURL(data.url);
+      }
+    } catch {
+      notify(
+        'Google Sign-In Unavailable',
+        'Google login isn’t configured yet. Please sign in with email or phone.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
+      );
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -160,34 +186,44 @@ export const LoginScreen = () => {
                 <MaterialCommunityIcons name="phone-outline" size={20} color={colors.text} />
                 <Text style={styles.altBtnText}>Phone</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.altBtn} activeOpacity={0.75}>
+              <TouchableOpacity
+                style={[styles.altBtn, googleLoading && { opacity: 0.6 }]}
+                activeOpacity={0.75}
+                onPress={handleGoogleLogin}
+                disabled={googleLoading}
+              >
                 <MaterialCommunityIcons name="google" size={20} color={colors.text} />
-                <Text style={styles.altBtnText}>Google</Text>
+                <Text style={styles.altBtnText}>{googleLoading ? 'Opening…' : 'Google'}</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.demoBox}>
-              <Text style={styles.demoTitle}>QUICK ACCESS</Text>
-              <View style={styles.demoRow}>
-                {(['passenger', 'driver', 'admin'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.demoChip, type === 'admin' && styles.demoChipAdmin]}
-                    onPress={() => handleDemoMode(type)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.demoChipText,
-                        type === 'admin' && styles.demoChipTextAdmin,
-                      ]}
+            {/* Demo quick-login dispatches fake users that only exist in the
+                in-memory mock backend. Hide it when a real Supabase backend is
+                configured, since those accounts would fail RLS / show empty data. */}
+            {!isSupabaseConfigured && (
+              <View style={styles.demoBox}>
+                <Text style={styles.demoTitle}>QUICK ACCESS (DEMO)</Text>
+                <View style={styles.demoRow}>
+                  {(['passenger', 'driver', 'admin'] as const).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[styles.demoChip, type === 'admin' && styles.demoChipAdmin]}
+                      onPress={() => handleDemoMode(type)}
+                      activeOpacity={0.7}
                     >
-                      {type.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.demoChipText,
+                          type === 'admin' && styles.demoChipTextAdmin,
+                        ]}
+                      >
+                        {type.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>New to Smart Trike?  </Text>

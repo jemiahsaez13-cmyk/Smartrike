@@ -17,6 +17,8 @@ import { ChatScreen } from '@/views/screens/shared/ChatScreen';
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
+import { DriverProfileScreen } from '@/views/screens/passenger/DriverProfileScreen';
+import { EMoneyWalletScreen } from '@/views/screens/driver/EMoneyWalletScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -50,6 +52,8 @@ export const PassengerNavigator = () => (
     <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} />
     <Stack.Screen name="ActiveTrip" component={ActiveTripScreen} />
     <Stack.Screen name="Chat" component={ChatScreen} />
+    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
+    <Stack.Screen name="EMoneyWallet" component={EMoneyWalletScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} />

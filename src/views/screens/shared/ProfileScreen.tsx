@@ -20,7 +20,7 @@ export const ProfileScreen = () => {
     try {
       await logout();
     } catch {
-      // Demo sessions have no remote state; dropping auth is enough.
+      // Best-effort: logout clears local auth state regardless of remote result.
     }
   };
 
@@ -145,22 +145,20 @@ export const ProfileScreen = () => {
           />
         </View>
 
-        {/* Account management */}
+        {/* Account management — profile-specific actions only. Notifications,
+            Settings, Help and About live in Settings (and the app-bar icons
+            above) to avoid duplicating the same destinations here. */}
         <Text style={styles.sectionTitle}>Account</Text>
         <View style={styles.card}>
-          <MenuItem icon="account-edit-outline" label="Edit Profile" onPress={() => navigation.navigate('EditProfile')} />
+          <MenuItem
+            icon="account-edit-outline"
+            label="Edit Profile"
+            onPress={() => navigation.navigate('EditProfile')}
+            last={user?.user_type !== 'passenger'}
+          />
           {user?.user_type === 'passenger' && (
-            <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} />
+            <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} last />
           )}
-          <MenuItem icon="bell-outline" label="Notifications" onPress={() => navigation.navigate('Notifications')} />
-          <MenuItem icon="cog-outline" label="Settings" onPress={() => navigation.navigate('Settings')} last />
-        </View>
-
-        {/* Support */}
-        <Text style={styles.sectionTitle}>Support</Text>
-        <View style={styles.card}>
-          <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
-          <MenuItem icon="information-outline" label="About Smart Trike" onPress={() => navigation.navigate('About')} last />
         </View>
 
         {/* Sign out */}

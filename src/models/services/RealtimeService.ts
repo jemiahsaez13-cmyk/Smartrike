@@ -31,6 +31,38 @@ export class RealtimeService {
     return key;
   }
 
+  // Pushes new notifications to a specific user in real time, so the bell badge
+  // and Notifications screen update the moment a row is inserted for them.
+  subscribeToNotifications(userId: string, callback: (payload: any) => void): string {
+    const key = `notifications-${userId}`;
+    const channel = supabase.channel(`notifications-${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .subscribe();
+    this.channels.set(key, channel);
+    return key;
+  }
+
+  // Pushes newly created pending bookings to online drivers in real time, so a
+  // request appears without the driver having to re-toggle their status.
+  subscribeToNewBookings(callback: (payload: any) => void): string {
+    const key = 'new-bookings';
+    const channel = supabase.channel('new-bookings')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'bookings',
+        filter: 'status=eq.pending'
+      }, callback)
+      .subscribe();
+    this.channels.set(key, channel);
+    return key;
+  }
+
   unsubscribe(channelKey: string): void {
     const channel = this.channels.get(channelKey);
     if (channel) {

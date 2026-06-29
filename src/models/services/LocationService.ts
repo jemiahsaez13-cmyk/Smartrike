@@ -12,6 +12,10 @@ const DEFAULT_LOCATION: Location = {
 };
 
 export class LocationService {
+  // Holds the active watchPositionAsync subscription so it can be stopped later.
+  // Kept here (not in Redux) because the subscription object is non-serializable.
+  private watchSub: { remove: () => void } | null = null;
+
   async getCurrentPosition(): Promise<Location> {
     try {
       const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
@@ -57,5 +61,23 @@ export class LocationService {
         address: ''
       })
     );
+  }
+
+  // Begins streaming the device position to `callback` every ~5s, after ensuring
+  // foreground permission. Any previous watch is stopped first so we never leak
+  // two subscriptions. Returns false if permission was denied.
+  async startWatching(callback: (location: Location) => void): Promise<boolean> {
+    const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return false;
+    this.stopWatching();
+    this.watchSub = await this.watchPosition(callback);
+    return true;
+  }
+
+  stopWatching(): void {
+    if (this.watchSub) {
+      this.watchSub.remove();
+      this.watchSub = null;
+    }
   }
 }

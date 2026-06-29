@@ -6,8 +6,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { addIncomingRequest, removeIncomingRequest, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { useLocation } from '@/controllers/hooks/useLocation';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
-import { supabase, isSupabaseConfigured } from '@/config/supabase';
+import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
@@ -20,6 +21,9 @@ export const DriverDashboard = () => {
   const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
   const { currentStatus, dailyEarnings, incomingRequests, completedTrips, loading } = useAppSelector(state => state.driver);
+  const { startWatchingLocation, stopWatchingLocation } = useLocation();
+  const realtimeRef = useRef<RealtimeService | null>(null);
+  if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
 
   // Real goal progress + a status-appropriate message (no canned copy).
@@ -62,10 +66,13 @@ export const DriverDashboard = () => {
   // new bookings appear the instant a passenger requests one. Requests that get
   // taken by another driver (or cancelled) are pruned from the queue.
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || !user?.id) return;
     let cancelled = false;
+    const realtime = realtimeRef.current!;
     const repo = new BookingRepository();
 
+    // Keep the incoming-request queue in sync with the backend: add new pending
+    // requests and prune any that were taken by another driver or cancelled.
     const sync = () =>
       repo
         .findActiveBookings()
@@ -78,40 +85,25 @@ export const DriverDashboard = () => {
         })
         .catch(() => undefined);
 
+    // 1. Seed + lightweight polling so taken/cancelled requests fall off.
     sync();
     const poll = setInterval(sync, 10000);
 
-    let channel: any;
-    if (isSupabaseConfigured) {
-      try {
-        channel = supabase
-          .channel('driver-incoming-bookings')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings' }, (payload: any) => {
-            const b = payload?.new;
-            if (b?.status === 'pending' && !b.driver_id) dispatch(addIncomingRequest(b));
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings' }, (payload: any) => {
-            const b = payload?.new;
-            if (b && (b.status !== 'pending' || b.driver_id)) dispatch(removeIncomingRequest(b.id));
-          })
-          .subscribe();
-      } catch {
-        /* realtime unavailable — polling still covers it */
-      }
-    }
+    // 2. Push new pending bookings as they are created (no re-toggle needed).
+    const bookingsKey = realtime.subscribeToNewBookings((payload) => {
+      if (payload?.new) dispatch(addIncomingRequest(payload.new));
+    });
+
+    // 3. Stream this driver's GPS position to driver_locations for live tracking.
+    startWatchingLocation(user.id);
 
     return () => {
       cancelled = true;
       clearInterval(poll);
-      if (channel) {
-        try {
-          supabase.removeChannel(channel);
-        } catch {
-          /* noop */
-        }
-      }
+      realtime.unsubscribe(bookingsKey);
+      stopWatchingLocation();
     };
-  }, [dispatch, isOnline]);
+  }, [dispatch, isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
 
   const toggleStatus = async () => {
     if (!user?.id) return;

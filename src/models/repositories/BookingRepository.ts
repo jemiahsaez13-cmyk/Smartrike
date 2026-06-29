@@ -75,10 +75,18 @@ export class BookingRepository {
     return data;
   }
 
-  async submitRating(id: string, rating: Rating): Promise<Booking> {
+  async submitRating(
+    id: string,
+    rating: Rating,
+    target: 'passenger' | 'driver' = 'passenger'
+  ): Promise<Booking> {
+    // `passenger_rating` = the passenger's rating OF the driver (drives the
+    // driver's public score). `driver_rating` = the driver's rating OF the
+    // passenger. Writing to the right column keeps the two reviews separate.
+    const column = target === 'driver' ? 'driver_rating' : 'passenger_rating';
     const { data, error } = await supabase
       .from('bookings')
-      .update({ passenger_rating: rating })
+      .update({ [column]: rating })
       .eq('id', id)
       .select()
       .single();

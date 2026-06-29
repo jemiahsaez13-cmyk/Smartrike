@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl, Platform } from 'react-native';
-import { Text, Chip } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
@@ -11,6 +11,13 @@ import { notify } from '@/utils/confirm';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
+
+// Shared choice-chip design (matches TripHistory / Earnings filters).
+const FilterChip = ({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[styles.chip, active && styles.chipActive]}>
+    <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+  </TouchableOpacity>
+);
 
 export const ActivityLogsScreen = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -148,16 +155,12 @@ export const ActivityLogsScreen = () => {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
           <View style={styles.filters}>
             {['all', 'info', 'success', 'warning', 'error'].map((s) => (
-              <Chip 
+              <FilterChip
                 key={s}
-                selected={severityFilter === s} 
+                label={s.charAt(0).toUpperCase() + s.slice(1)}
+                active={severityFilter === s}
                 onPress={() => setSeverityFilter(s)}
-                style={styles.chip}
-                textStyle={styles.chipText}
-                compact
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </Chip>
+              />
             ))}
           </View>
         </ScrollView>
@@ -294,18 +297,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
   },
-  chip: { 
-    height: 32,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    borderWidth: 0,
+  chip: {
+    height: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
-    ...typography.labelSmall,
-    fontSize: 12,
+    ...typography.label,
+    fontSize: 13,
     color: colors.textSecondary,
-    marginVertical: 0,
-    marginHorizontal: 4,
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
   },
   content: { 
     flex: 1 
