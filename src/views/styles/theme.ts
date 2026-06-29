@@ -34,6 +34,8 @@ const palette = {
   borderLight: '#EEEEEE',  // Subtle dividers
   borderFocus: '#000000',  // Focused / active border
 
+  overlay: 'rgba(13,27,42,0.6)', // Single scrim for all modal / sheet backdrops
+
   error: '#E11900',        // Uber Red
   errorLight: '#FFEFED',
   success: '#06C167',      // Uber Green

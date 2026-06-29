@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
   // ── Rating Modal ──────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(13,27,42,0.65)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     paddingHorizontal: spacing.screen,
   },

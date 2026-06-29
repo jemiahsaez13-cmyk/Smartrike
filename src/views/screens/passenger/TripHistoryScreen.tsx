@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   starsInline: { flexDirection: 'row', gap: 2 },
   reviewEdit: { ...typography.label, fontSize: 13, color: colors.textSecondary },
-  reviewOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  reviewOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', paddingHorizontal: spacing.lg },
   reviewCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center', ...shadows.xl },
   reviewTitle: { ...typography.h2, fontSize: 22, color: colors.text },
   reviewSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },

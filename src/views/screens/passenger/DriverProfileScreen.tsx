@@ -671,7 +671,7 @@ const styles = StyleSheet.create({
   editReviewText: { ...typography.label, color: colors.primary, fontSize: 13 },
 
   // Edit-rating modal
-  reviewOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  reviewOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', paddingHorizontal: spacing.lg },
   reviewModalCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center', ...shadows.xl },
   reviewModalTitle: { ...typography.h2, fontSize: 22, color: colors.text },
   reviewModalSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },

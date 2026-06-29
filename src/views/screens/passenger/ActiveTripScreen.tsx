@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   },
   paidChipText: { ...typography.label, fontSize: 12, color: colors.success },
   sosBtn: { borderColor: colors.error, borderRadius: 14 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', padding: spacing.lg },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.lg },
   ratingCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
   ratingDriverAvatar: {
     width: 72,
