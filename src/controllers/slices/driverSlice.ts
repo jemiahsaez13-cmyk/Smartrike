@@ -58,6 +58,16 @@ export const acceptBooking = createAsyncThunk(
   }
 );
 
+// Restores the driver's in-progress trip so the active passenger is never lost
+// when they navigate back to the dashboard or reload the app.
+export const fetchActiveTrip = createAsyncThunk('driver/fetchActiveTrip', async (driverId: string, { rejectWithValue }) => {
+  try {
+    return await bookingRepo.findActiveByDriver(driverId);
+  } catch (error: any) {
+    return rejectWithValue(error.message);
+  }
+});
+
 export const fetchCompletedTrips = createAsyncThunk('driver/fetchCompletedTrips', async (driverId: string, { rejectWithValue }) => {
   try {
     return await bookingRepo.findByDriver(driverId);
@@ -122,6 +132,13 @@ const driverSlice = createSlice({
       .addCase(startTrip.fulfilled, (state, action) => {
         if (state.currentTrip && action.payload?.id === state.currentTrip.id) {
           state.currentTrip = action.payload;
+        }
+      })
+      .addCase(fetchActiveTrip.fulfilled, (state, action) => {
+        // Only restore — never clobber a live trip we already hold in memory.
+        if (action.payload) {
+          state.currentTrip = action.payload;
+          if (state.currentStatus === 'offline') state.currentStatus = 'on-trip';
         }
       })
       .addCase(fetchCompletedTrips.fulfilled, (state, action) => {

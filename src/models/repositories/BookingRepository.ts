@@ -106,6 +106,21 @@ export class BookingRepository {
     return data;
   }
 
+  // The driver's current in-progress trip (accepted or in-transit), if any.
+  // Lets the dashboard restore/resume the active passenger after the driver
+  // navigates away or reloads the app.
+  async findActiveByDriver(driverId: string): Promise<Booking | null> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('driver_id', driverId)
+      .in('status', ['accepted', 'in-transit'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return null;
+    return (data && data[0]) || null;
+  }
+
   async findActiveBookings(): Promise<Booking[]> {
     const { data, error } = await supabase
       .from('bookings')

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus } from '@/controllers/slices/driverSlice';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { RealtimeService } from '@/models/services/RealtimeService';
@@ -22,7 +22,7 @@ export const DriverDashboard = () => {
   const dispatch = useAppDispatch();
   const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
-  const { currentStatus, dailyEarnings, incomingRequests, completedTrips, loading } = useAppSelector(state => state.driver);
+  const { currentStatus, dailyEarnings, incomingRequests, completedTrips, loading, currentTrip } = useAppSelector(state => state.driver);
   const { startWatchingLocation, stopWatchingLocation } = useLocation();
   const realtimeRef = useRef<RealtimeService | null>(null);
   if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
@@ -62,7 +62,10 @@ export const DriverDashboard = () => {
       }),
     ]).start();
 
-    if (user?.id) dispatch(fetchCompletedTrips(user.id));
+    if (user?.id) {
+      dispatch(fetchCompletedTrips(user.id));
+      dispatch(fetchActiveTrip(user.id)); // restore active passenger after back/reload
+    }
   }, [dispatch, user?.id]);
 
   // Incoming requests: only while genuinely AVAILABLE (online, not already on a
@@ -199,6 +202,33 @@ export const DriverDashboard = () => {
       </LinearGradient>
 
       <View style={styles.body}>
+        {currentTrip && (
+          <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('DriverTrip')}>
+            <LinearGradient
+              colors={gradients.brand}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.resumeCard}
+            >
+              <View style={styles.resumeIcon}>
+                <MaterialCommunityIcons name="rickshaw" size={24} color="#fff" />
+              </View>
+              <View style={styles.resumeText}>
+                <Text style={styles.resumeTitle}>
+                  Active Trip · {currentTrip.status === 'in-transit' ? 'In Progress' : 'Heading to Pickup'}
+                </Text>
+                <Text style={styles.resumeSub} numberOfLines={1}>
+                  To {currentTrip.dropoff_location?.address || 'destination'} • ₱{(currentTrip.total_fare || 0).toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.resumeBtn}>
+                <Text style={styles.resumeBtnText}>RESUME</Text>
+                <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.statsRow}>
           <StatBox label="Today's Pay" value={`₱${dailyEarnings.toFixed(2)}`} icon="cash" color={colors.success} />
           <StatBox label="Rating" value={ratingLabel} icon="star" color={colors.warning} />
@@ -389,6 +419,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screen,
     paddingBottom: 130,
   },
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 20,
+    ...shadows.md,
+  },
+  resumeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  resumeText: { flex: 1 },
+  resumeTitle: { ...typography.label, color: '#fff', fontSize: 14 },
+  resumeSub: { ...typography.bodySmall, color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+  resumeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingLeft: 12,
+    paddingRight: 8,
+    height: 34,
+    borderRadius: 17,
+  },
+  resumeBtnText: { ...typography.label, color: colors.primary, fontSize: 12 },
   statsRow: {
     flexDirection: 'row',
     gap: 12,

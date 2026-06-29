@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput as RNTextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, TextInput as RNTextInput, Modal } from 'react-native';
 import { Text, Menu } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAppSelector } from '@/controllers/store';
+import { useAppSelector, useAppDispatch } from '@/controllers/store';
+import { submitRating } from '@/controllers/slices/bookingSlice';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { ExportService } from '@/models/services/ExportService';
+import { notify } from '@/utils/confirm';
 
 // Filter options for the status choice chips.
 const FILTERS = [
@@ -41,12 +43,45 @@ const FilterChip = ({ label, active, onPress }: { label: string; active: boolean
 
 export const TripHistoryScreen = () => {
   const { user } = useAppSelector(state => state.auth);
+  const dispatch = useAppDispatch();
+  const isPassenger = user?.user_type !== 'driver';
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [menuVisible, setMenuVisible] = useState(false);
+  // Edit-review modal state
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
+  const [reviewStars, setReviewStars] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
+
+  const openReview = (b: Booking) => {
+    const r: any = b.passenger_rating;
+    setReviewStars(r?.stars ?? 5);
+    setReviewComment(r?.comment ?? '');
+    setReviewBooking(b);
+  };
+
+  const submitReview = async () => {
+    if (!reviewBooking) return;
+    setSavingReview(true);
+    try {
+      await dispatch(
+        submitRating({
+          bookingId: reviewBooking.id,
+          rating: { stars: reviewStars, comment: reviewComment, created_at: new Date().toISOString() } as any,
+        })
+      ).unwrap();
+      await loadBookings();
+      setReviewBooking(null);
+    } catch {
+      await notify('Could not save review', 'Please try again.');
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   useEffect(() => {
     loadBookings();
@@ -222,11 +257,82 @@ export const TripHistoryScreen = () => {
                     })}
                   </Text>
                 </View>
+
+                {isPassenger && booking.status === 'completed' && (
+                  <TouchableOpacity style={styles.reviewRow} onPress={() => openReview(booking)} activeOpacity={0.7}>
+                    {booking.passenger_rating ? (
+                      <>
+                        <View style={styles.starsInline}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <MaterialCommunityIcons
+                              key={n}
+                              name={n <= ((booking.passenger_rating as any)?.stars ?? 0) ? 'star' : 'star-outline'}
+                              size={14}
+                              color={colors.warning}
+                            />
+                          ))}
+                        </View>
+                        <Text style={styles.reviewEdit}>Edit review</Text>
+                      </>
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="star-plus-outline" size={16} color={colors.primary} />
+                        <Text style={[styles.reviewEdit, { color: colors.primary }]}>Rate this trip</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })
         )}
       </ScrollView>
+
+      {/* ── Edit Review Modal ───────────────────────────────────── */}
+      <Modal visible={!!reviewBooking} transparent animationType="fade" onRequestClose={() => setReviewBooking(null)}>
+        <View style={styles.reviewOverlay}>
+          <View style={styles.reviewCard}>
+            <Text style={styles.reviewTitle}>Rate your trip</Text>
+            <Text style={styles.reviewSub} numberOfLines={1}>
+              To {reviewBooking?.dropoff_location?.address || 'destination'}
+            </Text>
+
+            <View style={styles.reviewStarsRow}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <TouchableOpacity key={n} onPress={() => setReviewStars(n)} activeOpacity={0.7}>
+                  <MaterialCommunityIcons
+                    name={n <= reviewStars ? 'star' : 'star-outline'}
+                    size={40}
+                    color={n <= reviewStars ? colors.warning : colors.border}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <RNTextInput
+              placeholder="Share details about your ride (optional)"
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              style={styles.reviewInput}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              maxLength={300}
+            />
+
+            <TouchableOpacity
+              style={[styles.reviewSaveBtn, savingReview && { opacity: 0.6 }]}
+              onPress={submitReview}
+              disabled={savingReview}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.reviewSaveText}>{savingReview ? 'Saving…' : 'Save Review'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setReviewBooking(null)} style={styles.reviewCancelBtn} activeOpacity={0.7}>
+              <Text style={styles.reviewCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -385,6 +491,47 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   dateText: { ...typography.bodySmall, fontSize: 12, color: colors.textLight },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  starsInline: { flexDirection: 'row', gap: 2 },
+  reviewEdit: { ...typography.label, fontSize: 13, color: colors.textSecondary },
+  reviewOverlay: { flex: 1, backgroundColor: 'rgba(13,27,42,0.6)', justifyContent: 'center', paddingHorizontal: spacing.lg },
+  reviewCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center', ...shadows.xl },
+  reviewTitle: { ...typography.h2, fontSize: 22, color: colors.text },
+  reviewSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.lg, textAlign: 'center' },
+  reviewStarsRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.lg },
+  reviewInput: {
+    width: '100%',
+    minHeight: 64,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: spacing.md,
+    ...typography.body,
+    fontSize: 14,
+    color: colors.text,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  reviewSaveBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewSaveText: { ...typography.label, color: '#fff', fontSize: 16 },
+  reviewCancelBtn: { paddingVertical: spacing.sm, marginTop: spacing.xs },
+  reviewCancelText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
   emptyState: {
     alignItems: 'center',
     paddingVertical: spacing.xl * 2,
