@@ -297,6 +297,14 @@ export const DriverTripScreen = () => {
             <TouchableOpacity style={styles.contactBtn} onPress={handleMessagePassenger} activeOpacity={0.8}>
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.contactBtn, styles.reportBtn]}
+              onPress={() => setReportVisible(true)}
+              activeOpacity={0.8}
+              accessibilityLabel="Report passenger"
+            >
+              <MaterialCommunityIcons name="flag-outline" size={20} color={colors.error} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -593,6 +601,7 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   ratingText: { ...typography.bodySmall, color: colors.textSecondary },
   contactRow: { flexDirection: 'row', gap: 12 },
+  reportBtn: { backgroundColor: colors.errorLight },
   contactBtn: {
     width: 40,
     height: 40,
