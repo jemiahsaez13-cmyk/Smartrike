@@ -159,6 +159,17 @@ export const AdminDashboard = () => {
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('Reports')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="flag-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>User Reports</Text>
+                <Text style={styles.queueLevel}>Review &amp; action driver / passenger reports</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
           </Card>
 
           <View style={styles.sectionHeader}>

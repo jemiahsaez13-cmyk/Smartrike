@@ -14,7 +14,7 @@ import {
   docReviewStatus,
   anyDocumentRejected,
 } from '@/models/entities/Franchise';
-import { colors, spacing, shadows, typography, radius } from '@/views/styles/theme';
+import { colors, spacing, shadows, typography, radius, layout } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
@@ -348,9 +348,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 2,
   },
-  content: { 
-    paddingHorizontal: spacing.screen, 
-    paddingBottom: spacing.xxl 
+  content: {
+    paddingHorizontal: spacing.screen,
+    paddingBottom: layout.contentBottom
   },
   mtopCard: { 
     backgroundColor: colors.primary,

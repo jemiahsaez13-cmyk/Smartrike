@@ -17,6 +17,7 @@ import { ChangePasswordScreen } from '@/views/screens/shared/ChangePasswordScree
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
+import { AdminReportsScreen } from '@/views/screens/admin/AdminReportsScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -66,5 +67,6 @@ export const AdminNavigator = () => (
     <Stack.Screen name="Legal" component={LegalScreen} />
     <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+    <Stack.Screen name="Reports" component={AdminReportsScreen} />
   </Stack.Navigator>
 );
