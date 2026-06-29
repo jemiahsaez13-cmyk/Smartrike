@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -89,13 +89,6 @@ export const PassengerDashboard = () => {
   };
 
   if (bookingLoading && !currentBooking) return <Loading message="Syncing with TODA..." />;
-
-  const handleSupport = () => {
-    Alert.alert(
-      'Dispatch Support',
-      'For urgent trip help, contact the TODA desk or use Emergency SOS during an active trip.'
-    );
-  };
 
   const bookPlace = (place: PopularPlace) => {
     navigation.navigate('BookRide', {
@@ -275,7 +268,7 @@ export const PassengerDashboard = () => {
         <View style={styles.actionsGrid}>
           <QuickAction icon="history" label="History" onPress={() => navigation.navigate('History')} />
           <QuickAction icon="message-text-outline" label="Messages" onPress={() => navigation.navigate('Inbox')} color={colors.secondary} />
-          <QuickAction icon="lifebuoy" label="Support" onPress={handleSupport} color={colors.info} />
+          <QuickAction icon="wallet-outline" label="Wallet" onPress={() => navigation.navigate('EMoneyWallet')} color={colors.info} />
           <QuickAction icon="account-cog-outline" label="Profile" onPress={() => navigation.navigate('Profile')} color={colors.primary500} />
         </View>
 
