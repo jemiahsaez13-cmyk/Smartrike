@@ -58,7 +58,8 @@ const placeToLocation = (p: PopularPlace): Location => ({
 // perpendicular control offset) so the route line bends like Uber. Cosmetic
 // only — it does not follow roads (that would need the Directions API).
 type LatLng = { latitude: number; longitude: number };
-const curvedPath = (a: LatLng, b: LatLng, segments = 48): LatLng[] => {
+// `trim` pulls both ends inward (0–0.5) so the line stops just short of the pins.
+const curvedPath = (a: LatLng, b: LatLng, segments = 48, trim = 0): LatLng[] => {
   const dLat = b.latitude - a.latitude;
   const dLng = b.longitude - a.longitude;
   const mid = { latitude: (a.latitude + b.latitude) / 2, longitude: (a.longitude + b.longitude) / 2 };
@@ -66,7 +67,7 @@ const curvedPath = (a: LatLng, b: LatLng, segments = 48): LatLng[] => {
   const control = { latitude: mid.latitude + dLng * curve, longitude: mid.longitude - dLat * curve };
   const pts: LatLng[] = [];
   for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
+    const t = trim + (i / segments) * (1 - 2 * trim);
     const u = 1 - t;
     pts.push({
       latitude: u * u * a.latitude + 2 * u * t * control.latitude + t * t * b.latitude,
@@ -184,13 +185,12 @@ export const BookRideScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]);
 
-  // Curved route line between pickup and drop-off, nudged a hair left so it
-  // tucks just under the pins. Scaled to zoom to stay constant on screen.
-  const curvedLine = useMemo(() => {
-    if (!pickupCoord || !dropCoord) return [];
-    const shift = (region.longitudeDelta || 0.03) * 0.0012;
-    return curvedPath(pickupCoord, dropCoord).map((p) => ({ ...p, longitude: p.longitude - shift }));
-  }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, region.longitudeDelta]);
+  // Curved route line between pickup and drop-off, trimmed slightly at both
+  // ends so it stops just short of the pins instead of poking into them.
+  const curvedLine = useMemo(
+    () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord, 48, 0.05) : []),
+    [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]
+  );
 
   useEffect(() => {
     getLocation()
