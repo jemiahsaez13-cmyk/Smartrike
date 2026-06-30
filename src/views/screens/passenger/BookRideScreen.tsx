@@ -188,7 +188,7 @@ export const BookRideScreen = () => {
   // Curved route line between pickup and drop-off, trimmed slightly at both
   // ends so it stops just short of the pins instead of poking into them.
   const curvedLine = useMemo(
-    () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord, 48, 0.05) : []),
+    () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord, 48, 0.025) : []),
     [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]
   );
 
