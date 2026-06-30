@@ -17,6 +17,9 @@ export const supabase: any = isSupabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+        // PKCE is the secure OAuth flow for mobile: the browser comes back to
+        // the app with a one-time `code` that we exchange for a session.
+        flowType: 'pkce',
       },
     })
   : mockSupabase;

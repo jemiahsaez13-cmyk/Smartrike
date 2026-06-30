@@ -2,8 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
-  SafeAreaView, Animated, Linking,
+  SafeAreaView, Animated,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,7 +23,7 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 export const LoginScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
-  const { login, loading } = useAuth();
+  const { login, loading, checkAuth } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,21 +65,50 @@ export const LoginScreen = () => {
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     try {
-      // On web Supabase handles the full redirect; on native we get the auth URL
-      // back and open it in the system browser ourselves.
+      // Web: Supabase performs the full-page redirect itself, so we just kick it
+      // off and let the page reload handle the session.
+      if (Platform.OS === 'web') {
+        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        if (error) throw error;
+        return;
+      }
+
+      // Native: open Google in a secure in-app browser, then catch the redirect
+      // back into the app (smarttrike://auth-callback) and exchange the one-time
+      // code Supabase returns for a real session.
+      const redirectTo = Linking.createURL('auth-callback');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { skipBrowserRedirect: Platform.OS !== 'web' },
+        options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
-      if (Platform.OS !== 'web' && data?.url) {
-        const canOpen = await Linking.canOpenURL(data.url);
-        if (canOpen) await Linking.openURL(data.url);
+      if (!data?.url) throw new Error('Could not start Google sign-in.');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      // User dismissed the browser without completing sign-in.
+      if (result.type !== 'success' || !result.url) return;
+
+      const { queryParams } = Linking.parse(result.url);
+      if (queryParams?.error_description || queryParams?.error) {
+        throw new Error(String(queryParams.error_description || queryParams.error));
       }
-    } catch {
+
+      const code = queryParams?.code;
+      if (!code) throw new Error('Google did not return a sign-in code.');
+
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(String(code));
+      if (exchangeError) throw exchangeError;
+
+      // Session is now stored; load the matching app profile into Redux so the
+      // navigator switches the user into the app.
+      await checkAuth();
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message;
       notify(
         'Google Sign-In Unavailable',
-        'Google login isn’t configured yet. Please sign in with email or phone.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
+        msg
+          ? `Google sign-in could not be completed.\n\n${msg}`
+          : 'Google login isn’t configured yet. Please sign in with email or phone.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
       );
     } finally {
       setGoogleLoading(false);

@@ -3,6 +3,7 @@
     "name": "Smart Trike",
     "slug": "smart-trike",
     "version": "1.0.0",
+    "scheme": "smarttrike",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
@@ -18,6 +19,7 @@
     "plugins": [
       "expo-font",
       "expo-location",
+      "expo-web-browser",
       [
         "expo-image-picker",
         {
