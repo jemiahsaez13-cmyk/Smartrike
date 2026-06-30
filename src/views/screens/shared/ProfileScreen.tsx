@@ -157,7 +157,10 @@ export const ProfileScreen = () => {
             last={user?.user_type !== 'passenger'}
           />
           {user?.user_type === 'passenger' && (
-            <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} last />
+            <>
+              <MenuItem icon="map-marker-outline" label="My Addresses" onPress={() => navigation.navigate('AddressBook')} />
+              <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} last />
+            </>
           )}
         </View>
 

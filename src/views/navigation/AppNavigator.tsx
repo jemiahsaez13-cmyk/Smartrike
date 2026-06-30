@@ -7,6 +7,7 @@ import { PassengerNavigator } from './PassengerNavigator';
 import { DriverNavigator } from './DriverNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { SplashScreen } from '@/views/screens/auth/SplashScreen';
+import { ProfileSetupScreen } from '@/views/screens/auth/ProfileSetupScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,10 +32,22 @@ export const AppNavigator = () => {
     return <SplashScreen />;
   }
 
+  // New accounts (including Google sign-in) must finish profile setup before
+  // entering the app. Admins and demo sessions are exempt.
+  const needsOnboarding =
+    !!user &&
+    user.user_type !== 'admin' &&
+    !user.profile_completed &&
+    !user.id?.startsWith('demo-');
+
   return (
     <NavigationContainer>
       {!isAuthenticated ? (
         <AuthNavigator />
+      ) : needsOnboarding ? (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+        </Stack.Navigator>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {user?.user_type === 'passenger' && <Stack.Screen name="Passenger" component={PassengerNavigator} />}

@@ -10,6 +10,26 @@ export interface User {
   status: 'active' | 'inactive' | 'suspended';
   rating: number;
   total_trips: number;
+  // Primary address captured during profile setup.
+  home_address?: string | null;
+  // Gate for the one-time profile-setup screen. New accounts (incl. Google
+  // sign-in) start false; existing users are backfilled true.
+  profile_completed?: boolean;
+}
+
+// A reusable address in the passenger's saved-address book (Shopee-style).
+export interface SavedAddress {
+  id: string;
+  user_id: string;
+  label: string;
+  recipient_name: string | null;
+  recipient_phone: string | null;
+  full_address: string;
+  notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_default: boolean;
+  created_at: Date;
 }
 
 export interface Driver extends User {

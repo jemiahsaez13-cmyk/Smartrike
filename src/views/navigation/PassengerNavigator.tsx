@@ -9,6 +9,8 @@ import { PopularPlacesScreen } from '@/views/screens/passenger/PopularPlacesScre
 import { TripHistoryScreen } from '@/views/screens/passenger/TripHistoryScreen';
 import { ProfileScreen } from '@/views/screens/shared/ProfileScreen';
 import { EditProfileScreen } from '@/views/screens/shared/EditProfileScreen';
+import { AddressBookScreen } from '@/views/screens/shared/AddressBookScreen';
+import { AddressFormScreen } from '@/views/screens/shared/AddressFormScreen';
 import { HelpSupportScreen } from '@/views/screens/shared/HelpSupportScreen';
 import { AboutScreen } from '@/views/screens/shared/AboutScreen';
 import { LegalScreen } from '@/views/screens/shared/LegalScreen';
@@ -59,6 +61,8 @@ export const PassengerNavigator = () => (
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+    <Stack.Screen name="AddressBook" component={AddressBookScreen} />
+    <Stack.Screen name="AddressForm" component={AddressFormScreen} />
     <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
     <Stack.Screen name="About" component={AboutScreen} />
     <Stack.Screen name="Legal" component={LegalScreen} />

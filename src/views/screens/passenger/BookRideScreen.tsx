@@ -12,9 +12,12 @@ import { fetchEMoneyAccounts } from '@/controllers/slices/paymentSlice';
 import { confirm, notify } from '@/utils/confirm';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
+import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
-import { Location } from '@/models/types';
+import { GeocodingService } from '@/models/services/GeocodingService';
+import { AddressRepository } from '@/models/repositories/AddressRepository';
+import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
@@ -40,6 +43,8 @@ const UBER_MAP_STYLE = [
 const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
 const placeService = new PopularPlaceService();
+const geo = new GeocodingService();
+const addressRepo = new AddressRepository();
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
 const placeToLocation = (p: PopularPlace): Location => ({
@@ -75,14 +80,25 @@ export const BookRideScreen = () => {
   const [bookForOther, setBookForOther] = useState(false);
   const [otherName, setOtherName] = useState('');
   const [otherPhone, setOtherPhone] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
   }, []);
 
+  // Load the rider's saved addresses for quick drop-off selection.
+  useEffect(() => {
+    if (!user?.id) return;
+    addressRepo.listByUser(user.id).then(setSavedAddresses).catch(() => undefined);
+  }, [user?.id]);
+
   const sheetAnim = useRef(new Animated.Value(height * 0.42)).current;
   const mapRef = useRef<any>(null);
   const mapSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  // Live geographic centre of the native map — what sits under the fixed centre
+  // pin. Updated as the user pans so "Confirm" reads the right coordinate.
+  const mapCenterRef = useRef<{ latitude: number; longitude: number }>(BOAC_CENTER);
 
   // react-native-maps only renders on native; on web we show the faux map.
   const canUseNativeMap = !!MapView && Platform.OS !== 'web';
@@ -194,34 +210,48 @@ export const BookRideScreen = () => {
     Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }).start();
   };
 
-  const applyPin = (coord: { latitude: number; longitude: number }) => {
-    const loc: Location = {
-      latitude: coord.latitude,
-      longitude: coord.longitude,
-      address: pinTarget === 'pickup' ? 'Pinned pickup' : 'Pinned destination',
-    };
-    if (pinTarget === 'pickup') setPickup(loc);
-    else selectDestination(loc);
-    closePicker();
+  // Confirm whatever sits under the centre pin: snap it to the nearest road
+  // (Roads API) for accuracy, reverse-geocode a readable address, then assign it
+  // to pickup or drop-off.
+  const confirmPin = async () => {
+    const raw = canUseNativeMap ? mapCenterRef.current : { latitude: region.latitude, longitude: region.longitude };
+    setResolving(true);
+    try {
+      const place = await geo.resolvePin(raw.latitude, raw.longitude);
+      const loc: Location = { latitude: place.latitude, longitude: place.longitude, address: place.address };
+      if (pinTarget === 'pickup') setPickup(loc);
+      else selectDestination(loc);
+    } catch {
+      const loc: Location = {
+        latitude: raw.latitude,
+        longitude: raw.longitude,
+        address: pinTarget === 'pickup' ? 'Pinned pickup' : 'Pinned destination',
+      };
+      if (pinTarget === 'pickup') setPickup(loc);
+      else selectDestination(loc);
+    } finally {
+      setResolving(false);
+      closePicker();
+    }
   };
 
-  // Works everywhere: a native map tap carries real coordinates; a tap on the
-  // web/faux map carries pixel offsets we convert to geo within the framed region.
-  const handleMapTap = (e: any) => {
-    const ne = e?.nativeEvent;
-    if (!ne) return;
-    if (ne.coordinate) {
-      applyPin(ne.coordinate);
+  // Fill the drop-off from a saved address. Uses its stored pin when present,
+  // otherwise forward-geocodes the text so a fare can still be computed.
+  const selectSavedAddress = async (addr: SavedAddress) => {
+    if (addr.latitude != null && addr.longitude != null) {
+      selectDestination({ latitude: addr.latitude, longitude: addr.longitude, address: addr.full_address });
       return;
     }
-    const { width, height: h } = mapSizeRef.current;
-    const x = ne.locationX;
-    const y = ne.locationY;
-    if (width && h && x != null && y != null) {
-      applyPin({
-        latitude: region.latitude + (0.5 - y / h) * region.latitudeDelta,
-        longitude: region.longitude + (x / width - 0.5) * region.longitudeDelta,
-      });
+    setResolving(true);
+    try {
+      const coord = await geo.forwardGeocode(addr.full_address);
+      if (coord) {
+        selectDestination({ ...coord, address: addr.full_address });
+      } else {
+        void notify('Location not found', 'Couldn’t locate that saved address on the map. Set it on the map instead.');
+      }
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -297,7 +327,9 @@ export const BookRideScreen = () => {
             provider={PROVIDER_GOOGLE}
             customMapStyle={UBER_MAP_STYLE}
             initialRegion={region}
-            onPress={picking ? handleMapTap : undefined}
+            onRegionChangeComplete={(r: any) => {
+              mapCenterRef.current = { latitude: r.latitude, longitude: r.longitude };
+            }}
             showsUserLocation
             showsMyLocationButton={false}
             showsCompass={false}
@@ -332,23 +364,28 @@ export const BookRideScreen = () => {
             <View style={styles.mapNodeEnd} />
             <MaterialCommunityIcons name="map-outline" size={54} color={colors.textMuted} />
             <Text style={styles.mapHint}>Map preview</Text>
-            <View style={styles.centerPinContainer}>
-              <View style={styles.pinShadow} />
-              <View style={styles.pinCircle}>
-                <View style={styles.pinInner} />
-              </View>
-              <View style={styles.pinTail} />
-            </View>
           </View>
         )}
 
         <LinearGradient colors={['rgba(0,0,0,0.16)', 'transparent']} style={styles.mapTopGradient} pointerEvents="none" />
 
+        {/* Fixed centre pin: the live drop-off/pickup indicator. Shown while
+            picking, and as a hint whenever no drop-off has been set yet. */}
+        {(picking || !dropoff) && (
+          <View style={styles.centerPin} pointerEvents="none">
+            <View style={[styles.centerPinHead, pinTarget === 'pickup' && picking && styles.centerPinHeadPickup]}>
+              <MaterialCommunityIcons name="map-marker" size={26} color="#fff" />
+            </View>
+            <View style={styles.centerPinStem} />
+            <View style={styles.centerPinShadow} />
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.goBack()}
+          onPress={() => (picking ? closePicker() : navigation.goBack())}
           activeOpacity={0.85}
-          accessibilityLabel="Go back"
+          accessibilityLabel={picking ? 'Cancel picking' : 'Go back'}
         >
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
         </TouchableOpacity>
@@ -359,27 +396,29 @@ export const BookRideScreen = () => {
           </TouchableOpacity>
         )}
 
-        {/* Tap-to-pin mode overlay */}
+        {/* Move-map-under-pin picker. The pin stays fixed at the centre; the
+            user pans the map beneath it and taps Confirm to lock it in. */}
         {picking && (
           <>
-            {/* On web / faux map there is no map onPress, so this transparent
-                responder captures the tap and converts it to coordinates. */}
-            {!canUseNativeMap && (
-              <View
-                style={StyleSheet.absoluteFill}
-                onStartShouldSetResponder={() => true}
-                onResponderRelease={handleMapTap}
-              />
-            )}
             <View pointerEvents="none" style={styles.pinPickTop}>
-              <MaterialCommunityIcons name="gesture-tap" size={18} color="#fff" />
+              <MaterialCommunityIcons name="map-marker-radius" size={18} color="#fff" />
               <Text style={styles.pinPickTopText}>
-                Tap the map to set your {pinTarget === 'pickup' ? 'pickup point' : 'destination'}
+                {canUseNativeMap
+                  ? `Move the map to place your ${pinTarget === 'pickup' ? 'pickup point' : 'destination'}`
+                  : `Confirm your ${pinTarget === 'pickup' ? 'pickup point' : 'destination'}`}
               </Text>
             </View>
             <View style={styles.pinPickBar}>
-              <TouchableOpacity style={styles.pinPickConfirm} onPress={closePicker} activeOpacity={0.85}>
-                <Text style={styles.pinPickConfirmText}>Cancel</Text>
+              <TouchableOpacity
+                style={[styles.pinPickConfirm, resolving && { opacity: 0.7 }]}
+                onPress={confirmPin}
+                disabled={resolving}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="check" size={20} color="#fff" />
+                <Text style={styles.pinPickConfirmText}>
+                  {resolving ? 'Locating…' : `Confirm ${pinTarget === 'pickup' ? 'pickup' : 'destination'}`}
+                </Text>
               </TouchableOpacity>
             </View>
           </>
@@ -426,11 +465,15 @@ export const BookRideScreen = () => {
                     onPress={() => setRideType(option.id)}
                     activeOpacity={0.82}
                   >
-                    <MaterialCommunityIcons
-                      name={option.icon as any}
-                      size={20}
-                      color={selected ? colors.primary : colors.textSecondary}
-                    />
+                    {option.id === 'standard' ? (
+                      <TricycleIcon size={26} color={selected ? colors.primary : colors.textSecondary} />
+                    ) : (
+                      <MaterialCommunityIcons
+                        name={option.icon as any}
+                        size={20}
+                        color={selected ? colors.primary : colors.textSecondary}
+                      />
+                    )}
                     <View style={styles.rideOptionCopy}>
                       <Text style={styles.rideOptionLabel}>{option.label}</Text>
                       <Text style={styles.rideOptionDesc}>{option.desc}</Text>
@@ -440,6 +483,37 @@ export const BookRideScreen = () => {
               })}
             </View>
           </View>
+
+          {savedAddresses.length > 0 && (
+            <>
+              <View style={styles.savedHeader}>
+                <Text style={styles.savedTitle}>Saved addresses</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('AddressBook')} activeOpacity={0.7}>
+                  <Text style={styles.savedManage}>Manage</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destScroll} contentContainerStyle={styles.destRow}>
+                {savedAddresses.map((addr) => {
+                  const selected = dropoffAddress === addr.full_address;
+                  return (
+                    <TouchableOpacity
+                      key={addr.id}
+                      style={[styles.destChip, selected && styles.destChipSelected]}
+                      onPress={() => selectSavedAddress(addr)}
+                      activeOpacity={0.82}
+                    >
+                      <MaterialCommunityIcons
+                        name={addr.label.toLowerCase().includes('work') ? 'briefcase-outline' : addr.label.toLowerCase().includes('home') ? 'home-outline' : 'map-marker-outline'}
+                        size={16}
+                        color={selected ? '#FFFFFF' : colors.primary}
+                      />
+                      <Text style={[styles.destChipText, selected && styles.destChipTextSelected]} numberOfLines={1}>{addr.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
 
           {destinations.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.destScroll} contentContainerStyle={styles.destRow}>
@@ -558,7 +632,7 @@ export const BookRideScreen = () => {
           <Surface style={styles.fareCard} elevation={0}>
             <View style={styles.fareInfo}>
               <View style={styles.fareIconBox}>
-                <MaterialCommunityIcons name="rickshaw" size={24} color="#FFFFFF" />
+                <TricycleIcon size={30} color="#FFFFFF" />
               </View>
               <View style={styles.fareCopy}>
                 <Text style={styles.fareType}>{rideType === 'priority' ? 'Priority Tricycle' : 'Standard Tricycle'}</Text>
@@ -925,6 +999,57 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   pinPickConfirmText: { ...typography.button, color: '#fff', fontSize: 15 },
+  // Fixed centre pin (move-map-under-pin picker)
+  centerPin: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+  },
+  centerPinHead: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    // Lift the marker so its tip (the stem) lands on the exact centre.
+    marginBottom: 18,
+    ...shadows.md,
+  },
+  centerPinHeadPickup: {
+    backgroundColor: colors.accent,
+  },
+  centerPinStem: {
+    position: 'absolute',
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    marginTop: 16,
+  },
+  centerPinShadow: {
+    position: 'absolute',
+    width: 14,
+    height: 5,
+    borderRadius: 7,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    marginTop: 30,
+  },
+  savedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  savedTitle: { ...typography.label, color: colors.text, fontSize: 13 },
+  savedManage: { ...typography.labelSmall, color: colors.primary, fontWeight: '700' },
   // Book for someone else
   forOtherToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   forOtherText: { ...typography.label, color: colors.text, fontSize: 14 },
