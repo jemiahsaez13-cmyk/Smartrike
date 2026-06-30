@@ -184,11 +184,13 @@ export const BookRideScreen = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]);
 
-  // Curved route line between pickup and drop-off (ends exactly on the pins).
-  const curvedLine = useMemo(
-    () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord) : []),
-    [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]
-  );
+  // Curved route line between pickup and drop-off, nudged a hair left so it
+  // tucks just under the pins. Scaled to zoom to stay constant on screen.
+  const curvedLine = useMemo(() => {
+    if (!pickupCoord || !dropCoord) return [];
+    const shift = (region.longitudeDelta || 0.03) * 0.003;
+    return curvedPath(pickupCoord, dropCoord).map((p) => ({ ...p, longitude: p.longitude - shift }));
+  }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, region.longitudeDelta]);
 
   useEffect(() => {
     getLocation()
