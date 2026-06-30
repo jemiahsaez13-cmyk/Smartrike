@@ -54,6 +54,28 @@ const placeToLocation = (p: PopularPlace): Location => ({
   address: p.name,
 });
 
+// Build a smooth curved arc between two points (quadratic Bézier with a
+// perpendicular control offset) so the route line bends like Uber. Cosmetic
+// only — it does not follow roads (that would need the Directions API).
+type LatLng = { latitude: number; longitude: number };
+const curvedPath = (a: LatLng, b: LatLng, segments = 48): LatLng[] => {
+  const dLat = b.latitude - a.latitude;
+  const dLng = b.longitude - a.longitude;
+  const mid = { latitude: (a.latitude + b.latitude) / 2, longitude: (a.longitude + b.longitude) / 2 };
+  const curve = 0.18; // bend strength
+  const control = { latitude: mid.latitude + dLng * curve, longitude: mid.longitude - dLat * curve };
+  const pts: LatLng[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const u = 1 - t;
+    pts.push({
+      latitude: u * u * a.latitude + 2 * u * t * control.latitude + t * t * b.latitude,
+      longitude: u * u * a.longitude + 2 * u * t * control.longitude + t * t * b.longitude,
+    });
+  }
+  return pts;
+};
+
 const RIDE_OPTIONS = [
   { id: 'standard', label: 'Standard', desc: 'Regular TODA queue', icon: 'rickshaw' },
   { id: 'priority', label: 'Priority', desc: 'Faster driver matching', icon: 'lightning-bolt-outline' },
@@ -161,6 +183,12 @@ export const BookRideScreen = () => {
     return { ...base, latitudeDelta: 0.03, longitudeDelta: 0.03 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]);
+
+  // Curved route line between pickup and drop-off.
+  const curvedLine = useMemo(
+    () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord) : []),
+    [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]
+  );
 
   useEffect(() => {
     getLocation()
@@ -428,15 +456,15 @@ export const BookRideScreen = () => {
               setMarkerMenu(null);
             }}
             onPress={() => setMarkerMenu(null)}
-            showsUserLocation
+            showsUserLocation={false}
             showsMyLocationButton={false}
             showsCompass={false}
             toolbarEnabled={false}
             rotateEnabled={false}
             pitchEnabled={false}
           >
-            {/* Tappable current-location marker (distinct from an explicit
-                pickup) — tap it to use your GPS spot as the pickup. */}
+            {/* Tappable current-location marker — only when the pickup has been
+                moved elsewhere; tap it to set pickup back to your GPS spot. */}
             {currentLocation && pickup && (
               <Marker
                 coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}
@@ -450,10 +478,11 @@ export const BookRideScreen = () => {
                 </View>
               </Marker>
             )}
+            {/* Pickup: a dot centred exactly on its coordinate (line end = centre). */}
             {pickupCoord && (
               <Marker
                 coordinate={pickupCoord}
-                anchor={{ x: 0.5, y: 1 }}
+                anchor={{ x: 0.5, y: 0.5 }}
                 tracksViewChanges={tracking}
                 draggable
                 onDragStart={() => setMarkerMenu(null)}
@@ -461,14 +490,13 @@ export const BookRideScreen = () => {
                 onPress={() => openMarkerMenu('pickup', pickupCoord)}
                 zIndex={2}
               >
-                <View style={styles.endMarker}>
-                  <View style={[styles.endMarkerHead, { backgroundColor: '#fff', borderColor: colors.primary }]}>
-                    <View style={styles.pickupMarkerCore} />
-                  </View>
-                  <View style={[styles.endMarkerStem, { backgroundColor: colors.primary }]} />
+                <View style={styles.pickupDot}>
+                  <View style={styles.pickupDotCore} />
                 </View>
               </Marker>
             )}
+            {/* Drop-off: a pin whose tip sits exactly on its coordinate (line end
+                = tip). White body + navy icon to match the pickup palette. */}
             {dropCoord && (
               <Marker
                 coordinate={dropCoord}
@@ -480,20 +508,21 @@ export const BookRideScreen = () => {
                 onPress={() => openMarkerMenu('dropoff', dropCoord)}
                 zIndex={2}
               >
-                <View style={styles.endMarker}>
-                  <View style={[styles.endMarkerHead, { backgroundColor: colors.primary, borderColor: '#fff' }]}>
-                    <MaterialCommunityIcons name="map-marker" size={16} color="#FFFFFF" />
+                <View style={styles.dropPin}>
+                  <View style={styles.dropPinHead}>
+                    <MaterialCommunityIcons name="map-marker" size={18} color={colors.primary} />
                   </View>
-                  <View style={[styles.endMarkerStem, { backgroundColor: colors.primary }]} />
+                  <View style={styles.dropPinTip} />
                 </View>
               </Marker>
             )}
             {pickupCoord && dropCoord && (
               <Polyline
-                coordinates={[pickupCoord, dropCoord]}
+                coordinates={curvedLine}
                 strokeColor={colors.primary}
                 strokeWidth={2.5}
                 lineCap="round"
+                geodesic
                 zIndex={0}
               />
             )}
@@ -942,6 +971,50 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.primary,
+  },
+  // Pickup: centred dot (white ring + navy core).
+  pickupDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  pickupDotCore: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  // Drop-off: white pin head (navy icon) + navy tip pointing at the coordinate.
+  dropPin: {
+    alignItems: 'center',
+  },
+  dropPinHead: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#fff',
+    borderWidth: 2.5,
+    borderColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  dropPinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderTopWidth: 9,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: colors.primary,
+    marginTop: -2,
   },
   // Draggable end markers (pickup / drop-off) — pin head + stem.
   endMarker: {
