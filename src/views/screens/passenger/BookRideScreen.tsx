@@ -13,10 +13,10 @@ import { confirm, notify } from '@/utils/confirm';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
+import { LocationChooser } from '@/views/screens/passenger/LocationChooser';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
-import { DirectionsService, RouteResult } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
@@ -45,7 +45,6 @@ const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
 const placeService = new PopularPlaceService();
 const geo = new GeocodingService();
-const directionsService = new DirectionsService();
 const addressRepo = new AddressRepository();
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
@@ -84,8 +83,11 @@ export const BookRideScreen = () => {
   const [otherPhone, setOtherPhone] = useState('');
   const [resolving, setResolving] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
-  // Road-following route (Directions API). Null until fetched / on failure.
-  const [roadRoute, setRoadRoute] = useState<RouteResult | null>(null);
+  // Which field the location chooser modal is editing (null = closed).
+  const [chooserTarget, setChooserTarget] = useState<null | 'pickup' | 'dropoff'>(null);
+  // Custom map markers must briefly track view changes or they render blank;
+  // we enable it on coord changes, then turn it off to keep the map smooth.
+  const [tracking, setTracking] = useState(true);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
@@ -98,33 +100,37 @@ export const BookRideScreen = () => {
   }, [user?.id]);
 
   const sheetAnim = useRef(new Animated.Value(height * 0.42)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<any>(null);
   const mapSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
   // Live geographic centre of the native map — what sits under the fixed centre
   // pin. Updated as the user pans so "Confirm" reads the right coordinate.
   const mapCenterRef = useRef<{ latitude: number; longitude: number }>(BOAC_CENTER);
-  // Measured height of the sheet, so a downward drag knows how far "fully down" is.
+  // Measured height of the sheet + its current resting offset, so the handle can
+  // be dragged between two snap points: expanded (0) and a collapsed peek that
+  // leaves the top of the card visible and can be dragged back up — like Uber.
   const sheetHeightRef = useRef(0);
+  const sheetPosRef = useRef(0);
+  const PEEK = 210; // visible height of the sheet when collapsed
 
-  // Drag-to-dismiss: dragging the sheet handle down slides the "Plan your ride"
-  // sheet away to reveal the map for picking; a small drag snaps back open.
+  const collapsedYOf = () => Math.max(0, (sheetHeightRef.current || height) - PEEK);
+
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && g.dy > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 5 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderMove: (_e, g) => {
-        if (g.dy <= 0) return; // only follow downward drags
-        sheetAnim.setValue(Math.min(g.dy, sheetHeightRef.current || height));
+        const collapsedY = collapsedYOf();
+        const next = Math.min(Math.max(0, sheetPosRef.current + g.dy), collapsedY);
+        sheetAnim.setValue(next);
       },
       onPanResponderRelease: (_e, g) => {
-        const fullDown = sheetHeightRef.current || height;
-        // Flicked or dragged far enough → dismiss into map-picking mode.
-        if (g.dy > 90 || g.vy > 0.5) {
-          setPinTarget('dropoff');
-          setPicking(true);
-          Animated.timing(sheetAnim, { toValue: fullDown, duration: 200, useNativeDriver: true }).start();
-        } else {
-          Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }).start();
-        }
+        const collapsedY = collapsedYOf();
+        const current = Math.min(Math.max(0, sheetPosRef.current + g.dy), collapsedY);
+        let target = current > collapsedY / 2 ? collapsedY : 0;
+        if (g.vy > 0.5) target = collapsedY;        // flick down → collapse
+        else if (g.vy < -0.5) target = 0;           // flick up → expand
+        sheetPosRef.current = target;
+        Animated.spring(sheetAnim, { toValue: target, tension: 50, friction: 10, useNativeDriver: true }).start();
       },
     })
   ).current;
@@ -159,35 +165,27 @@ export const BookRideScreen = () => {
       .catch(() => undefined)
       .finally(() => {
         setLoadingLocation(false);
-        Animated.spring(sheetAnim, {
-          toValue: 0,
-          tension: 48,
-          friction: 9,
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }),
+          // Uber-like: the pickup→drop-off card fades and lifts in just after
+          // the sheet settles.
+          Animated.timing(cardAnim, { toValue: 1, duration: 420, delay: 120, useNativeDriver: true }),
+        ]).start();
       });
-  }, [getLocation, sheetAnim]);
+  }, [getLocation, sheetAnim, cardAnim]);
 
   // Keep the native map framed on the active pickup/dropoff pair.
   useEffect(() => {
     if (mapRef.current?.animateToRegion) mapRef.current.animateToRegion(region, 650);
   }, [region]);
 
-  // Fetch the road-following route whenever the pickup/drop-off pair changes.
-  // Clears on failure so the fare falls back to straight-line distance.
+  // Re-enable marker view tracking briefly whenever an endpoint moves, so the
+  // custom marker artwork is captured and actually shows (then settle to false).
   useEffect(() => {
-    let active = true;
-    const ep = pickup || currentLocation;
-    if (!ep || !dropoff) {
-      setRoadRoute(null);
-      return;
-    }
-    directionsService
-      .getRoute(ep, dropoff)
-      .then((r) => { if (active) setRoadRoute(r); })
-      .catch(() => { if (active) setRoadRoute(null); });
-    return () => { active = false; };
-  }, [pickup, currentLocation, dropoff]);
+    setTracking(true);
+    const t = setTimeout(() => setTracking(false), 1200);
+    return () => clearTimeout(t);
+  }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, currentLocation?.latitude]);
 
   useEffect(() => {
     let active = true;
@@ -198,8 +196,7 @@ export const BookRideScreen = () => {
         return;
       }
       try {
-        // Prefer real road distance from the route; fall back to haversine.
-        const distance = roadRoute?.distanceKm ?? (await fareService.calculateDistance(ep, dropoff));
+        const distance = await fareService.calculateDistance(ep, dropoff);
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
         const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
         const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
@@ -213,7 +210,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType, roadRoute]);
+  }, [pickup, currentLocation, dropoff, rideType]);
 
   useEffect(() => {
     const destination = route.params?.destination;
@@ -253,18 +250,67 @@ export const BookRideScreen = () => {
   };
   const closePicker = () => {
     setPicking(false);
+    sheetPosRef.current = 0;
     Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }).start();
   };
 
-  // Confirm whatever sits under the centre pin: snap it to the nearest road
-  // (Roads API) for accuracy, reverse-geocode a readable address, then assign it
-  // to pickup or drop-off.
+  // Assign a chosen location to whichever field the chooser was opened for.
+  const assignLocation = (loc: Location) => {
+    if (chooserTarget === 'pickup') setPickup(loc);
+    else selectDestination(loc);
+  };
+
+  // Confirmed from the chooser's bottom bar.
+  const confirmChooser = (loc: Location) => {
+    assignLocation(loc);
+    setChooserTarget(null);
+  };
+
+  // Resolve a saved address to coordinates for the chooser (geocode if it has
+  // no stored pin). Returns null when it can't be located.
+  const resolveSavedAddress = async (addr: SavedAddress): Promise<Location | null> => {
+    if (addr.latitude != null && addr.longitude != null) {
+      return { latitude: addr.latitude, longitude: addr.longitude, address: addr.full_address };
+    }
+    const coord = await geo.forwardGeocode(addr.full_address);
+    if (coord) return { ...coord, address: addr.full_address };
+    void notify('Location not found', 'Couldn’t locate that saved address. Set it on the map instead.');
+    return null;
+  };
+
+  // Reposition a marker by dragging it on the map; name the new spot on-device.
+  const handleMarkerDragEnd = async (which: 'pickup' | 'dropoff', coord: { latitude: number; longitude: number }) => {
+    const address = await geo.reverseGeocode(coord.latitude, coord.longitude);
+    const loc: Location = { latitude: coord.latitude, longitude: coord.longitude, address };
+    if (which === 'pickup') setPickup(loc);
+    else selectDestination(loc);
+  };
+
+  // Swap pickup and drop-off.
+  const swapLocations = () => {
+    const ep = pickup || currentLocation;
+    if (!ep || !dropoff) return;
+    setPickup(dropoff);
+    selectDestination({ ...ep, address: ep.address || 'Pickup' });
+  };
+
+  // Tap the current-location marker to use it as pickup.
+  const useCurrentAsPickup = async () => {
+    if (!currentLocation) return;
+    const ok = await confirm('Use current location', 'Set your current location as the pickup point?', {
+      confirmText: 'Set as pickup',
+    });
+    if (ok) setPickup({ ...currentLocation, address: currentLocation.address || 'Current location' });
+  };
+
+  // Confirm whatever sits under the centre pin: reverse-geocode a readable
+  // address (on-device), then assign it to pickup or drop-off.
   const confirmPin = async () => {
     const raw = canUseNativeMap ? mapCenterRef.current : { latitude: region.latitude, longitude: region.longitude };
     setResolving(true);
     try {
-      const place = await geo.resolvePin(raw.latitude, raw.longitude);
-      const loc: Location = { latitude: place.latitude, longitude: place.longitude, address: place.address };
+      const address = await geo.reverseGeocode(raw.latitude, raw.longitude);
+      const loc: Location = { latitude: raw.latitude, longitude: raw.longitude, address };
       if (pinTarget === 'pickup') setPickup(loc);
       else selectDestination(loc);
     } catch {
@@ -383,27 +429,57 @@ export const BookRideScreen = () => {
             rotateEnabled={false}
             pitchEnabled={false}
           >
+            {/* Tappable current-location marker (distinct from an explicit
+                pickup) — tap it to use your GPS spot as the pickup. */}
+            {currentLocation && pickup && (
+              <Marker
+                coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={tracking}
+                onPress={useCurrentAsPickup}
+                zIndex={1}
+              >
+                <View style={styles.currentLocMarker}>
+                  <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.accent} />
+                </View>
+              </Marker>
+            )}
             {pickupCoord && (
-              <Marker coordinate={pickupCoord} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-                <View style={styles.pickupMarker}>
-                  <View style={styles.pickupMarkerCore} />
+              <Marker
+                coordinate={pickupCoord}
+                anchor={{ x: 0.5, y: 1 }}
+                tracksViewChanges={tracking}
+                draggable
+                onDragEnd={(e: any) => handleMarkerDragEnd('pickup', e.nativeEvent.coordinate)}
+                zIndex={2}
+              >
+                <View style={styles.endMarker}>
+                  <View style={[styles.endMarkerHead, { backgroundColor: '#fff', borderColor: colors.primary }]}>
+                    <View style={styles.pickupMarkerCore} />
+                  </View>
+                  <View style={[styles.endMarkerStem, { backgroundColor: colors.primary }]} />
                 </View>
               </Marker>
             )}
             {dropCoord && (
-              <Marker coordinate={dropCoord} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-                <View style={styles.dropMarker}>
-                  <MaterialCommunityIcons name="map-marker" size={18} color="#FFFFFF" />
+              <Marker
+                coordinate={dropCoord}
+                anchor={{ x: 0.5, y: 1 }}
+                tracksViewChanges={tracking}
+                draggable
+                onDragEnd={(e: any) => handleMarkerDragEnd('dropoff', e.nativeEvent.coordinate)}
+                zIndex={2}
+              >
+                <View style={styles.endMarker}>
+                  <View style={[styles.endMarkerHead, { backgroundColor: colors.primary, borderColor: '#fff' }]}>
+                    <MaterialCommunityIcons name="map-marker" size={16} color="#FFFFFF" />
+                  </View>
+                  <View style={[styles.endMarkerStem, { backgroundColor: colors.primary }]} />
                 </View>
               </Marker>
             )}
             {pickupCoord && dropCoord && (
-              <Polyline
-                coordinates={roadRoute?.coordinates?.length ? roadRoute.coordinates : [pickupCoord, dropCoord]}
-                strokeColor={colors.primary}
-                strokeWidth={4}
-                lineCap="round"
-              />
+              <Polyline coordinates={[pickupCoord, dropCoord]} strokeColor={colors.primary} strokeWidth={4} lineCap="round" />
             )}
           </MapView>
         ) : (
@@ -448,6 +524,13 @@ export const BookRideScreen = () => {
           </TouchableOpacity>
         )}
 
+        {/* Swap pickup ↔ drop-off */}
+        {canUseNativeMap && !picking && pickup && dropoff && (
+          <TouchableOpacity style={styles.swapBtn} onPress={swapLocations} activeOpacity={0.85} accessibilityLabel="Swap pickup and drop-off">
+            <MaterialCommunityIcons name="swap-vertical" size={20} color={colors.text} />
+          </TouchableOpacity>
+        )}
+
         {/* Move-map-under-pin picker. The pin stays fixed at the centre; the
             user pans the map beneath it and taps Confirm to lock it in. */}
         {picking && (
@@ -488,7 +571,15 @@ export const BookRideScreen = () => {
           <Text style={styles.sheetTitle}>Plan your ride</Text>
           <Text style={styles.sheetSubtitle}>Drag this card down to set your drop-off on the map, or pick a saved place below.</Text>
 
-          <View style={styles.locationContainer}>
+          <Animated.View
+            style={[
+              styles.locationContainer,
+              {
+                opacity: cardAnim,
+                transform: [{ translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+              },
+            ]}
+          >
             <View style={styles.pathGraphic}>
               <View style={[styles.pathDot, { backgroundColor: colors.primary }]} />
               <View style={styles.pathLine} />
@@ -496,19 +587,19 @@ export const BookRideScreen = () => {
             </View>
 
             <View style={styles.inputs}>
-              <TouchableOpacity style={styles.inputWrapper} onPress={() => openPickerFor('pickup')} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.inputWrapper} onPress={() => setChooserTarget('pickup')} activeOpacity={0.7}>
                 <Text style={styles.inputLabel}>PICKUP</Text>
                 <Text style={styles.inputValue} numberOfLines={1}>{effectivePickup?.address || 'Tap to set pickup'}</Text>
               </TouchableOpacity>
               <View style={styles.inputDivider} />
-              <TouchableOpacity style={styles.inputWrapper} onPress={() => openPickerFor('dropoff')} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.inputWrapper} onPress={() => setChooserTarget('dropoff')} activeOpacity={0.7}>
                 <Text style={styles.inputLabel}>DROP OFF</Text>
                 <Text style={[styles.inputValue, !dropoffAddress && styles.inputMuted]} numberOfLines={1}>
                   {dropoffAddress || 'Tap to set destination'}
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
 
           <View style={styles.optionSection}>
             <Text style={styles.optionTitle}>Ride type</Text>
@@ -713,6 +804,22 @@ export const BookRideScreen = () => {
           </Button>
         </ScrollView>
       </Animated.View>
+
+      <LocationChooser
+        visible={chooserTarget !== null}
+        target={chooserTarget ?? 'dropoff'}
+        currentLocation={currentLocation}
+        savedAddresses={savedAddresses}
+        popularPlaces={destinations}
+        onClose={() => setChooserTarget(null)}
+        onConfirm={confirmChooser}
+        resolveSaved={resolveSavedAddress}
+        onSetOnMap={() => {
+          const t = chooserTarget ?? 'dropoff';
+          setChooserTarget(null);
+          openPickerFor(t);
+        }}
+      />
     </View>
   );
 };
@@ -800,6 +907,49 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.primary,
+  },
+  // Draggable end markers (pickup / drop-off) — pin head + stem.
+  endMarker: {
+    alignItems: 'center',
+  },
+  endMarkerHead: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
+  },
+  endMarkerStem: {
+    width: 3,
+    height: 10,
+    marginTop: -1,
+    borderRadius: 2,
+  },
+  currentLocMarker: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  swapBtn: {
+    position: 'absolute',
+    right: 20,
+    bottom: '12%',
+    zIndex: 2,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.md,
   },
   dropMarker: {
     width: 32,

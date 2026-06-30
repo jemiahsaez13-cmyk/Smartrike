@@ -1,39 +1,11 @@
 import * as ExpoLocation from 'expo-location';
 
-const GOOGLE_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-
-export interface SnappedPlace {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-
-// Accuracy helpers for the map pin picker. `snapToRoad` uses Google's Roads API
-// so a pin dropped slightly off a street is pulled onto the nearest drivable
-// road — tricycles can only pick up/drop off on roads, so this avoids fares
-// being computed to the middle of a building or field. `reverseGeocode` turns
-// the final coordinate into a human-readable address.
+// On-device geocoding helpers (expo-location) for the map pin picker. No Google
+// Roads/Directions APIs are used — `reverseGeocode` names a dropped pin and
+// `forwardGeocode` locates a typed address, both via the phone's own geocoder.
 export class GeocodingService {
-  // Pull a coordinate onto the nearest road. Falls back to the original point
-  // if the Roads API is unavailable (no key, offline, or quota).
-  async snapToRoad(latitude: number, longitude: number): Promise<{ latitude: number; longitude: number }> {
-    if (!GOOGLE_KEY) return { latitude, longitude };
-    try {
-      const url = `https://roads.googleapis.com/v1/nearestRoads?points=${latitude},${longitude}&key=${GOOGLE_KEY}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      const pt = json?.snappedPoints?.[0]?.location;
-      if (pt && typeof pt.latitude === 'number' && typeof pt.longitude === 'number') {
-        return { latitude: pt.latitude, longitude: pt.longitude };
-      }
-    } catch {
-      // Ignore and fall back to the raw coordinate.
-    }
-    return { latitude, longitude };
-  }
-
-  // Build a readable address from a coordinate using the device geocoder
-  // (expo-location). Returns a coordinate string if no address is found.
+  // Build a readable address from a coordinate using the device geocoder.
+  // Returns a coordinate string if no address is found.
   async reverseGeocode(latitude: number, longitude: number): Promise<string> {
     try {
       const results = await ExpoLocation.reverseGeocodeAsync({ latitude, longitude });
@@ -67,12 +39,5 @@ export class GeocodingService {
       // Geocoder unavailable — caller falls back.
     }
     return null;
-  }
-
-  // Snap + reverse-geocode in one call, returning everything the picker needs.
-  async resolvePin(latitude: number, longitude: number): Promise<SnappedPlace> {
-    const snapped = await this.snapToRoad(latitude, longitude);
-    const address = await this.reverseGeocode(snapped.latitude, snapped.longitude);
-    return { ...snapped, address };
   }
 }
