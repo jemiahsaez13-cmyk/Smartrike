@@ -5,7 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.smarttrike.app",
       "permissions": [
@@ -22,6 +24,11 @@
           "photosPermission": "Smart Trike needs access to your photos so you can set a profile picture."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b6be5f97-7fbc-4ce7-bd43-c9f222f67e73"
+      }
+    }
   }
 }

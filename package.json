@@ -40,9 +40,9 @@
     "@babel/core": "^7.20.0",
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.0",
-    "babel-preset-expo": "^56.0.15",
+    "babel-preset-expo": "~54.0.10",
     "supabase": "^2.106.0",
-    "typescript": "~5.3.3"
+    "typescript": "~5.9.2"
   },
   "private": true
 }
