@@ -88,6 +88,8 @@ export const BookRideScreen = () => {
   // Custom map markers must briefly track view changes or they render blank;
   // we enable it on coord changes, then turn it off to keep the map smooth.
   const [tracking, setTracking] = useState(true);
+  // Action popup anchored above a tapped marker (screen-space x/y from the map).
+  const [markerMenu, setMarkerMenu] = useState<{ which: 'current' | 'pickup' | 'dropoff'; x: number; y: number } | null>(null);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
@@ -235,12 +237,6 @@ export const BookRideScreen = () => {
     setDropoffAddress(dest.address);
   }
 
-  const recenter = () => {
-    if (mapRef.current?.animateToRegion) {
-      mapRef.current.animateToRegion({ ...(pickupCoord || BOAC_CENTER), latitudeDelta: 0.02, longitudeDelta: 0.02 }, 500);
-    }
-  };
-
   // Enter full-screen tap-to-pin mode for either pickup or drop-off. The sheet
   // slides away so the whole map is usable.
   const openPickerFor = (target: 'pickup' | 'dropoff') => {
@@ -286,21 +282,29 @@ export const BookRideScreen = () => {
     else selectDestination(loc);
   };
 
-  // Swap pickup and drop-off.
+  // Tapping a marker opens a small action menu anchored above it. We project the
+  // marker's coordinate to a screen point so the popup sits right over the pin.
+  const openMarkerMenu = async (which: 'current' | 'pickup' | 'dropoff', coord: { latitude: number; longitude: number }) => {
+    try {
+      const pt = await mapRef.current?.pointForCoordinate(coord);
+      if (pt) setMarkerMenu({ which, x: pt.x, y: pt.y });
+    } catch {
+      // pointForCoordinate unavailable — ignore.
+    }
+  };
+
+  const setPickupFromCurrent = () => {
+    if (currentLocation) setPickup({ ...currentLocation, address: currentLocation.address || 'Current location' });
+    setMarkerMenu(null);
+  };
+
+  // Switch pickup and drop-off (offered from a pin's menu).
   const swapLocations = () => {
     const ep = pickup || currentLocation;
     if (!ep || !dropoff) return;
     setPickup(dropoff);
     selectDestination({ ...ep, address: ep.address || 'Pickup' });
-  };
-
-  // Tap the current-location marker to use it as pickup.
-  const useCurrentAsPickup = async () => {
-    if (!currentLocation) return;
-    const ok = await confirm('Use current location', 'Set your current location as the pickup point?', {
-      confirmText: 'Set as pickup',
-    });
-    if (ok) setPickup({ ...currentLocation, address: currentLocation.address || 'Current location' });
+    setMarkerMenu(null);
   };
 
   // Confirm whatever sits under the centre pin: reverse-geocode a readable
@@ -421,7 +425,9 @@ export const BookRideScreen = () => {
             initialRegion={region}
             onRegionChangeComplete={(r: any) => {
               mapCenterRef.current = { latitude: r.latitude, longitude: r.longitude };
+              setMarkerMenu(null);
             }}
+            onPress={() => setMarkerMenu(null)}
             showsUserLocation
             showsMyLocationButton={false}
             showsCompass={false}
@@ -436,8 +442,8 @@ export const BookRideScreen = () => {
                 coordinate={{ latitude: currentLocation.latitude, longitude: currentLocation.longitude }}
                 anchor={{ x: 0.5, y: 0.5 }}
                 tracksViewChanges={tracking}
-                onPress={useCurrentAsPickup}
-                zIndex={1}
+                onPress={() => openMarkerMenu('current', { latitude: currentLocation.latitude, longitude: currentLocation.longitude })}
+                zIndex={3}
               >
                 <View style={styles.currentLocMarker}>
                   <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.accent} />
@@ -450,7 +456,9 @@ export const BookRideScreen = () => {
                 anchor={{ x: 0.5, y: 1 }}
                 tracksViewChanges={tracking}
                 draggable
+                onDragStart={() => setMarkerMenu(null)}
                 onDragEnd={(e: any) => handleMarkerDragEnd('pickup', e.nativeEvent.coordinate)}
+                onPress={() => openMarkerMenu('pickup', pickupCoord)}
                 zIndex={2}
               >
                 <View style={styles.endMarker}>
@@ -467,7 +475,9 @@ export const BookRideScreen = () => {
                 anchor={{ x: 0.5, y: 1 }}
                 tracksViewChanges={tracking}
                 draggable
+                onDragStart={() => setMarkerMenu(null)}
                 onDragEnd={(e: any) => handleMarkerDragEnd('dropoff', e.nativeEvent.coordinate)}
+                onPress={() => openMarkerMenu('dropoff', dropCoord)}
                 zIndex={2}
               >
                 <View style={styles.endMarker}>
@@ -479,7 +489,13 @@ export const BookRideScreen = () => {
               </Marker>
             )}
             {pickupCoord && dropCoord && (
-              <Polyline coordinates={[pickupCoord, dropCoord]} strokeColor={colors.primary} strokeWidth={4} lineCap="round" />
+              <Polyline
+                coordinates={[pickupCoord, dropCoord]}
+                strokeColor={colors.primary}
+                strokeWidth={2.5}
+                lineCap="round"
+                zIndex={0}
+              />
             )}
           </MapView>
         ) : (
@@ -518,18 +534,6 @@ export const BookRideScreen = () => {
           <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
         </TouchableOpacity>
 
-        {canUseNativeMap && !picking && (
-          <TouchableOpacity style={styles.recenterBtn} onPress={recenter} activeOpacity={0.85} accessibilityLabel="Recenter map">
-            <MaterialCommunityIcons name="crosshairs-gps" size={20} color={colors.text} />
-          </TouchableOpacity>
-        )}
-
-        {/* Swap pickup ↔ drop-off */}
-        {canUseNativeMap && !picking && pickup && dropoff && (
-          <TouchableOpacity style={styles.swapBtn} onPress={swapLocations} activeOpacity={0.85} accessibilityLabel="Swap pickup and drop-off">
-            <MaterialCommunityIcons name="swap-vertical" size={20} color={colors.text} />
-          </TouchableOpacity>
-        )}
 
         {/* Move-map-under-pin picker. The pin stays fixed at the centre; the
             user pans the map beneath it and taps Confirm to lock it in. */}
@@ -557,6 +561,37 @@ export const BookRideScreen = () => {
               </TouchableOpacity>
             </View>
           </>
+        )}
+
+        {/* Tap-a-marker action popup, anchored above the pin. */}
+        {markerMenu && !picking && (
+          <View style={[styles.markerMenu, { left: markerMenu.x - 96, top: markerMenu.y - 116 }]}>
+            {markerMenu.which === 'current' ? (
+              <TouchableOpacity style={styles.markerMenuBtn} onPress={setPickupFromCurrent} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={18} color={colors.primary} />
+                <Text style={styles.markerMenuText}>Set as pickup</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.markerMenuBtn}
+                  onPress={() => { setChooserTarget(markerMenu.which as 'pickup' | 'dropoff'); setMarkerMenu(null); }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
+                  <Text style={styles.markerMenuText}>Change {markerMenu.which === 'pickup' ? 'pickup' : 'destination'}</Text>
+                </TouchableOpacity>
+                {pickup && dropoff && (
+                  <TouchableOpacity style={[styles.markerMenuBtn, styles.markerMenuBtnBorder]} onPress={swapLocations} activeOpacity={0.8}>
+                    <MaterialCommunityIcons name="swap-vertical" size={18} color={colors.primary} />
+                    <Text style={styles.markerMenuText}>Swap with {markerMenu.which === 'pickup' ? 'destination' : 'pickup'}</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+            <Text style={styles.markerMenuHint}>Tip: drag the pin to move it</Text>
+            <View style={styles.markerMenuArrow} />
+          </View>
         )}
       </View>
 
@@ -938,18 +973,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.sm,
   },
-  swapBtn: {
+  // Tap-a-marker action popup
+  markerMenu: {
     position: 'absolute',
-    right: 20,
-    bottom: '12%',
-    zIndex: 2,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 192,
     backgroundColor: colors.surface,
-    justifyContent: 'center',
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    zIndex: 5,
+    ...shadows.lg,
+  },
+  markerMenuBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.md,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  markerMenuBtnBorder: {
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  markerMenuText: { ...typography.label, color: colors.text, fontSize: 14 },
+  markerMenuHint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 11,
+    paddingHorizontal: spacing.md,
+    paddingTop: 2,
+    paddingBottom: spacing.xs,
+  },
+  markerMenuArrow: {
+    position: 'absolute',
+    bottom: -6,
+    left: '50%',
+    marginLeft: -6,
+    width: 12,
+    height: 12,
+    backgroundColor: colors.surface,
+    transform: [{ rotate: '45deg' }],
   },
   dropMarker: {
     width: 32,
@@ -970,19 +1032,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadows.md,
-  },
-  recenterBtn: {
-    position: 'absolute',
-    right: 20,
-    bottom: '4%',
-    zIndex: 2,
-    width: 46,
-    height: 46,
-    borderRadius: 23,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
