@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,6 +16,7 @@ import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
+import { DirectionsService, RouteResult } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
@@ -44,6 +45,7 @@ const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
 const placeService = new PopularPlaceService();
 const geo = new GeocodingService();
+const directionsService = new DirectionsService();
 const addressRepo = new AddressRepository();
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
@@ -82,6 +84,8 @@ export const BookRideScreen = () => {
   const [otherPhone, setOtherPhone] = useState('');
   const [resolving, setResolving] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  // Road-following route (Directions API). Null until fetched / on failure.
+  const [roadRoute, setRoadRoute] = useState<RouteResult | null>(null);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
@@ -99,6 +103,31 @@ export const BookRideScreen = () => {
   // Live geographic centre of the native map — what sits under the fixed centre
   // pin. Updated as the user pans so "Confirm" reads the right coordinate.
   const mapCenterRef = useRef<{ latitude: number; longitude: number }>(BOAC_CENTER);
+  // Measured height of the sheet, so a downward drag knows how far "fully down" is.
+  const sheetHeightRef = useRef(0);
+
+  // Drag-to-dismiss: dragging the sheet handle down slides the "Plan your ride"
+  // sheet away to reveal the map for picking; a small drag snaps back open.
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && g.dy > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => {
+        if (g.dy <= 0) return; // only follow downward drags
+        sheetAnim.setValue(Math.min(g.dy, sheetHeightRef.current || height));
+      },
+      onPanResponderRelease: (_e, g) => {
+        const fullDown = sheetHeightRef.current || height;
+        // Flicked or dragged far enough → dismiss into map-picking mode.
+        if (g.dy > 90 || g.vy > 0.5) {
+          setPinTarget('dropoff');
+          setPicking(true);
+          Animated.timing(sheetAnim, { toValue: fullDown, duration: 200, useNativeDriver: true }).start();
+        } else {
+          Animated.spring(sheetAnim, { toValue: 0, tension: 48, friction: 9, useNativeDriver: true }).start();
+        }
+      },
+    })
+  ).current;
 
   // react-native-maps only renders on native; on web we show the faux map.
   const canUseNativeMap = !!MapView && Platform.OS !== 'web';
@@ -144,6 +173,22 @@ export const BookRideScreen = () => {
     if (mapRef.current?.animateToRegion) mapRef.current.animateToRegion(region, 650);
   }, [region]);
 
+  // Fetch the road-following route whenever the pickup/drop-off pair changes.
+  // Clears on failure so the fare falls back to straight-line distance.
+  useEffect(() => {
+    let active = true;
+    const ep = pickup || currentLocation;
+    if (!ep || !dropoff) {
+      setRoadRoute(null);
+      return;
+    }
+    directionsService
+      .getRoute(ep, dropoff)
+      .then((r) => { if (active) setRoadRoute(r); })
+      .catch(() => { if (active) setRoadRoute(null); });
+    return () => { active = false; };
+  }, [pickup, currentLocation, dropoff]);
+
   useEffect(() => {
     let active = true;
     const compute = async () => {
@@ -153,7 +198,8 @@ export const BookRideScreen = () => {
         return;
       }
       try {
-        const distance = await fareService.calculateDistance(ep, dropoff);
+        // Prefer real road distance from the route; fall back to haversine.
+        const distance = roadRoute?.distanceKm ?? (await fareService.calculateDistance(ep, dropoff));
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
         const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
         const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
@@ -167,7 +213,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType]);
+  }, [pickup, currentLocation, dropoff, rideType, roadRoute]);
 
   useEffect(() => {
     const destination = route.params?.destination;
@@ -352,7 +398,12 @@ export const BookRideScreen = () => {
               </Marker>
             )}
             {pickupCoord && dropCoord && (
-              <Polyline coordinates={[pickupCoord, dropCoord]} strokeColor={colors.primary} strokeWidth={4} lineCap="round" />
+              <Polyline
+                coordinates={roadRoute?.coordinates?.length ? roadRoute.coordinates : [pickupCoord, dropCoord]}
+                strokeColor={colors.primary}
+                strokeWidth={4}
+                lineCap="round"
+              />
             )}
           </MapView>
         ) : (
@@ -369,9 +420,10 @@ export const BookRideScreen = () => {
 
         <LinearGradient colors={['rgba(0,0,0,0.16)', 'transparent']} style={styles.mapTopGradient} pointerEvents="none" />
 
-        {/* Fixed centre pin: the live drop-off/pickup indicator. Shown while
-            picking, and as a hint whenever no drop-off has been set yet. */}
-        {(picking || !dropoff) && (
+        {/* Fixed centre pin: the live drop-off/pickup indicator. Shown only
+            while actively picking on the map, so it never overlaps the open
+            "Plan your ride" sheet. */}
+        {picking && (
           <View style={styles.centerPin} pointerEvents="none">
             <View style={[styles.centerPinHead, pinTarget === 'pickup' && picking && styles.centerPinHeadPickup]}>
               <MaterialCommunityIcons name="map-marker" size={26} color="#fff" />
@@ -425,11 +477,16 @@ export const BookRideScreen = () => {
         )}
       </View>
 
-      <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}>
-        <View style={styles.handle} />
+      <Animated.View
+        style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}
+        onLayout={(e) => { sheetHeightRef.current = e.nativeEvent.layout.height; }}
+      >
+        <View style={styles.grabZone} {...panResponder.panHandlers}>
+          <View style={styles.handle} />
+        </View>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Plan your ride</Text>
-          <Text style={styles.sheetSubtitle}>Pick a saved place, tap the map, or pin your exact drop-off.</Text>
+          <Text style={styles.sheetSubtitle}>Drag this card down to set your drop-off on the map, or pick a saved place below.</Text>
 
           <View style={styles.locationContainer}>
             <View style={styles.pathGraphic}>
@@ -832,13 +889,16 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingBottom: spacing.xl,
   },
+  grabZone: {
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+  },
   handle: {
-    width: 40,
+    width: 44,
     height: 5,
     backgroundColor: colors.border,
     borderRadius: radius.pill,
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
   },
   sheetTitle: {
     ...typography.h2,
