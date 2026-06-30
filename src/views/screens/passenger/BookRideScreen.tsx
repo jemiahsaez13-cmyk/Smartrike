@@ -17,6 +17,7 @@ import { LocationChooser } from '@/views/screens/passenger/LocationChooser';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
+import { DirectionsService } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
@@ -45,6 +46,7 @@ const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
 const placeService = new PopularPlaceService();
 const geo = new GeocodingService();
+const directionsService = new DirectionsService();
 const addressRepo = new AddressRepository();
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
 
@@ -113,6 +115,8 @@ export const BookRideScreen = () => {
   const [tracking, setTracking] = useState(true);
   // Action popup anchored above a tapped marker (screen-space x/y from the map).
   const [markerMenu, setMarkerMenu] = useState<{ which: 'current' | 'pickup' | 'dropoff'; x: number; y: number } | null>(null);
+  // Real road distance (Directions API) for fare accuracy; null until fetched.
+  const [roadDistanceKm, setRoadDistanceKm] = useState<number | null>(null);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
@@ -219,6 +223,22 @@ export const BookRideScreen = () => {
     return () => clearTimeout(t);
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, currentLocation?.latitude]);
 
+  // Fetch real road distance (Directions API) for the active pair; clears on
+  // failure so the fare falls back to straight-line distance.
+  useEffect(() => {
+    let active = true;
+    const ep = pickup || currentLocation;
+    if (!ep || !dropoff) {
+      setRoadDistanceKm(null);
+      return;
+    }
+    directionsService
+      .getRoadDistanceKm(ep, dropoff)
+      .then((km) => { if (active) setRoadDistanceKm(km); })
+      .catch(() => { if (active) setRoadDistanceKm(null); });
+    return () => { active = false; };
+  }, [pickup, currentLocation, dropoff]);
+
   useEffect(() => {
     let active = true;
     const compute = async () => {
@@ -228,7 +248,8 @@ export const BookRideScreen = () => {
         return;
       }
       try {
-        const distance = await fareService.calculateDistance(ep, dropoff);
+        // Prefer real road distance; fall back to straight-line (haversine).
+        const distance = roadDistanceKm ?? (await fareService.calculateDistance(ep, dropoff));
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
         const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
         const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
@@ -242,7 +263,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType]);
+  }, [pickup, currentLocation, dropoff, rideType, roadDistanceKm]);
 
   useEffect(() => {
     const destination = route.params?.destination;
