@@ -188,7 +188,7 @@ export const BookRideScreen = () => {
   // tucks just under the pins. Scaled to zoom to stay constant on screen.
   const curvedLine = useMemo(() => {
     if (!pickupCoord || !dropCoord) return [];
-    const shift = (region.longitudeDelta || 0.03) * 0.003;
+    const shift = (region.longitudeDelta || 0.03) * 0.0012;
     return curvedPath(pickupCoord, dropCoord).map((p) => ({ ...p, longitude: p.longitude - shift }));
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, region.longitudeDelta]);
 
