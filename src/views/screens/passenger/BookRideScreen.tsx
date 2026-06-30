@@ -7,8 +7,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useLocation } from '@/controllers/hooks/useLocation';
-import { useAppDispatch } from '@/controllers/store';
-import { fetchEMoneyAccounts } from '@/controllers/slices/paymentSlice';
 import { confirm, notify } from '@/utils/confirm';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
@@ -88,7 +86,6 @@ export const BookRideScreen = () => {
   const { user } = useAuth();
   const { bookRide, loading } = useBooking();
   const { currentLocation, getLocation } = useLocation();
-  const dispatch = useAppDispatch();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const [dropoffAddress, setDropoffAddress] = useState('');
@@ -96,7 +93,7 @@ export const BookRideScreen = () => {
   const [estimate, setEstimate] = useState<{ fare: number; distance: number; eta: number } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [rideType, setRideType] = useState<'standard' | 'priority'>('standard');
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'gcash'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [passengers, setPassengers] = useState(1);
   const [tripNote, setTripNote] = useState('');
   const [destinations, setDestinations] = useState<PopularPlace[]>([]);
@@ -416,7 +413,7 @@ export const BookRideScreen = () => {
     if (tripNote.trim()) noteParts.push(tripNote.trim());
     const notes = noteParts.join(' • ') || undefined;
 
-    const proceed = async (method: 'cash' | 'gcash') => {
+    const proceed = async (method: 'cash' | 'online') => {
       try {
         await bookRide(user!.id, ep, dropoff, { notes, paymentMethod: method });
         navigation.navigate('ConfirmBooking');
@@ -425,33 +422,20 @@ export const BookRideScreen = () => {
       }
     };
 
-    // For GCash, confirm the rider has a funded wallet first — otherwise the
-    // fare can never be collected and the trip would silently fall back to cash.
-    if (paymentMethod === 'gcash') {
+    // Online payment is a DEMO: we simulate a successful charge. Real GCash/card
+    // requires a licensed gateway (PayMongo/Xendit/Maya) plus business
+    // registration and BIR permits, so no actual money moves here.
+    if (paymentMethod === 'online') {
       const fare = estimate?.fare ?? 0;
-      let acct: any = null;
-      try {
-        const accounts: any[] = await dispatch(fetchEMoneyAccounts(user!.id)).unwrap();
-        acct = accounts.find((a) => a.is_default) ?? accounts[0] ?? null;
-      } catch {
-        acct = null;
-      }
-      if (!acct || Number(acct.balance) < fare) {
-        const detail = !acct
-          ? 'You have no funded GCash wallet yet.'
-          : `Your GCash balance is ₱${Number(acct.balance).toFixed(2)} but the fare is ₱${fare.toFixed(2)}.`;
-        const useCash = await confirm('GCash not ready', `${detail} Pay with cash instead, or open your wallet to cash in.`, {
-          confirmText: 'Pay with Cash',
-          cancelText: 'Open Wallet',
-        });
-        if (useCash) {
-          setPaymentMethod('cash');
-          await proceed('cash');
-        } else {
-          navigation.navigate('EMoneyWallet');
-        }
-        return;
-      }
+      const ok = await confirm(
+        'Online payment (demo)',
+        `Pay ₱${fare.toFixed(2)} online now?\n\nThis is a demo — no real charge is made. Live GCash/card payments need a payment gateway (e.g. PayMongo) plus business registration and BIR permits.`,
+        { confirmText: `Pay ₱${fare.toFixed(2)}`, cancelText: 'Cancel' }
+      );
+      if (!ok) return;
+      await notify('Payment successful (demo)', 'Your online payment was simulated successfully.');
+      await proceed('online');
+      return;
     }
 
     await proceed(paymentMethod);
@@ -808,7 +792,7 @@ export const BookRideScreen = () => {
             <View style={styles.paymentGroup}>
               <Text style={styles.controlLabel}>Payment</Text>
               <View style={styles.paymentRow}>
-                {(['cash', 'gcash'] as const).map((method) => (
+                {(['cash', 'online'] as const).map((method) => (
                   <TouchableOpacity
                     key={method}
                     style={[styles.paymentPill, paymentMethod === method && styles.paymentPillActive]}
@@ -816,7 +800,7 @@ export const BookRideScreen = () => {
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.paymentText, paymentMethod === method && styles.paymentTextActive]}>
-                      {method === 'cash' ? 'Cash' : 'GCash'}
+                      {method === 'cash' ? 'Cash' : 'Online'}
                     </Text>
                   </TouchableOpacity>
                 ))}

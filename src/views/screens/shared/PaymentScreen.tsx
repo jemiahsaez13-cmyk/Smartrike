@@ -22,6 +22,7 @@ import { PAYMENT_METHODS } from '@/config/constants';
 
 const METHOD_META: Record<string, { icon: string; label: string; color: string }> = {
   cash: { icon: 'cash', label: 'Cash', color: colors.secondary },
+  online: { icon: 'credit-card-outline', label: 'Online', color: colors.info },
   gcash: { icon: 'cellphone', label: 'GCash', color: colors.accent },
   paymaya: { icon: 'credit-card', label: 'PayMaya', color: colors.warning },
 };

@@ -15,7 +15,7 @@ export class BookingService {
     passengerId: string,
     pickup: Location,
     dropoff: Location,
-    options: { scheduledTime?: Date; notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' } = {}
+    options: { scheduledTime?: Date; notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online' } = {}
   ): Promise<Booking> {
     const distance = await this.fareService.calculateDistance(pickup, dropoff);
     const { baseFare, perKmRate, multiplier } = await this.fareService.getFareConfig();
@@ -37,7 +37,9 @@ export class BookingService {
       total_fare: totalFare,
       peak_hour_multiplier: multiplier,
       payment_method: options.paymentMethod || 'cash',
-      payment_status: 'pending',
+      // Online is paid upfront at booking (demo), so mark it completed; cash and
+      // legacy wallet methods settle on trip completion.
+      payment_status: options.paymentMethod === 'online' ? 'completed' : 'pending',
       passenger_rating: null,
       driver_rating: null,
       notes: options.notes || null,
@@ -95,7 +97,7 @@ export class BookingService {
     // (migration 021). Best-effort and idempotent — a payment hiccup (e.g. no
     // wallet / low balance) must not block trip completion; the fare can then be
     // collected in cash. The booking's payment_status reflects the outcome.
-    if (booking.payment_method && booking.payment_method !== 'cash') {
+    if (booking.payment_method === 'gcash' || booking.payment_method === 'paymaya') {
       try {
         const { data, error } = await supabase.rpc('pay_trip_with_emoney', {
           p_booking_id: bookingId,

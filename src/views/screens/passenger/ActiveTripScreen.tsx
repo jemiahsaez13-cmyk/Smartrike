@@ -47,7 +47,7 @@ export const ActiveTripScreen = () => {
   const paymentMethod = currentBooking?.payment_method || 'cash';
   const isEMoney = paymentMethod !== 'cash';
   const paidViaEMoney = isEMoney && currentBooking?.payment_status === 'completed';
-  const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : 'cash';
+  const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'online' ? 'Online' : 'cash';
   const fareText = `₱${(currentBooking?.total_fare ?? 0).toFixed(2)}`;
 
   // Animation for the tracking card

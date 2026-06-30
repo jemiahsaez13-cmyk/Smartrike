@@ -32,7 +32,7 @@ export const createBooking = createAsyncThunk(
       dropoff: Location;
       scheduledTime?: Date;
       notes?: string;
-      paymentMethod?: 'cash' | 'gcash' | 'paymaya';
+      paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online';
     },
     { rejectWithValue }
   ) => {

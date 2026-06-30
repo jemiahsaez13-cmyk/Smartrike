@@ -87,7 +87,7 @@ export const LEGAL = {
       },
       {
         heading: 'Fares & Payments',
-        body: 'Fares follow the official Boac LGU tricycle matrix: a ₱120 base fare for the first kilometer plus ₱10 for every succeeding kilometer, with the distance rounded up to the next whole kilometer. You agree to pay the correct fare for completed trips using cash, GCash, or PayMaya.',
+        body: 'Fares follow the official Boac LGU tricycle matrix: a ₱120 base fare for the first kilometer plus ₱10 for every succeeding kilometer, with the distance rounded up to the next whole kilometer. You agree to pay the correct fare for completed trips using cash or online payment.',
       },
       {
         heading: 'Driver Franchises (MTOP)',
@@ -121,7 +121,7 @@ export const FAQS = [
   },
   {
     q: 'What payment methods are accepted?',
-    a: 'You can pay with Cash, GCash, or PayMaya. Choose your method on the confirmation screen before the trip starts.',
+    a: 'You can pay with Cash or Online payment. Choose your method before you confirm the ride.',
   },
   {
     q: 'How do I cancel a booking?',
@@ -159,7 +159,7 @@ export interface PopularPlace {
   sortOrder?: number;
 }
 
-export const PAYMENT_METHODS = ['cash', 'gcash', 'paymaya'] as const;
+export const PAYMENT_METHODS = ['cash', 'online'] as const;
 export type PaymentMethod = typeof PAYMENT_METHODS[number];
 
 export const BOOKING_STATUSES = ['pending', 'accepted', 'in-transit', 'completed', 'cancelled'] as const;

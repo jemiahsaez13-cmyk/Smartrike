@@ -268,7 +268,7 @@ export const PassengerDashboard = () => {
         <View style={styles.actionsGrid}>
           <QuickAction icon="history" label="History" onPress={() => navigation.navigate('History')} />
           <QuickAction icon="message-text-outline" label="Messages" onPress={() => navigation.navigate('Inbox')} color={colors.secondary} />
-          <QuickAction icon="wallet-outline" label="Wallet" onPress={() => navigation.navigate('EMoneyWallet')} color={colors.info} />
+          <QuickAction icon="map-marker-outline" label="Addresses" onPress={() => navigation.navigate('AddressBook')} color={colors.info} />
           <QuickAction icon="account-cog-outline" label="Profile" onPress={() => navigation.navigate('Profile')} color={colors.primary500} />
         </View>
 

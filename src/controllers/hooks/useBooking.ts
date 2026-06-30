@@ -12,7 +12,7 @@ export const useBooking = () => {
       passengerId: string,
       pickup: Location,
       dropoff: Location,
-      options?: { notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' }
+      options?: { notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online' }
     ) => {
       return dispatch(
         createBooking({ passengerId, pickup, dropoff, notes: options?.notes, paymentMethod: options?.paymentMethod })
