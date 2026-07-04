@@ -14,6 +14,7 @@ import { useAppSelector } from '@/controllers/store';
 import { MessageService } from '@/models/services/MessageService';
 import { Conversation } from '@/models/types';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
+import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, spacing, typography } from '@/views/styles/theme';
 
 const service = new MessageService();
@@ -97,13 +98,36 @@ export const InboxScreen = () => {
     navigation.navigate('Chat', { bookingId: c.bookingId, otherName: c.otherName });
   };
 
+  // Long-press a conversation to delete it (removes the thread's messages for
+  // both parties; the booking record itself is untouched).
+  const deleteConversation = async (c: Conversation) => {
+    const yes = await confirm(
+      'Delete conversation',
+      `Delete your conversation with ${c.otherName}? This removes the messages for both of you and cannot be undone.`,
+      { confirmText: 'Delete', cancelText: 'Cancel', destructive: true }
+    );
+    if (!yes) return;
+    try {
+      await service.deleteConversation(c.bookingId);
+      setConversations((prev) => prev.filter((x) => x.bookingId !== c.bookingId));
+    } catch {
+      await notify('Could not delete', 'Please try again.');
+    }
+  };
+
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
   const renderItem = ({ item }: { item: Conversation }) => {
     const status = statusMeta[item.bookingStatus];
     const hasUnread = item.unreadCount > 0;
     return (
-      <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => openChat(item)}>
+      <TouchableOpacity
+        style={styles.row}
+        activeOpacity={0.7}
+        onPress={() => openChat(item)}
+        onLongPress={() => deleteConversation(item)}
+        delayLongPress={450}
+      >
         <View style={[styles.avatar, item.active && styles.avatarActive]}>
           <Text style={styles.avatarText}>{item.otherName.charAt(0).toUpperCase()}</Text>
           {item.active && <View style={styles.onlineDot} />}

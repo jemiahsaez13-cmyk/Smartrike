@@ -94,6 +94,13 @@ export class MessageRepository {
     return count ?? 0;
   }
 
+  // Permanently removes a conversation's messages (long-press → delete in the
+  // inbox). RLS restricts this to the booking's own participants (or admins).
+  async deleteConversation(bookingId: string): Promise<void> {
+    const { error } = await supabase.from('messages').delete().eq('booking_id', bookingId);
+    if (error) throw error;
+  }
+
   // Unread messages from the other party within a single trip's thread —
   // powers the red badge on the Active Ride chat button.
   async getUnreadCountForBooking(bookingId: string, userId: string): Promise<number> {

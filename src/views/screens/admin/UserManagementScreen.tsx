@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AdminService } from '@/models/services/AdminService';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
+import { supabase } from '@/config/supabase';
 import { confirm, notify } from '@/utils/confirm';
 import { useAppSelector } from '@/controllers/store';
 import { User } from '@/models/types';
@@ -180,6 +181,43 @@ export const UserManagementScreen = () => {
       notify('Invite failed', e?.message || 'Could not create the administrator.');
     } finally {
       setInviting(false);
+    }
+  };
+
+  // Formal warning: lands in the user's notification feed (heads-up banner +
+  // bell) and is recorded in the activity log.
+  const sendWarning = async (user: User) => {
+    setSelected(null);
+    await new Promise((r) => setTimeout(r, 300));
+    const ok = await confirm(
+      `Warn ${user.name}?`,
+      'They will receive an official warning notification from the TODA admin. Repeated violations can lead to suspension.',
+      { confirmText: 'Send Warning', cancelText: 'Cancel', destructive: true }
+    );
+    if (!ok) return;
+    try {
+      const { error } = await supabase.from('notifications').insert({
+        user_id: user.id,
+        type: 'system_alert',
+        title: 'Official warning from TODA Admin',
+        body:
+          user.user_type === 'driver'
+            ? 'A report or policy violation has been recorded against your account. Please follow TODA rules — further violations may lead to suspension.'
+            : 'A report or policy violation has been recorded against your account. Please follow the community rules — further violations may lead to suspension.',
+        read: false,
+      });
+      if (error) throw error;
+      void ActivityLogService.logActivity({
+        user_id: currentUser?.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        entity_id: user.id,
+        description: `Admin issued a warning to ${user.user_type} ${user.name}.`,
+        severity: 'warning',
+      });
+      notify('Warning sent', `${user.name} has been notified.`);
+    } catch (e: any) {
+      notify('Could not send warning', e?.message || 'Please try again.');
     }
   };
 
@@ -367,7 +405,9 @@ export const UserManagementScreen = () => {
                   ) : selected.user_type === 'driver' ? (
                     <>
                       <View style={styles.sheetStat}>
-                        <Text style={styles.sheetStatValue}>{(selected.rating ?? 5).toFixed(1)}</Text>
+                        <Text style={styles.sheetStatValue}>
+                          {(selected.total_trips ?? 0) > 0 ? (selected.rating ?? 5).toFixed(1) : 'New'}
+                        </Text>
                         <Text style={styles.sheetStatLabel}>Rating</Text>
                       </View>
                       <View style={styles.sheetDivider} />
@@ -391,6 +431,26 @@ export const UserManagementScreen = () => {
                   )}
                 </View>
 
+                {selected.user_type === 'driver' && (
+                  <TouchableOpacity
+                    style={styles.actionRow}
+                    disabled={working}
+                    onPress={() => {
+                      const driver = selected;
+                      setSelected(null);
+                      navigation.navigate('DriverProfile', { driverId: driver.id });
+                    }}
+                  >
+                    <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.text} />
+                    <Text style={styles.actionLabel}>View Driver Profile (rating & reviews)</Text>
+                  </TouchableOpacity>
+                )}
+                {selected.user_type !== 'admin' && (
+                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => sendWarning(selected)}>
+                    <MaterialCommunityIcons name="alert-outline" size={20} color={colors.warning} />
+                    <Text style={[styles.actionLabel, { color: colors.warning }]}>Issue Warning</Text>
+                  </TouchableOpacity>
+                )}
                 {selected.user_type === 'driver' && (selected as any).verification_status !== 'verified' && (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyVerification(selected, 'verified')}>
                     <MaterialCommunityIcons name="check-decagram" size={20} color={colors.text} />

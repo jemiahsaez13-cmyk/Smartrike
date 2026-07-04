@@ -36,6 +36,13 @@
       "expo-location",
       "expo-web-browser",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/splash-icon.png",
+          "color": "#000000"
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Smart Trike needs access to your photos so you can set a profile picture."

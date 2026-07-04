@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
@@ -19,7 +19,7 @@ import {
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
-import { confirm } from '@/utils/confirm';
+import { confirm, notify } from '@/utils/confirm';
 
 const REVIEW_COLOR: Record<DocumentReviewStatus, string> = {
   pending: colors.warning,
@@ -72,57 +72,79 @@ export const FranchiseManagementScreen = () => {
   // Derive the document-review modal target from the store so it auto-updates.
   const [reviewAppId, setReviewAppId] = useState<string | null>(null);
   const reviewApp = applications.find((a) => a.id === reviewAppId) ?? null;
+  // In-flight guards: exactly one document verdict (or bulk approve) at a
+  // time, awaited to completion — rapid taps used to race each other with
+  // stale document arrays and silently revert earlier verdicts.
+  const [docBusy, setDocBusy] = useState<string | null>(null); // doc name or '*all*'
+  const [actionBusy, setActionBusy] = useState<string | null>(null); // app id
 
   useEffect(() => {
     dispatch(fetchAllApplications());
   }, []);
 
   // Records an admin verdict for a single document and persists the documents
-  // array. When every document is approved we stamp documents_verified_at.
-  const setDocReview = (
+  // array. Awaited + serialized so verdicts can't clobber one another; the
+  // busy row shows a spinner until the write lands in the store.
+  const setDocReview = async (
     app: FranchiseApplication,
     docName: string,
     status: DocumentReviewStatus
   ) => {
-    const documents: FranchiseDocument[] = app.documents.map((d) =>
-      d.name === docName
-        ? {
-            ...d,
-            review_status: status,
-            review_remarks:
-              status === 'rejected'
-                ? 'Rejected by administrator — please re-upload a clear, valid copy.'
-                : null,
-          }
-        : d
-    );
-    const patch: Partial<FranchiseApplication> = { documents };
-    if (allDocumentsApproved(documents)) {
-      patch.documents_verified_at = new Date().toISOString();
-      patch.reviewed_by = currentUser?.id ?? null;
-    } else {
-      patch.documents_verified_at = null;
+    if (docBusy) return;
+    setDocBusy(docName);
+    try {
+      const documents: FranchiseDocument[] = app.documents.map((d) =>
+        d.name === docName
+          ? {
+              ...d,
+              review_status: status,
+              review_remarks:
+                status === 'rejected'
+                  ? 'Rejected by administrator — please re-upload a clear, valid copy.'
+                  : null,
+            }
+          : d
+      );
+      const patch: Partial<FranchiseApplication> = { documents };
+      if (allDocumentsApproved(documents)) {
+        patch.documents_verified_at = new Date().toISOString();
+        patch.reviewed_by = currentUser?.id ?? null;
+      } else {
+        patch.documents_verified_at = null;
+      }
+      await dispatch(patchApplication({ id: app.id, patch })).unwrap();
+    } catch {
+      notify('Update failed', 'Could not save the document verdict. Please try again.');
+    } finally {
+      setDocBusy(null);
     }
-    dispatch(patchApplication({ id: app.id, patch }));
   };
 
   // Bulk-approve every uploaded document at once.
-  const approveAllDocs = (app: FranchiseApplication) => {
-    const documents: FranchiseDocument[] = app.documents.map((d) =>
-      d.uploaded ? { ...d, review_status: 'approved' as const, review_remarks: null } : d
-    );
-    dispatch(
-      patchApplication({
-        id: app.id,
-        patch: {
-          documents,
-          documents_verified_at: allDocumentsApproved(documents)
-            ? new Date().toISOString()
-            : null,
-          reviewed_by: currentUser?.id ?? null,
-        },
-      })
-    );
+  const approveAllDocs = async (app: FranchiseApplication) => {
+    if (docBusy) return;
+    setDocBusy('*all*');
+    try {
+      const documents: FranchiseDocument[] = app.documents.map((d) =>
+        d.uploaded ? { ...d, review_status: 'approved' as const, review_remarks: null } : d
+      );
+      await dispatch(
+        patchApplication({
+          id: app.id,
+          patch: {
+            documents,
+            documents_verified_at: allDocumentsApproved(documents)
+              ? new Date().toISOString()
+              : null,
+            reviewed_by: currentUser?.id ?? null,
+          },
+        })
+      ).unwrap();
+    } catch {
+      notify('Update failed', 'Could not approve the documents. Please try again.');
+    } finally {
+      setDocBusy(null);
+    }
   };
 
   const advance = async (app: FranchiseApplication) => {
@@ -148,7 +170,14 @@ export const FranchiseManagementScreen = () => {
     if (next.status === 'issued') {
       patch.mtop_number = `MTOP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
-    dispatch(advanceApplication({ id: app.id, status: next.status, patch }));
+    setActionBusy(app.id);
+    try {
+      await dispatch(advanceApplication({ id: app.id, status: next.status, patch })).unwrap();
+    } catch {
+      notify('Update failed', 'Could not advance the application. Please try again.');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const reject = async (app: FranchiseApplication) => {
@@ -157,13 +186,20 @@ export const FranchiseManagementScreen = () => {
       destructive: true,
     });
     if (!ok) return;
-    dispatch(
-      advanceApplication({
-        id: app.id,
-        status: 'rejected',
-        patch: { remarks: 'Rejected by administrator.' },
-      })
-    );
+    setActionBusy(app.id);
+    try {
+      await dispatch(
+        advanceApplication({
+          id: app.id,
+          status: 'rejected',
+          patch: { remarks: 'Rejected by administrator.' },
+        })
+      ).unwrap();
+    } catch {
+      notify('Update failed', 'Could not reject the application. Please try again.');
+    } finally {
+      setActionBusy(null);
+    }
   };
 
   const filtered = applications.filter((a) => {
@@ -296,12 +332,28 @@ export const FranchiseManagementScreen = () => {
 
               {next ? (
                 <View style={styles.actions}>
-                  <TouchableOpacity style={styles.rejectBtn} onPress={() => reject(app)} activeOpacity={0.8}>
+                  <TouchableOpacity
+                    style={[styles.rejectBtn, actionBusy === app.id && { opacity: 0.5 }]}
+                    onPress={() => reject(app)}
+                    disabled={actionBusy === app.id}
+                    activeOpacity={0.8}
+                  >
                     <Text style={styles.rejectText}>Reject</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.advanceBtn} onPress={() => advance(app)} activeOpacity={0.8}>
-                    <Text style={styles.advanceText}>{next.label}</Text>
-                    <MaterialCommunityIcons name="arrow-right" size={16} color="#fff" />
+                  <TouchableOpacity
+                    style={[styles.advanceBtn, actionBusy === app.id && { opacity: 0.7 }]}
+                    onPress={() => advance(app)}
+                    disabled={actionBusy === app.id}
+                    activeOpacity={0.8}
+                  >
+                    {actionBusy === app.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Text style={styles.advanceText}>{next.label}</Text>
+                        <MaterialCommunityIcons name="arrow-right" size={16} color="#fff" />
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -326,6 +378,7 @@ export const FranchiseManagementScreen = () => {
 
       <DocumentReviewModal
         app={reviewApp}
+        busyDoc={docBusy}
         onClose={() => setReviewAppId(null)}
         onSetReview={setDocReview}
         onApproveAll={approveAllDocs}
@@ -340,12 +393,14 @@ export const FranchiseManagementScreen = () => {
 // ─────────────────────────────────────────────────────────────────────────────
 interface DocumentReviewModalProps {
   app: FranchiseApplication | null;
+  /** Name of the document with a verdict in flight ('*all*' for bulk). */
+  busyDoc: string | null;
   onClose: () => void;
   onSetReview: (app: FranchiseApplication, docName: string, status: DocumentReviewStatus) => void;
   onApproveAll: (app: FranchiseApplication) => void;
 }
 
-const DocumentReviewModal = ({ app, onClose, onSetReview, onApproveAll }: DocumentReviewModalProps) => {
+const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll }: DocumentReviewModalProps) => {
   const [preview, setPreview] = useState<FranchiseDocument | null>(null);
 
   if (!app) return null;
@@ -454,42 +509,55 @@ const DocumentReviewModal = ({ app, onClose, onSetReview, onApproveAll }: Docume
 
                   {doc.uploaded && (
                     <View style={styles.docActions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.docActionBtn,
-                          styles.docRejectBtn,
-                          status === 'rejected' && styles.docRejectBtnActive,
-                        ]}
-                        onPress={() => onSetReview(app, doc.name, 'rejected')}
-                        activeOpacity={0.8}
-                      >
-                        <MaterialCommunityIcons
-                          name="close"
-                          size={16}
-                          color={status === 'rejected' ? '#fff' : colors.error}
-                        />
-                        <Text style={[styles.docRejectText, status === 'rejected' && { color: '#fff' }]}>
-                          Reject
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.docActionBtn,
-                          styles.docApproveBtn,
-                          status === 'approved' && styles.docApproveBtnActive,
-                        ]}
-                        onPress={() => onSetReview(app, doc.name, 'approved')}
-                        activeOpacity={0.8}
-                      >
-                        <MaterialCommunityIcons
-                          name="check"
-                          size={16}
-                          color={status === 'approved' ? '#fff' : colors.success}
-                        />
-                        <Text style={[styles.docApproveText, status === 'approved' && { color: '#fff' }]}>
-                          Approve
-                        </Text>
-                      </TouchableOpacity>
+                      {busyDoc === doc.name ? (
+                        <View style={styles.docBusyRow}>
+                          <ActivityIndicator size="small" color={colors.primary} />
+                          <Text style={styles.docBusyText}>Saving verdict…</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={[
+                              styles.docActionBtn,
+                              styles.docRejectBtn,
+                              status === 'rejected' && styles.docRejectBtnActive,
+                              !!busyDoc && { opacity: 0.4 },
+                            ]}
+                            onPress={() => onSetReview(app, doc.name, 'rejected')}
+                            disabled={!!busyDoc}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialCommunityIcons
+                              name="close"
+                              size={16}
+                              color={status === 'rejected' ? '#fff' : colors.error}
+                            />
+                            <Text style={[styles.docRejectText, status === 'rejected' && { color: '#fff' }]}>
+                              Reject
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.docActionBtn,
+                              styles.docApproveBtn,
+                              status === 'approved' && styles.docApproveBtnActive,
+                              !!busyDoc && { opacity: 0.4 },
+                            ]}
+                            onPress={() => onSetReview(app, doc.name, 'approved')}
+                            disabled={!!busyDoc}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={16}
+                              color={status === 'approved' ? '#fff' : colors.success}
+                            />
+                            <Text style={[styles.docApproveText, status === 'approved' && { color: '#fff' }]}>
+                              Approve
+                            </Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
                     </View>
                   )}
                 </View>
@@ -503,8 +571,18 @@ const DocumentReviewModal = ({ app, onClose, onSetReview, onApproveAll }: Docume
                 <MaterialCommunityIcons name="shield-check" size={18} color={colors.success} />
                 <Text style={styles.verifiedText}>All documents verified.</Text>
               </View>
+            ) : busyDoc === '*all*' ? (
+              <View style={styles.approveAllBtn}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.approveAllText}>Approving all…</Text>
+              </View>
             ) : (
-              <TouchableOpacity style={styles.approveAllBtn} onPress={() => onApproveAll(app)} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={[styles.approveAllBtn, !!busyDoc && { opacity: 0.5 }]}
+                onPress={() => onApproveAll(app)}
+                disabled={!!busyDoc}
+                activeOpacity={0.85}
+              >
                 <MaterialCommunityIcons name="check-all" size={18} color="#fff" />
                 <Text style={styles.approveAllText}>Approve All Documents</Text>
               </TouchableOpacity>
@@ -955,6 +1033,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontStyle: 'italic',
   },
+  docBusyRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 38,
+  },
+  docBusyText: { ...typography.label, fontSize: 12, color: colors.textSecondary },
   docActions: {
     flexDirection: 'row',
     gap: spacing.sm,

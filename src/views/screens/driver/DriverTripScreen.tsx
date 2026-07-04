@@ -509,47 +509,12 @@ export const DriverTripScreen = () => {
                 {farePaid ? 'Paid online — already settled' : 'Collect the fare in cash'}
               </Text>
             </View>
-            <Text style={styles.ratingSubtitle}>Now rate your trip with {passengerName}</Text>
+            {/* Passengers are not star-rated — the trip simply wraps up here. */}
+            <Text style={styles.ratingSubtitle}>Trip with {passengerName} is all wrapped up.</Text>
 
-            {/* Stars */}
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <TouchableOpacity
-                  key={n}
-                  onPress={() => setRatingStars(n)}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${n} star`}
-                >
-                  <MaterialCommunityIcons
-                    name={n <= ratingStars ? 'star' : 'star-outline'}
-                    size={42}
-                    color={n <= ratingStars ? '#FBBF24' : colors.border}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Star label */}
-            <Text style={styles.starLabel}>
-              {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'][ratingStars]}
-            </Text>
-
-            {/* Comment */}
-            <TextInput
-              placeholder="Any comments about this passenger? (optional)"
-              value={ratingComment}
-              onChangeText={setRatingComment}
-              style={styles.commentInput}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxLength={200}
-            />
-
-            {/* Submit */}
             <TouchableOpacity
-              style={[styles.submitBtn, submittingRating && { opacity: 0.6 }]}
-              onPress={handleSubmitPassengerRating}
-              disabled={submittingRating}
+              style={styles.submitBtn}
+              onPress={handleSkipRating}
               activeOpacity={0.85}
             >
               <LinearGradient
@@ -558,17 +523,12 @@ export const DriverTripScreen = () => {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
-                <Text style={styles.submitText}>
-                  {submittingRating ? 'Submitting…' : 'Submit & Go Online'}
-                </Text>
+                <Text style={styles.submitText}>Done — Go Online</Text>
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Skip + Report */}
             <View style={styles.ratingActionsRow}>
-              <TouchableOpacity onPress={handleSkipRating} style={styles.skipBtn} activeOpacity={0.7}>
-                <Text style={styles.skipText}>Skip</Text>
-              </TouchableOpacity>
+              <View />
               <TouchableOpacity
                 onPress={() => openReport(true)}
                 style={styles.reportLink}

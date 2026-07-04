@@ -16,6 +16,7 @@ import {
   docReviewStatus,
   anyDocumentRejected,
 } from '@/models/entities/Franchise';
+import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { colors, spacing, shadows, typography, radius, layout } from '@/views/styles/theme';
 import { confirm, notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
@@ -45,6 +46,32 @@ export const FranchiseScreen = () => {
   useEffect(() => {
     if (user?.id) dispatch(fetchMyApplication(user.id));
   }, [user?.id]);
+
+  // Live sync: the moment the admin approves/rejects a document or advances
+  // the application, this screen updates — no refresh needed.
+  useEffect(() => {
+    if (!isSupabaseConfigured || !user?.id) return;
+    let channel: any;
+    try {
+      channel = supabase
+        .channel(`franchise_${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'franchise_applications', filter: `driver_id=eq.${user.id}` },
+          () => dispatch(fetchMyApplication(user.id))
+        )
+        .subscribe();
+    } catch {
+      /* realtime unavailable — screen still refreshes on focus */
+    }
+    return () => {
+      try {
+        if (channel) supabase.removeChannel(channel);
+      } catch {
+        /* noop */
+      }
+    };
+  }, [user?.id, dispatch]);
 
   // Pick a real file (image or PDF) and attach it as a data URI so the admin
   // can actually view what was submitted. Re-tapping a row replaces the file.

@@ -43,4 +43,8 @@ export class MessageService {
   async getConversations(userId: string): Promise<Conversation[]> {
     return repo.getConversations(userId);
   }
+
+  async deleteConversation(bookingId: string): Promise<void> {
+    return repo.deleteConversation(bookingId);
+  }
 }

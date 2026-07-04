@@ -91,7 +91,7 @@ export const DriverProfileScreen = () => {
 
   // The passenger's own latest completed trip with THIS driver (the one they
   // can rate / edit). null = they've never completed a trip with this driver.
-  const [myTrip, setMyTrip] = useState<{ id: string; rating: Rating | null } | null>(null);
+  const [myTrip, setMyTrip] = useState<{ id: string; rating: Rating | null; completed_at: string | null } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewStars, setReviewStars] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
@@ -125,14 +125,18 @@ export const DriverProfileScreen = () => {
     try {
       const { data } = await supabase
         .from('bookings')
-        .select('id, passenger_rating, status, created_at')
+        .select('id, passenger_rating, status, created_at, completed_at')
         .eq('driver_id', driverId)
         .eq('passenger_id', me!.id)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(1);
       const b = data && data[0];
-      setMyTrip(b ? { id: b.id, rating: (b as any).passenger_rating ?? null } : null);
+      setMyTrip(
+        b
+          ? { id: b.id, rating: (b as any).passenger_rating ?? null, completed_at: (b as any).completed_at ?? null }
+          : null
+      );
     } catch {
       /* silent */
     }
@@ -146,10 +150,10 @@ export const DriverProfileScreen = () => {
 
   const submitMyReview = async () => {
     if (!myTrip) return;
-    // Server-agnostic guard: the edit window is 1 hour from first submission.
-    if (myTrip.rating?.created_at && Date.now() - new Date(myTrip.rating.created_at).getTime() > 60 * 60 * 1000) {
+    // Guard: the rate/edit window is 1 hour from trip completion.
+    if (!myTrip.completed_at || Date.now() - new Date(myTrip.completed_at).getTime() > 60 * 60 * 1000) {
       setReviewOpen(false);
-      await notify('Editing closed', 'Reviews can only be edited within 1 hour of submitting them.');
+      await notify('Review window closed', 'Reviews can only be added or edited within 1 hour after the trip is completed.');
       return;
     }
     setSavingReview(true);
@@ -226,11 +230,11 @@ export const DriverProfileScreen = () => {
   const hasRatings = reviews.length > 0;
   const avgRating = hasRatings ? reviews.reduce((s, r) => s + r.stars, 0) / reviews.length : 0;
 
-  // Passengers may edit their review only within 1 hour of submitting it.
-  const reviewAgeMs = myTrip?.rating?.created_at
-    ? Date.now() - new Date(myTrip.rating.created_at).getTime()
-    : null;
-  const canEditReview = !myTrip?.rating || (reviewAgeMs != null && reviewAgeMs < 60 * 60 * 1000);
+  // Business rule: rating AND editing are only open for 1 hour after the trip
+  // completes. Once the window lapses, both actions are disabled.
+  const REVIEW_WINDOW_MS = 60 * 60 * 1000;
+  const tripAgeMs = myTrip?.completed_at ? Date.now() - new Date(myTrip.completed_at).getTime() : null;
+  const canEditReview = tripAgeMs != null && tripAgeMs < REVIEW_WINDOW_MS;
 
   const starBuckets = [5, 4, 3, 2, 1].map((n) => ({
     n,
@@ -387,7 +391,7 @@ export const DriverProfileScreen = () => {
               ) : (
                 <View style={styles.editClosedChip}>
                   <MaterialCommunityIcons name="lock-outline" size={13} color={colors.textMuted} />
-                  <Text style={styles.editClosedText}>Editing closed</Text>
+                  <Text style={styles.editClosedText}>{myTrip.rating ? 'Editing closed' : 'Rating closed'}</Text>
                 </View>
               )}
             </View>

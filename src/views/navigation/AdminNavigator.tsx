@@ -18,6 +18,8 @@ import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen'
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
 import { AdminReportsScreen } from '@/views/screens/admin/AdminReportsScreen';
+import { AdminMessagesScreen } from '@/views/screens/admin/AdminMessagesScreen';
+import { DriverProfileScreen } from '@/views/screens/passenger/DriverProfileScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -68,5 +70,7 @@ export const AdminNavigator = () => (
     <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     <Stack.Screen name="Analytics" component={AnalyticsScreen} />
     <Stack.Screen name="Reports" component={AdminReportsScreen} />
+    <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
+    <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
   </Stack.Navigator>
 );
