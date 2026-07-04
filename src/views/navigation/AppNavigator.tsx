@@ -32,11 +32,12 @@ export const AppNavigator = () => {
     return <SplashScreen />;
   }
 
-  // New accounts (including Google sign-in) must finish profile setup before
-  // entering the app. Admins and demo sessions are exempt.
+  // New PASSENGER accounts (including Google sign-in) must finish profile
+  // setup before entering the app. Drivers already submit their full details
+  // on the driver application form, and admins/demo sessions are exempt.
   const needsOnboarding =
     !!user &&
-    user.user_type !== 'admin' &&
+    user.user_type === 'passenger' &&
     !user.profile_completed &&
     !user.id?.startsWith('demo-');
 

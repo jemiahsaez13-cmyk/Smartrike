@@ -103,7 +103,10 @@ export const NotificationsScreen = () => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  if (loading) return <Loading message="Loading notifications..." />;
+  // Never blank the whole screen while fetching: the header (and its back
+  // button) must always render so a slow/hung network can't trap the user on
+  // an empty white page. Loading shows inline in the body instead.
+  const showLoading = loading && notifications.length === 0 && !refreshing;
 
   return (
     <View style={styles.container}>
@@ -134,7 +137,11 @@ export const NotificationsScreen = () => {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
         >
-          {notifications.length === 0 ? (
+          {showLoading ? (
+            <View style={styles.emptyContainer}>
+              <Loading message="Loading notifications..." />
+            </View>
+          ) : notifications.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialCommunityIcons name="bell-off-outline" size={72} color={colors.textLight} />
               <Text style={styles.emptyTitle}>All caught up!</Text>
