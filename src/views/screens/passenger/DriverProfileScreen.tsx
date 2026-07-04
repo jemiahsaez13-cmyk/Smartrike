@@ -146,12 +146,24 @@ export const DriverProfileScreen = () => {
 
   const submitMyReview = async () => {
     if (!myTrip) return;
+    // Server-agnostic guard: the edit window is 1 hour from first submission.
+    if (myTrip.rating?.created_at && Date.now() - new Date(myTrip.rating.created_at).getTime() > 60 * 60 * 1000) {
+      setReviewOpen(false);
+      await notify('Editing closed', 'Reviews can only be edited within 1 hour of submitting them.');
+      return;
+    }
     setSavingReview(true);
     try {
       await dispatch(
         submitRating({
           bookingId: myTrip.id,
-          rating: { stars: reviewStars, comment: reviewComment, created_at: new Date().toISOString() } as any,
+          // Preserve the original submission time on edits — the 1-hour edit
+          // window is anchored to the FIRST submission, not the last edit.
+          rating: {
+            stars: reviewStars,
+            comment: reviewComment,
+            created_at: myTrip.rating?.created_at ?? new Date().toISOString(),
+          } as any,
         })
       ).unwrap();
       setReviewOpen(false);
@@ -210,10 +222,15 @@ export const DriverProfileScreen = () => {
   };
 
   // ── Derived stats ──────────────────────────────────────────────────────────
-  const avgRating =
-    reviews.length > 0
-      ? reviews.reduce((s, r) => s + r.stars, 0) / reviews.length
-      : (driver?.rating ?? 5.0);
+  // A driver with zero reviews has NO rating — never show the DB's default 5.0.
+  const hasRatings = reviews.length > 0;
+  const avgRating = hasRatings ? reviews.reduce((s, r) => s + r.stars, 0) / reviews.length : 0;
+
+  // Passengers may edit their review only within 1 hour of submitting it.
+  const reviewAgeMs = myTrip?.rating?.created_at
+    ? Date.now() - new Date(myTrip.rating.created_at).getTime()
+    : null;
+  const canEditReview = !myTrip?.rating || (reviewAgeMs != null && reviewAgeMs < 60 * 60 * 1000);
 
   const starBuckets = [5, 4, 3, 2, 1].map((n) => ({
     n,
@@ -265,7 +282,7 @@ export const DriverProfileScreen = () => {
 
         <View style={styles.headerMeta}>
           <MaterialCommunityIcons name="star" size={14} color="#FBBF24" />
-          <Text style={styles.headerRating}>{avgRating.toFixed(1)}</Text>
+          <Text style={styles.headerRating}>{hasRatings ? avgRating.toFixed(1) : 'No ratings yet'}</Text>
           <Text style={styles.headerDot}>·</Text>
           <Text style={styles.headerTrips}>{driver?.total_trips ?? 0} trips</Text>
           {(driver as Driver)?.verification_status === 'verified' && (
@@ -358,14 +375,21 @@ export const DriverProfileScreen = () => {
                   <Text style={styles.yourReviewEmpty}>You haven't rated this driver yet.</Text>
                 )}
               </View>
-              <TouchableOpacity style={styles.editReviewBtn} onPress={openMyReview} activeOpacity={0.85}>
-                <MaterialCommunityIcons
-                  name={myTrip.rating ? 'pencil-outline' : 'star-plus-outline'}
-                  size={15}
-                  color={colors.primary}
-                />
-                <Text style={styles.editReviewText}>{myTrip.rating ? 'Edit' : 'Rate'}</Text>
-              </TouchableOpacity>
+              {canEditReview ? (
+                <TouchableOpacity style={styles.editReviewBtn} onPress={openMyReview} activeOpacity={0.85}>
+                  <MaterialCommunityIcons
+                    name={myTrip.rating ? 'pencil-outline' : 'star-plus-outline'}
+                    size={15}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.editReviewText}>{myTrip.rating ? 'Edit' : 'Rate'}</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.editClosedChip}>
+                  <MaterialCommunityIcons name="lock-outline" size={13} color={colors.textMuted} />
+                  <Text style={styles.editClosedText}>Editing closed</Text>
+                </View>
+              )}
             </View>
           </Surface>
         )}
@@ -376,9 +400,11 @@ export const DriverProfileScreen = () => {
 
           <View style={styles.ratingOverview}>
             <View style={styles.ratingBig}>
-              <Text style={styles.ratingBigNum}>{avgRating.toFixed(1)}</Text>
+              <Text style={styles.ratingBigNum}>{hasRatings ? avgRating.toFixed(1) : '—'}</Text>
               <StarRow stars={avgRating} size={20} />
-              <Text style={styles.ratingCount}>{reviews.length} review{reviews.length !== 1 ? 's' : ''}</Text>
+              <Text style={styles.ratingCount}>
+                {hasRatings ? `${reviews.length} review${reviews.length !== 1 ? 's' : ''}` : 'No ratings yet'}
+              </Text>
             </View>
 
             <View style={styles.ratingBreakdown}>
@@ -669,6 +695,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   editReviewText: { ...typography.label, color: colors.primary, fontSize: 13 },
+  editClosedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  editClosedText: { ...typography.label, color: colors.textMuted, fontSize: 12 },
 
   // Edit-rating modal
   reviewOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', paddingHorizontal: spacing.lg },

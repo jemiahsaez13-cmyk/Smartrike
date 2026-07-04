@@ -4,12 +4,15 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
+import { useAppSelector } from '@/controllers/store';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
   const navigation = useNavigation<any>();
+  // Red dot on the bell only while there are actual unread notifications.
+  const unreadNotifs = useAppSelector((state) => state.notification.unreadCount);
 
   const handleLogout = async () => {
     const ok = await confirm('Log Out', 'Are you sure you want to log out?', {
@@ -64,7 +67,7 @@ export const ProfileScreen = () => {
             onPress={() => navigation.navigate('Notifications')}
           >
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
-            <View style={styles.badge} />
+            {unreadNotifs > 0 && <View style={styles.badge} />}
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
@@ -112,7 +115,7 @@ export const ProfileScreen = () => {
             </>
           ) : user?.user_type === 'driver' ? (
             <>
-              <Stat icon="star" value={user?.rating ? user.rating.toFixed(1) : 'New'} label="Rating" />
+              <Stat icon="star" value={user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New'} label="Rating" />
               <View style={styles.statDivider} />
               <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
               <View style={styles.statDivider} />

@@ -8,15 +8,33 @@ interface CustomInputProps extends TextInputProps {
   containerStyle?: any;
 }
 
-export const Input: React.FC<CustomInputProps> = ({ 
-  errorText, 
-  containerStyle, 
+export const Input: React.FC<CustomInputProps> = ({
+  errorText,
+  containerStyle,
   mode = 'outlined',
   onFocus,
   onBlur,
-  ...props 
+  secureTextEntry,
+  right,
+  ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [hidden, setHidden] = useState(true);
+
+  // Password fields get a single show/hide eye managed HERE, superseding any
+  // caller-provided right icon — guarantees exactly one eye per field on
+  // every screen (driver register, passenger register, logins, …).
+  const isPassword = !!secureTextEntry;
+  const rightNode = isPassword ? (
+    <TextInput.Icon
+      icon={hidden ? 'eye-outline' : 'eye-off-outline'}
+      color={colors.textMuted}
+      forceTextInputFocus={false}
+      onPress={() => setHidden((h) => !h)}
+    />
+  ) : (
+    right
+  );
 
   const handleFocus = (args: any) => {
     setIsFocused(true);
@@ -48,6 +66,8 @@ export const Input: React.FC<CustomInputProps> = ({
         onFocus={handleFocus}
         onBlur={handleBlur}
         error={!!errorText}
+        secureTextEntry={isPassword ? hidden : false}
+        right={rightNode}
         {...props}
       />
       {errorText ? (

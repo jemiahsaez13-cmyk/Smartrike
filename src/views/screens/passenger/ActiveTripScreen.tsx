@@ -3,12 +3,15 @@ import { ActivityIndicator, Linking, View, StyleSheet, Animated, Dimensions, Tou
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
+import { useChatUnread } from '@/controllers/hooks/useChatUnread';
+import { useAppSelector } from '@/controllers/store';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
 import { submitRating, cancelBooking, updateBookingStatus, clearCurrentBooking } from '@/controllers/slices/bookingSlice';
 import { RealtimeService } from '@/models/services/RealtimeService';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { UserRepository } from '@/models/repositories/UserRepository';
+import { ReportService, PASSENGER_REPORT_REASONS } from '@/models/services/ReportService';
 import { User } from '@/models/types';
 import { Button } from '@/views/components/common/Button';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
@@ -23,11 +26,15 @@ const { height } = Dimensions.get('window');
 const realtimeService = new RealtimeService();
 const bookingRepo = new BookingRepository();
 const userRepo = new UserRepository();
+const reportService = new ReportService();
 
 export const ActiveTripScreen = () => {
   const { currentBooking } = useBooking();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
+  const me = useAppSelector((state) => state.auth.user);
+  // Unread chat messages from the driver — red badge on the message button.
+  const chatUnread = useChatUnread(currentBooking?.id, me?.id);
 
   const [driver, setDriver] = useState<User | null>(null);
   const [ratingVisible, setRatingVisible] = useState(false);
@@ -36,6 +43,14 @@ export const ActiveTripScreen = () => {
   const [submitting, setSubmitting] = useState(false);
   const [driverCoords, setDriverCoords] = useState<Location | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Report-driver sheet (opened from the rating modal or on its own).
+  const [reportVisible, setReportVisible] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+  // True when the report was opened from the rating sheet, so cancelling
+  // returns there instead of dropping the post-trip flow.
+  const [reportFromRating, setReportFromRating] = useState(false);
   // Demo online payment, collected at pickup: sheet visibility + progress.
   const [payVisible, setPayVisible] = useState(false);
   const [payPhase, setPayPhase] = useState<'confirm' | 'processing' | 'success'>('confirm');
@@ -217,6 +232,53 @@ export const ActiveTripScreen = () => {
     void notify('Emergency SOS', 'For urgent help, contact the TODA dispatch desk right away.');
   };
 
+  // Open the report sheet without stacking it on top of the rating sheet.
+  const openReport = (fromRating: boolean) => {
+    setReportFromRating(fromRating);
+    if (fromRating) setRatingVisible(false);
+    setReportVisible(true);
+  };
+
+  const closeReport = () => {
+    setReportVisible(false);
+    setReportReason('');
+    setReportDetails('');
+    if (reportFromRating) {
+      setReportFromRating(false);
+      setRatingVisible(true);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) {
+      void notify('Choose a reason', 'Please select what happened so we can review it.');
+      return;
+    }
+    if (!me?.id || !driverId) return;
+    setSubmittingReport(true);
+    try {
+      await reportService.fileReport({
+        bookingId: currentBooking?.id,
+        reporterId: me.id,
+        reportedId: driverId,
+        reporterRole: 'passenger',
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportVisible(false);
+      setReportReason('');
+      setReportDetails('');
+      const backToRating = reportFromRating;
+      setReportFromRating(false);
+      await notify('Report submitted', 'Thanks — the TODA admin will review this driver.');
+      if (backToRating) setRatingVisible(true);
+    } catch (e: any) {
+      await notify('Could not submit report', e?.message || 'Please try again.');
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
   const handleSubmitRating = async () => {
     if (!currentBooking) return;
     setSubmitting(true);
@@ -304,7 +366,9 @@ export const ActiveTripScreen = () => {
               <View style={styles.ratingRow}>
                 <MaterialCommunityIcons name="star" size={14} color="#FBBF24" style={{ marginRight: 4 }} />
                 <Text style={styles.ratingText}>
-                  {(driver?.rating ?? 5).toFixed(1)} ({driver?.total_trips ?? 0} trips)
+                  {(driver?.total_trips ?? 0) > 0
+                    ? `${(driver?.rating ?? 5).toFixed(1)} (${driver?.total_trips} trips)`
+                    : 'No ratings yet'}
                 </Text>
               </View>
               <Text style={[styles.ratingText, { color: colors.accent, marginTop: 2 }]}>
@@ -318,6 +382,11 @@ export const ActiveTripScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionBtn} onPress={handleMessageDriver} activeOpacity={0.76} accessibilityLabel="Message driver">
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
+              {chatUnread > 0 && (
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -570,6 +639,64 @@ export const ActiveTripScreen = () => {
                 <Text style={styles.submitRatingText}>{submitting ? 'Submitting...' : 'Submit & Finish'}</Text>
               </LinearGradient>
             </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => openReport(true)} style={styles.reportLink} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="flag-outline" size={15} color={colors.error} />
+              <Text style={styles.reportLinkText}>Report driver</Text>
+            </TouchableOpacity>
+          </Surface>
+        </View>
+      </Modal>
+
+      {/* ── Report Driver Modal ─────────────────────────────────────── */}
+      <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={closeReport}>
+        <View style={styles.modalOverlay}>
+          <Surface style={styles.ratingCard} elevation={5}>
+            <View style={[styles.ratingDriverAvatar, { backgroundColor: colors.errorLight }]}>
+              <MaterialCommunityIcons name="flag" size={36} color={colors.error} />
+            </View>
+            <Text style={styles.ratingTitle}>Report {driverName}</Text>
+            <Text style={styles.ratingSubtitle}>Tell us what happened. This goes to the TODA admin for review.</Text>
+
+            <View style={styles.reasonWrap}>
+              {PASSENGER_REPORT_REASONS.map((r) => {
+                const active = reportReason === r;
+                return (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => setReportReason(r)}
+                    activeOpacity={0.8}
+                    style={[styles.reasonChip, active && styles.reasonChipActive]}
+                  >
+                    <Text style={[styles.reasonChipText, active && styles.reasonChipTextActive]}>{r}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TextInput
+              placeholder="Add details (optional)"
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              style={styles.commentInput}
+              placeholderTextColor={colors.textLight}
+              multiline
+              maxLength={300}
+            />
+
+            <TouchableOpacity
+              style={[styles.submitRatingBtn, submittingReport && { opacity: 0.6 }]}
+              onPress={handleSubmitReport}
+              disabled={submittingReport}
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={[colors.error, '#B91C1C']} style={styles.submitRatingGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                <Text style={styles.submitRatingText}>{submittingReport ? 'Submitting…' : 'Submit Report'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={closeReport} style={styles.reportCancelBtn} activeOpacity={0.7}>
+              <Text style={styles.reportCancelText}>Cancel</Text>
+            </TouchableOpacity>
           </Surface>
         </View>
       </Modal>
@@ -599,6 +726,21 @@ const styles = StyleSheet.create({
   ratingText: { ...typography.body, fontSize: 12, color: colors.textSecondary },
   driverActions: { flexDirection: 'row', gap: spacing.sm },
   actionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderLight },
+  chatBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.error,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  chatBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   vehicleCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryLight, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.lg },
   vehicleInfo: { flex: 1 },
   vehiclePlate: { ...typography.number, fontSize: 18, color: colors.primaryDark, letterSpacing: 0 },
@@ -782,4 +924,23 @@ const styles = StyleSheet.create({
   submitRatingBtn: { width: '100%', height: 52, borderRadius: 14, overflow: 'hidden' },
   submitRatingGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   submitRatingText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
+  // Report driver
+  reportLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: spacing.sm, marginTop: spacing.sm },
+  reportLinkText: { ...typography.label, fontSize: 13, color: colors.error },
+  reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md, justifyContent: 'center' },
+  reasonChip: {
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reasonChipActive: { backgroundColor: colors.errorLight, borderColor: colors.error },
+  reasonChipText: { ...typography.label, fontSize: 12, color: colors.textSecondary },
+  reasonChipTextActive: { color: colors.error },
+  reportCancelBtn: { paddingVertical: spacing.sm, marginTop: spacing.xs },
+  reportCancelText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
 });

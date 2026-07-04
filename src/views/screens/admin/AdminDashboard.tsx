@@ -5,12 +5,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { AdminService, AdminStats, Analytics, FareMatrix } from '@/models/services/AdminService';
+import { ReportService } from '@/models/services/ReportService';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
 const adminService = new AdminService();
+const reportService = new ReportService();
 
 const peso = (n: number) =>
   `₱${Math.round(n).toLocaleString('en-PH')}`;
@@ -33,20 +35,23 @@ export const AdminDashboard = () => {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [fare, setFare] = useState<FareMatrix | null>(null);
+  const [openReports, setOpenReports] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [s, a, l, f] = await Promise.all([
+      const [s, a, l, f, r] = await Promise.all([
         adminService.getStats(),
         adminService.getAnalytics(),
         ActivityLogService.getRecentLogs(4),
         adminService.getFareMatrix(),
+        reportService.countOpen(),
       ]);
       setStats(s);
       setAnalytics(a);
       setLogs(l);
       setFare(f);
+      setOpenReports(r);
     } catch (e) {
       console.error('Dashboard load failed:', e);
     } finally {
@@ -129,6 +134,29 @@ export const AdminDashboard = () => {
           <View style={styles.grid}>
             {kpiData.map(item => <KPICard key={item.id} item={item} />)}
           </View>
+
+          {/* Prominent Reports entry — always visible, urgent when open > 0 */}
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Reports')}>
+            <Card variant="elevated" padding="md" style={styles.reportsCard}>
+              <View style={[styles.reportsIcon, openReports > 0 && { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="flag" size={24} color={openReports > 0 ? colors.error : colors.primary} />
+                {openReports > 0 && (
+                  <View style={styles.reportsBadge}>
+                    <Text style={styles.reportsBadgeText}>{openReports > 9 ? '9+' : openReports}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.reportsTitle}>User Reports</Text>
+                <Text style={styles.queueLevel}>
+                  {openReports > 0
+                    ? `${openReports} open report${openReports > 1 ? 's' : ''} need${openReports === 1 ? 's' : ''} your review`
+                    : 'Review passenger & driver reports'}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textLight} />
+            </Card>
+          </TouchableOpacity>
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>CONFIGURATION</Text>
@@ -479,6 +507,40 @@ const styles = StyleSheet.create({
   },
   queueCard: {
     marginBottom: spacing.sm,
+  },
+  reportsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  reportsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  reportsBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.error,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  reportsBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  reportsTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontSize: 16,
   },
   queueItem: {
     minHeight: 68,

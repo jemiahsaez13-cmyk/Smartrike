@@ -78,7 +78,19 @@ export class BookingService {
   }
 
   async startTrip(bookingId: string): Promise<Booking> {
-    return await this.bookingRepo.updateStatus(bookingId, 'in-transit');
+    const booking = await this.bookingRepo.updateStatus(bookingId, 'in-transit');
+    // Best-effort, passenger-only: the driver initiated this, so only the
+    // passenger is told the trip started.
+    try {
+      await this.notificationService.notifyPassenger(
+        booking.passenger_id,
+        'Trip started',
+        'You have been picked up — enjoy the ride!'
+      );
+    } catch (e) {
+      console.warn('trip-start notification skipped:', e);
+    }
+    return booking;
   }
 
   async completeTrip(bookingId: string): Promise<Booking> {
@@ -110,6 +122,17 @@ export class BookingService {
       } catch (e) {
         console.warn('e-money trip settlement skipped:', e);
       }
+    }
+
+    // Passenger-only completion notice (the driver pressed the button).
+    try {
+      await this.notificationService.notifyPassenger(
+        booking.passenger_id,
+        'Trip completed',
+        `Fare ₱${(booking.total_fare ?? 0).toFixed(2)} — thanks for riding with Smart Trike!`
+      );
+    } catch (e) {
+      console.warn('trip-complete notification skipped:', e);
     }
     return booking;
   }

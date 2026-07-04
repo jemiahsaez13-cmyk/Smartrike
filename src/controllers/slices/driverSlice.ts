@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { isTodayPHT } from '@/utils/dateUtils';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { BookingService } from '@/models/services/BookingService';
@@ -143,9 +144,10 @@ const driverSlice = createSlice({
       })
       .addCase(fetchCompletedTrips.fulfilled, (state, action) => {
         state.completedTrips = action.payload.filter(b => b.status === 'completed');
-        const today = new Date().toDateString();
+        // Daily goal resets at midnight Philippine time (UTC+8), not device
+        // time, so every driver's quota flips on the same clock.
         state.dailyEarnings = action.payload
-          .filter(b => b.completed_at && new Date(b.completed_at).toDateString() === today)
+          .filter(b => b.completed_at && isTodayPHT(b.completed_at))
           .reduce((sum, b) => sum + b.total_fare, 0);
       });
   }

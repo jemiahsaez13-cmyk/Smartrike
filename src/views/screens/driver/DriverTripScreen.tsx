@@ -23,6 +23,7 @@ import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ReportService, DRIVER_REPORT_REASONS } from '@/models/services/ReportService';
 import { DirectionsService } from '@/models/services/DirectionsService';
 import { RealtimeService } from '@/models/services/RealtimeService';
+import { useChatUnread } from '@/controllers/hooks/useChatUnread';
 import { User } from '@/models/types';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatETA, formatDistance } from '@/utils/locationUtils';
@@ -101,6 +102,8 @@ export const DriverTripScreen = () => {
 
   const passengerId = currentBooking?.passenger_id || null;
   const passengerName = passenger?.name || 'Passenger';
+  // Unread chat messages from the passenger — red badge on the message button.
+  const chatUnread = useChatUnread(currentBooking?.id, user?.id);
 
   useEffect(() => {
     let active = true;
@@ -393,6 +396,11 @@ export const DriverTripScreen = () => {
             </TouchableOpacity>
             <TouchableOpacity style={styles.contactBtn} onPress={handleMessagePassenger} activeOpacity={0.8}>
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
+              {chatUnread > 0 && (
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.contactBtn, styles.reportBtn]}
@@ -731,6 +739,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  chatBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.error,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  chatBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   fareCard: { marginBottom: 20 },
   payStateRow: {
     flexDirection: 'row',

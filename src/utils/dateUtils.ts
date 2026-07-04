@@ -69,3 +69,19 @@ export function isSameDay(a: Date | string, b: Date | string): boolean {
 export function isToday(date: Date | string): boolean {
   return isSameDay(date, new Date());
 }
+
+// ── Philippine Standard Time (UTC+8) day helpers ─────────────────────────────
+// The TODA operates on PHT, so "today" (driver quotas, daily earnings) must
+// flip at midnight Manila time regardless of the device/server timezone.
+const PHT_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** Calendar date (YYYY-MM-DD) of the given instant in Philippine time. */
+export function phtDayKey(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Date(d.getTime() + PHT_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** True when the instant falls on the current Philippine calendar day. */
+export function isTodayPHT(date: Date | string): boolean {
+  return phtDayKey(date) === phtDayKey(new Date());
+}

@@ -28,12 +28,16 @@ export class MessageService {
     return repo.markRead(messageId);
   }
 
-  async markAllRead(bookingId: string, myType: 'passenger' | 'driver'): Promise<void> {
-    return repo.markAllReadForBooking(bookingId, myType);
+  async markAllRead(bookingId: string, myType: 'passenger' | 'driver', userId?: string): Promise<void> {
+    return repo.markAllReadForBooking(bookingId, myType, userId);
   }
 
   async getUnreadCount(userId: string): Promise<number> {
     return repo.getUnreadCount(userId);
+  }
+
+  async getUnreadCountForBooking(bookingId: string, userId: string): Promise<number> {
+    return repo.getUnreadCountForBooking(bookingId, userId);
   }
 
   async getConversations(userId: string): Promise<Conversation[]> {

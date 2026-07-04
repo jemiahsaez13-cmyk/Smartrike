@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { Image, Platform, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, View } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { fetchMyApplication, submitApplication } from '@/controllers/slices/franchiseSlice';
 import {
@@ -44,22 +46,59 @@ export const FranchiseScreen = () => {
     if (user?.id) dispatch(fetchMyApplication(user.id));
   }, [user?.id]);
 
-  const toggleDoc = (idx: number) =>
-    setDocs((prev) =>
-      prev.map((d, i) => {
-        if (i !== idx) return d;
-        const uploaded = !d.uploaded;
-        return {
-          ...d,
-          uploaded,
-          // Record submission metadata so the admin can review each document.
-          uploaded_at: uploaded ? new Date().toISOString() : null,
-          file_url: uploaded ? `document://${encodeURIComponent(d.name)}` : null,
-          review_status: 'pending' as const,
-          review_remarks: null,
-        };
-      })
-    );
+  // Pick a real file (image or PDF) and attach it as a data URI so the admin
+  // can actually view what was submitted. Re-tapping a row replaces the file.
+  const pickDoc = async (idx: number) => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      if ((asset.size ?? 0) > 2_500_000) {
+        void notify('File too large', 'Please choose a file under 2.5 MB — a clear photo or a compressed PDF.');
+        return;
+      }
+      const mime =
+        asset.mimeType || (asset.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      let dataUri: string;
+      if (asset.uri.startsWith('data:')) {
+        dataUri = asset.uri;
+      } else if (Platform.OS === 'web') {
+        const blob = await (await fetch(asset.uri)).blob();
+        dataUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        dataUri = `data:${mime};base64,${base64}`;
+      }
+      setDocs((prev) =>
+        prev.map((d, i) =>
+          i === idx
+            ? {
+                ...d,
+                uploaded: true,
+                uploaded_at: new Date().toISOString(),
+                file_url: dataUri,
+                file_name: asset.name ?? null,
+                review_status: 'pending' as const,
+                review_remarks: null,
+              }
+            : d
+        )
+      );
+    } catch {
+      void notify('Could not attach file', 'Please try again.');
+    }
+  };
 
   const allUploaded = docs.every((d) => d.uploaded);
 
@@ -297,17 +336,26 @@ export const FranchiseScreen = () => {
         <Text style={styles.sectionTitle}>Required Documents</Text>
         <Card variant="outlined" padding="none" style={styles.docCard}>
           {docs.map((doc, idx) => (
-            <TouchableOpacity key={doc.name} style={[styles.docRow, idx === docs.length - 1 && { borderBottomWidth: 0 }]} onPress={() => toggleDoc(idx)} activeOpacity={0.7}>
-              <View style={[styles.docIcon, doc.uploaded && { backgroundColor: colors.successLight }]}>
-                <MaterialCommunityIcons
-                  name={doc.uploaded ? 'check' : 'plus'}
-                  size={18}
-                  color={doc.uploaded ? colors.success : colors.textMuted}
-                />
+            <TouchableOpacity key={doc.name} style={[styles.docRow, idx === docs.length - 1 && { borderBottomWidth: 0 }]} onPress={() => pickDoc(idx)} activeOpacity={0.7}>
+              {doc.uploaded && doc.file_url?.startsWith('data:image') ? (
+                <Image source={{ uri: doc.file_url }} style={styles.docThumb} resizeMode="cover" />
+              ) : (
+                <View style={[styles.docIcon, doc.uploaded && { backgroundColor: colors.successLight }]}>
+                  <MaterialCommunityIcons
+                    name={doc.uploaded ? 'file-check' : 'plus'}
+                    size={18}
+                    color={doc.uploaded ? colors.success : colors.textMuted}
+                  />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.docName, doc.uploaded && { color: colors.text }]}>{doc.name}</Text>
+                {doc.uploaded && (doc as any).file_name ? (
+                  <Text style={styles.docFileName} numberOfLines={1}>{(doc as any).file_name}</Text>
+                ) : null}
               </View>
-              <Text style={[styles.docName, doc.uploaded && { color: colors.text }]}>{doc.name}</Text>
               <Text style={[styles.docAction, doc.uploaded && { color: colors.success }]}>
-                {doc.uploaded ? 'Uploaded' : 'Add'}
+                {doc.uploaded ? 'Replace' : 'Add'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -588,10 +636,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  docName: { 
-    flex: 1, 
+  docName: {
     ...typography.label,
-    color: colors.textSecondary 
+    color: colors.textSecondary
+  },
+  docFileName: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  docThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
   docAction: { 
     ...typography.labelSmall,

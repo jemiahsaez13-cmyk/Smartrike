@@ -34,7 +34,9 @@ const formatDate = (iso?: string | null) => {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const isHttp = (url?: string | null) => !!url && /^https?:\/\//i.test(url);
+// Previewable in an <Image>: hosted URLs and on-device picked images
+// (data URIs). PDFs fall back to the "submitted" placeholder card.
+const isHttp = (url?: string | null) => !!url && (/^https?:\/\//i.test(url) || /^data:image\//i.test(url));
 
 // Maps the current status to the next admin action.
 const NEXT: Record<string, { label: string; status: FranchiseStatus; patch?: Partial<FranchiseApplication> }> = {

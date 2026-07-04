@@ -39,7 +39,8 @@ export const DriverDashboard = () => {
       : dailyEarnings > 0
       ? `₱${remaining.toFixed(0)} more to hit today's goal.`
       : 'Complete trips to start earning toward your goal.';
-  const ratingLabel = user?.rating ? user.rating.toFixed(1) : 'New';
+  // A brand-new driver has no rated trips — show "New", not the default 5.0.
+  const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
 
   // Live ride requests, newest first (populated by realtime + polling).
   const liveRequests = useMemo(() => incomingRequests.slice(0, 4), [incomingRequests]);

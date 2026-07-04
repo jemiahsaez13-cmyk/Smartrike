@@ -8,6 +8,7 @@ import { DriverNavigator } from './DriverNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { SplashScreen } from '@/views/screens/auth/SplashScreen';
 import { ProfileSetupScreen } from '@/views/screens/auth/ProfileSetupScreen';
+import { NotificationListener } from '@/views/components/common/NotificationListener';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +44,7 @@ export const AppNavigator = () => {
 
   return (
     <NavigationContainer>
+      {isAuthenticated && <NotificationListener />}
       {!isAuthenticated ? (
         <AuthNavigator />
       ) : needsOnboarding ? (

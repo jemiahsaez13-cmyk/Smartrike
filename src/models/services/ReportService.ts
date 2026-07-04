@@ -19,6 +19,16 @@ export const DRIVER_REPORT_REASONS = [
   'Other',
 ] as const;
 
+/** Reasons a passenger can flag a driver with. */
+export const PASSENGER_REPORT_REASONS = [
+  'Reckless / unsafe driving',
+  'Rude or abusive behavior',
+  'Overcharged the fare',
+  'Vehicle in poor condition',
+  'Took a wrong or long route',
+  'Other',
+] as const;
+
 export type ReportStatus = 'open' | 'reviewed' | 'dismissed' | 'actioned';
 
 export interface ReportRow {
@@ -71,6 +81,16 @@ export class ReportService {
       });
     }
     return rows;
+  }
+
+  // Admin: number of reports still awaiting review (dashboard badge).
+  async countOpen(): Promise<number> {
+    const { count, error } = await supabase
+      .from('reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'open');
+    if (error) return 0;
+    return count ?? 0;
   }
 
   // Admin: change a report's status (reviewed / dismissed / actioned).

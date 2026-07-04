@@ -16,7 +16,7 @@ import { Booking } from '@/models/types';
 import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
-import { formatDate, formatTime, getWeekRange, getMonthRange, isToday } from '@/utils/dateUtils';
+import { formatDate, formatTime, getWeekRange, getMonthRange, isTodayPHT } from '@/utils/dateUtils';
 import { DRIVER_GOAL_DAILY } from '@/config/constants';
 
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -66,7 +66,7 @@ export const EarningsScreen = () => {
     const now = new Date();
     switch (p) {
       case 'today':
-        return trips.filter(t => t.completed_at && isToday(t.completed_at));
+        return trips.filter(t => t.completed_at && isTodayPHT(t.completed_at));
       case 'week': {
         const { start } = getWeekRange();
         return trips.filter(t => t.completed_at && new Date(t.completed_at) >= start);

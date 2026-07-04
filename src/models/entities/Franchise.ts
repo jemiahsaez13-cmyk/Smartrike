@@ -23,8 +23,11 @@ export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected';
 export interface FranchiseDocument {
   name: string;
   uploaded: boolean;
-  // URI/URL pointing to the uploaded scan so the admin can view it.
+  // URI/URL pointing to the uploaded scan so the admin can view it. Either an
+  // http(s) URL or a data: URI (image/PDF picked on-device).
   file_url?: string | null;
+  // Original filename of the picked file, shown to driver and admin.
+  file_name?: string | null;
   // ISO timestamp the driver uploaded the document.
   uploaded_at?: string | null;
   // Admin verdict for this specific document.

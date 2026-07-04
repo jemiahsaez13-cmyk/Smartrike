@@ -9,7 +9,17 @@ type BookingRow = {
   status: Conversation['bookingStatus'];
   created_at: string;
   accepted_at: string | null;
+  completed_at: string | null;
 };
+
+// Trip chats expire 1 hour after the trip completes (a pg_cron job deletes the
+// rows server-side; this mirrors that cutoff so the UI never shows a thread
+// that is already scheduled for deletion).
+const CHAT_TTL_AFTER_COMPLETION_MS = 60 * 60 * 1000;
+const chatExpired = (b: Pick<BookingRow, 'status' | 'completed_at'>) =>
+  b.status === 'completed' &&
+  !!b.completed_at &&
+  Date.now() - new Date(b.completed_at).getTime() > CHAT_TTL_AFTER_COMPLETION_MS;
 type UserRow = { id: string; name: string; profile_photo_url: string | null; user_type: string };
 
 export class MessageRepository {
@@ -41,19 +51,56 @@ export class MessageRepository {
     if (error) throw error;
   }
 
-  async markAllReadForBooking(bookingId: string, recipientType: string): Promise<void> {
+  async markAllReadForBooking(bookingId: string, recipientType: string, userId?: string): Promise<void> {
     const { error } = await supabase
       .from('messages')
       .update({ read: true })
       .eq('booking_id', bookingId)
       .neq('sender_type', recipientType);
     if (error) throw error;
+    // Keep the bell badge in sync: reading the chat also clears the "new
+    // message" notifications this thread produced for me.
+    if (userId) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', userId)
+        .eq('booking_id', bookingId)
+        .eq('type', 'message')
+        .eq('read', false);
+    }
   }
 
+  // Unread messages addressed to this user, scoped to bookings they are a
+  // party of. (Never count other people's conversations — RLS should already
+  // hide them, but admin god-mode and future policy changes must not inflate
+  // the badge.)
   async getUnreadCount(userId: string): Promise<number> {
+    const { data: bookings, error: bErr } = await supabase
+      .from('bookings')
+      .select('id')
+      .or(`passenger_id.eq.${userId},driver_id.eq.${userId}`)
+      .not('driver_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (bErr || !bookings?.length) return 0;
     const { count, error } = await supabase
       .from('messages')
       .select('id', { count: 'exact', head: true })
+      .in('booking_id', bookings.map((b: { id: string }) => b.id))
+      .eq('read', false)
+      .neq('sender_id', userId);
+    if (error) return 0;
+    return count ?? 0;
+  }
+
+  // Unread messages from the other party within a single trip's thread —
+  // powers the red badge on the Active Ride chat button.
+  async getUnreadCountForBooking(bookingId: string, userId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('booking_id', bookingId)
       .eq('read', false)
       .neq('sender_id', userId);
     if (error) return 0;
@@ -70,13 +117,14 @@ export class MessageRepository {
   async getConversations(userId: string): Promise<Conversation[]> {
     const { data, error } = await supabase
       .from('bookings')
-      .select('id, passenger_id, driver_id, status, created_at, accepted_at')
+      .select('id, passenger_id, driver_id, status, created_at, accepted_at, completed_at')
       .or(`passenger_id.eq.${userId},driver_id.eq.${userId}`)
       .not('driver_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(60);
     if (error) throw error;
-    const bookings = (data ?? []) as BookingRow[];
+    // Threads of trips completed over an hour ago are gone (or about to be).
+    const bookings = ((data ?? []) as BookingRow[]).filter((b) => !chatExpired(b));
     if (bookings.length === 0) return [];
 
     const bookingIds = bookings.map((b) => b.id);

@@ -37,6 +37,7 @@ const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> =
   [NOTIFICATION_TYPES.PAYMENT_RECEIVED]: { icon: 'cash-check', color: colors.secondary, bg: colors.successLight },
   [NOTIFICATION_TYPES.FRANCHISE_STATUS]: { icon: 'card-account-details', color: colors.warning, bg: colors.warningLight },
   [NOTIFICATION_TYPES.SYSTEM_ALERT]: { icon: 'alert-circle', color: colors.warning, bg: colors.warningLight },
+  message: { icon: 'message-text', color: colors.accent, bg: colors.infoLight },
 };
 
 const getNotifMeta = (type: string) =>

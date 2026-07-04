@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Vibration,
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,11 +42,11 @@ export const ChatScreen = () => {
       const data = await service.getMessages(bookingId);
       setMessages(data);
       scrollToEnd();
-      await service.markAllRead(bookingId, myType);
+      await service.markAllRead(bookingId, myType, user?.id);
     } catch (e) {
       console.error('Failed to load messages:', e);
     }
-  }, [bookingId, myType]);
+  }, [bookingId, myType, user?.id]);
 
   useEffect(() => {
     load();
@@ -67,6 +68,13 @@ export const ChatScreen = () => {
               return [...prev, payload.new];
             });
             scrollToEnd();
+            // A message from the other party, received while this chat is
+            // open: buzz, and mark it read immediately so every unread badge
+            // (inbox, home, active ride) clears without a manual refresh.
+            if (payload?.new?.sender_id && payload.new.sender_id !== user?.id) {
+              Vibration.vibrate(150);
+              service.markAllRead(bookingId, myType, user?.id).catch(() => undefined);
+            }
           }
         )
         .subscribe();
@@ -80,7 +88,7 @@ export const ChatScreen = () => {
         /* noop */
       }
     };
-  }, [bookingId]);
+  }, [bookingId, myType, user?.id]);
 
   const send = async () => {
     const body = text.trim();
