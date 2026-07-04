@@ -1,9 +1,24 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { BookingService } from '@/models/services/BookingService';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { Booking, Location, Rating } from '@/models/types';
 
 const bookingService = new BookingService();
+const bookingRepo = new BookingRepository();
+
+// Restores the passenger's in-flight booking (searching / matched / mid-ride)
+// so the dashboard can resume it after a reload instead of losing it.
+export const fetchActiveBooking = createAsyncThunk(
+  'booking/fetchActive',
+  async (passengerId: string, { rejectWithValue }) => {
+    try {
+      return await bookingRepo.findActiveByPassenger(passengerId);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
 
 interface BookingState {
   currentBooking: Booking | null;
@@ -196,6 +211,14 @@ const bookingSlice = createSlice({
       .addCase(cancelBooking.fulfilled, (state) => {
         state.currentBooking = null;
         state.searchingForDriver = false;
+      })
+      // Restore the in-flight booking on load (only sets when one exists, so it
+      // never clobbers a fresh booking already held in memory).
+      .addCase(fetchActiveBooking.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.currentBooking = action.payload;
+          state.searchingForDriver = action.payload.status === 'pending';
+        }
       })
       // Passenger rated driver — persist the rating back onto currentBooking
       .addCase(submitRating.fulfilled, (state, action) => {

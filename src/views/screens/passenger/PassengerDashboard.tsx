@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useBooking } from '@/controllers/hooks/useBooking';
+import { useAppDispatch } from '@/controllers/store';
+import { fetchActiveBooking } from '@/controllers/slices/bookingSlice';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
@@ -33,6 +35,15 @@ export const PassengerDashboard = () => {
   const [places, setPlaces] = useState<PopularPlace[]>([]);
   const [driversOnline, setDriversOnline] = useState<number | null>(null);
   const [fareInfo, setFareInfo] = useState<{ base: number; perKm: number } | null>(null);
+
+  const dispatch = useAppDispatch();
+
+  // Restore any in-flight booking (searching / matched / mid-ride) after an
+  // app reload so the active trip card comes back instead of being lost.
+  useEffect(() => {
+    if (user?.id && !currentBooking) dispatch(fetchActiveBooking(user.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;

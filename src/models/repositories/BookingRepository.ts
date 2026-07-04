@@ -38,6 +38,18 @@ export class BookingRepository {
     return data;
   }
 
+  // Marks the fare as paid (demo online payment settles at pickup).
+  async markPaid(id: string): Promise<Booking> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ payment_status: 'completed' })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   async assignDriver(bookingId: string, driverId: string): Promise<Booking> {
     const { data, error } = await supabase
       .from('bookings')
@@ -104,6 +116,21 @@ export class BookingRepository {
       .single();
     if (error) throw error;
     return data;
+  }
+
+  // The passenger's current in-flight booking (still searching, matched, or
+  // mid-ride). Lets the passenger dashboard restore the active trip after a
+  // reload instead of losing it.
+  async findActiveByPassenger(passengerId: string): Promise<Booking | null> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('passenger_id', passengerId)
+      .in('status', ['pending', 'accepted', 'in-transit'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return null;
+    return (data && data[0]) || null;
   }
 
   // The driver's current in-progress trip (accepted or in-transit), if any.
