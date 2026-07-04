@@ -37,9 +37,10 @@ export class BookingService {
       total_fare: totalFare,
       peak_hour_multiplier: multiplier,
       payment_method: options.paymentMethod || 'cash',
-      // Online is paid upfront at booking (demo), so mark it completed; cash and
+      // Every method starts unpaid. Online (demo) settles at pickup — the
+      // passenger is prompted to pay when the driver confirms pickup; cash and
       // legacy wallet methods settle on trip completion.
-      payment_status: options.paymentMethod === 'online' ? 'completed' : 'pending',
+      payment_status: 'pending',
       passenger_rating: null,
       driver_rating: null,
       notes: options.notes || null,

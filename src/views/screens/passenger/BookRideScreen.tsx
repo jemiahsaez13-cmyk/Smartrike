@@ -15,7 +15,7 @@ import { LocationChooser } from '@/views/screens/passenger/LocationChooser';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
-import { DirectionsService } from '@/models/services/DirectionsService';
+import { DirectionsService, RoadRoute } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
@@ -112,8 +112,9 @@ export const BookRideScreen = () => {
   const [tracking, setTracking] = useState(true);
   // Action popup anchored above a tapped marker (screen-space x/y from the map).
   const [markerMenu, setMarkerMenu] = useState<{ which: 'current' | 'pickup' | 'dropoff'; x: number; y: number } | null>(null);
-  // Real road distance (Directions API) for fare accuracy; null until fetched.
-  const [roadDistanceKm, setRoadDistanceKm] = useState<number | null>(null);
+  // Real road route (Directions API): road-following polyline for the map line
+  // plus driving distance for fare accuracy; null until fetched.
+  const [roadRoute, setRoadRoute] = useState<RoadRoute | null>(null);
 
   useEffect(() => {
     placeService.listActive().then(setDestinations).catch(() => undefined);
@@ -188,10 +189,14 @@ export const BookRideScreen = () => {
 
   // Curved route line between pickup and drop-off, trimmed slightly at both
   // ends so it stops just short of the pins instead of poking into them.
+  // Only a FALLBACK while the real road route loads (or when Directions fails).
   const curvedLine = useMemo(
     () => (pickupCoord && dropCoord ? curvedPath(pickupCoord, dropCoord, 48, 0.025) : []),
     [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude]
   );
+
+  // Prefer the real road-following path; fall back to the cosmetic curve.
+  const routeLine = roadRoute?.points?.length ? roadRoute.points : curvedLine;
 
   useEffect(() => {
     getLocation()
@@ -207,10 +212,18 @@ export const BookRideScreen = () => {
       });
   }, [getLocation, sheetAnim, cardAnim]);
 
-  // Keep the native map framed on the active pickup/dropoff pair.
+  // Keep the native map framed on the active route: fit the whole road path
+  // when we have one (so every bend stays on screen), else the endpoint pair.
   useEffect(() => {
-    if (mapRef.current?.animateToRegion) mapRef.current.animateToRegion(region, 650);
-  }, [region]);
+    if (roadRoute?.points?.length && mapRef.current?.fitToCoordinates) {
+      mapRef.current.fitToCoordinates(roadRoute.points, {
+        edgePadding: { top: 110, right: 70, bottom: Math.round(height * 0.42), left: 70 },
+        animated: true,
+      });
+    } else if (mapRef.current?.animateToRegion) {
+      mapRef.current.animateToRegion(region, 650);
+    }
+  }, [region, roadRoute]);
 
   // Re-enable marker view tracking briefly whenever an endpoint moves, so the
   // custom marker artwork is captured and actually shows (then settle to false).
@@ -220,19 +233,19 @@ export const BookRideScreen = () => {
     return () => clearTimeout(t);
   }, [pickupCoord?.latitude, pickupCoord?.longitude, dropCoord?.latitude, dropCoord?.longitude, currentLocation?.latitude]);
 
-  // Fetch real road distance (Directions API) for the active pair; clears on
-  // failure so the fare falls back to straight-line distance.
+  // Fetch the real road route (Directions API) for the active pair; clears on
+  // failure so the map falls back to the curve and the fare to straight-line.
   useEffect(() => {
     let active = true;
     const ep = pickup || currentLocation;
     if (!ep || !dropoff) {
-      setRoadDistanceKm(null);
+      setRoadRoute(null);
       return;
     }
     directionsService
-      .getRoadDistanceKm(ep, dropoff)
-      .then((km) => { if (active) setRoadDistanceKm(km); })
-      .catch(() => { if (active) setRoadDistanceKm(null); });
+      .getRoute(ep, dropoff)
+      .then((r) => { if (active) setRoadRoute(r); })
+      .catch(() => { if (active) setRoadRoute(null); });
     return () => { active = false; };
   }, [pickup, currentLocation, dropoff]);
 
@@ -246,7 +259,7 @@ export const BookRideScreen = () => {
       }
       try {
         // Prefer real road distance; fall back to straight-line (haversine).
-        const distance = roadDistanceKm ?? (await fareService.calculateDistance(ep, dropoff));
+        const distance = roadRoute?.distanceKm ?? (await fareService.calculateDistance(ep, dropoff));
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
         const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
         const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
@@ -260,7 +273,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType, roadDistanceKm]);
+  }, [pickup, currentLocation, dropoff, rideType, roadRoute]);
 
   useEffect(() => {
     const destination = route.params?.destination;
@@ -422,20 +435,19 @@ export const BookRideScreen = () => {
       }
     };
 
-    // Online payment is a DEMO: we simulate a successful charge. Real GCash/card
-    // requires a licensed gateway (PayMongo/Xendit/Maya) plus business
-    // registration and BIR permits, so no actual money moves here.
+    // Online payment is a DEMO and settles at pickup: the app asks the
+    // passenger to pay once the driver confirms "Passenger Picked Up" —
+    // nothing is charged at booking time. Real GCash/card requires a licensed
+    // gateway (PayMongo/Xendit/Maya) plus business registration and BIR
+    // permits, so no actual money moves here.
     if (paymentMethod === 'online') {
       const fare = estimate?.fare ?? 0;
       const ok = await confirm(
         'Online payment (demo)',
-        `Pay ₱${fare.toFixed(2)} online now?\n\nThis is a demo — no real charge is made. Live GCash/card payments need a payment gateway (e.g. PayMongo) plus business registration and BIR permits.`,
-        { confirmText: `Pay ₱${fare.toFixed(2)}`, cancelText: 'Cancel' }
+        `You'll be asked to pay ₱${fare.toFixed(2)} online when your driver picks you up.\n\nThis is a demo — no real charge is made.`,
+        { confirmText: 'Book ride', cancelText: 'Cancel' }
       );
       if (!ok) return;
-      await notify('Payment successful (demo)', 'Your online payment was simulated successfully.');
-      await proceed('online');
-      return;
     }
 
     await proceed(paymentMethod);
@@ -523,13 +535,13 @@ export const BookRideScreen = () => {
                 </View>
               </Marker>
             )}
-            {pickupCoord && dropCoord && (
+            {pickupCoord && dropCoord && routeLine.length > 1 && (
               <Polyline
-                coordinates={curvedLine}
+                coordinates={routeLine}
                 strokeColor={colors.primary}
-                strokeWidth={2.5}
+                strokeWidth={roadRoute ? 4 : 2.5}
                 lineCap="round"
-                geodesic
+                lineJoin="round"
                 zIndex={0}
               />
             )}

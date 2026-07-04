@@ -19,7 +19,10 @@ import { clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
 import { UserRepository } from '@/models/repositories/UserRepository';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ReportService, DRIVER_REPORT_REASONS } from '@/models/services/ReportService';
+import { DirectionsService } from '@/models/services/DirectionsService';
+import { RealtimeService } from '@/models/services/RealtimeService';
 import { User } from '@/models/types';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatETA, formatDistance } from '@/utils/locationUtils';
@@ -28,7 +31,9 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 
 const { height } = Dimensions.get('window');
 const userRepo = new UserRepository();
+const bookingRepo = new BookingRepository();
 const reportService = new ReportService();
+const directionsService = new DirectionsService();
 
 const UBER_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
@@ -65,6 +70,15 @@ export const DriverTripScreen = () => {
   // True when the report was opened from the post-trip rating sheet (so we know
   // to wrap the trip up afterwards instead of returning to the live trip).
   const [reportFromRating, setReportFromRating] = useState(false);
+  // Real road-following path (Directions API) between pickup and drop-off;
+  // falls back to a straight segment while loading or if the API fails.
+  const [roadPoints, setRoadPoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  // Live fare payment state — flips to 'completed' the moment the passenger
+  // settles the demo online payment after pickup.
+  const [paymentStatus, setPaymentStatus] = useState(currentBooking?.payment_status ?? 'pending');
+  const paymentMethod = currentBooking?.payment_method ?? 'cash';
+  const isOnlinePay = paymentMethod !== 'cash';
+  const farePaid = paymentStatus === 'completed';
 
   // Open the report sheet without ever stacking it on top of the rating sheet.
   const openReport = (fromRating: boolean) => {
@@ -126,6 +140,51 @@ export const DriverTripScreen = () => {
       useNativeDriver: true,
     }).start();
   }, []);
+
+  // Fetch the real road route so the map line follows streets, not a straight
+  // pickup→drop-off segment.
+  useEffect(() => {
+    let active = true;
+    const p = currentBooking?.pickup_location;
+    const d = currentBooking?.dropoff_location;
+    if (!p || !d) {
+      setRoadPoints([]);
+      return;
+    }
+    directionsService
+      .getRoute(p, d)
+      .then((r) => { if (active) setRoadPoints(r?.points ?? []); })
+      .catch(() => { if (active) setRoadPoints([]); });
+    return () => { active = false; };
+  }, [
+    currentBooking?.pickup_location?.latitude,
+    currentBooking?.pickup_location?.longitude,
+    currentBooking?.dropoff_location?.latitude,
+    currentBooking?.dropoff_location?.longitude,
+  ]);
+
+  // Keep the fare's payment state live (realtime + polling fallback) so the
+  // driver sees PAID the moment the passenger settles the online demo payment.
+  useEffect(() => {
+    if (!currentBooking?.id) return;
+    setPaymentStatus(currentBooking.payment_status ?? 'pending');
+    const realtime = new RealtimeService();
+    const key = realtime.subscribeToBooking(currentBooking.id, (payload) => {
+      if (payload?.new?.payment_status) setPaymentStatus(payload.new.payment_status);
+    });
+    const poll = setInterval(async () => {
+      try {
+        const fresh = await bookingRepo.findById(currentBooking.id);
+        if (fresh?.payment_status) setPaymentStatus(fresh.payment_status);
+      } catch {
+        /* ignore */
+      }
+    }, 8000);
+    return () => {
+      realtime.unsubscribe(key);
+      clearInterval(poll);
+    };
+  }, [currentBooking?.id]);
 
   if (!currentBooking) {
     return (
@@ -282,12 +341,18 @@ export const DriverTripScreen = () => {
         )}
         {pickup && dropoff && (
           <Polyline
-            coordinates={[
-              { latitude: pickup.latitude, longitude: pickup.longitude },
-              { latitude: dropoff.latitude, longitude: dropoff.longitude },
-            ]}
+            coordinates={
+              roadPoints.length > 1
+                ? roadPoints
+                : [
+                    { latitude: pickup.latitude, longitude: pickup.longitude },
+                    { latitude: dropoff.latitude, longitude: dropoff.longitude },
+                  ]
+            }
             strokeColor={colors.primary}
-            strokeWidth={3}
+            strokeWidth={roadPoints.length > 1 ? 4 : 3}
+            lineCap="round"
+            lineJoin="round"
           />
         )}
       </MapView>
@@ -358,6 +423,22 @@ export const DriverTripScreen = () => {
               <Text style={styles.fareLabel}>ETA</Text>
             </View>
           </View>
+          {/* How this fare gets settled: online (demo, paid in-app at pickup)
+              vs cash collected at drop-off. */}
+          <View style={[styles.payStateRow, farePaid ? styles.payStateRowPaid : null]}>
+            <MaterialCommunityIcons
+              name={farePaid ? 'check-decagram' : isOnlinePay ? 'credit-card-clock-outline' : 'cash'}
+              size={16}
+              color={farePaid ? colors.success : colors.textSecondary}
+            />
+            <Text style={[styles.payStateText, farePaid && { color: colors.success }]}>
+              {farePaid
+                ? 'Paid online — no cash to collect'
+                : isOnlinePay
+                  ? 'Online payment — passenger pays in-app at pickup'
+                  : 'Cash — collect the fare at drop-off'}
+            </Text>
+          </View>
         </Card>
 
         {/* Location display */}
@@ -410,6 +491,16 @@ export const DriverTripScreen = () => {
             </View>
             <Text style={styles.ratingTitle}>Trip Completed</Text>
             <Text style={styles.celebrateFare}>You earned ₱{completedFare.toFixed(2)}</Text>
+            <View style={styles.settleChip}>
+              <MaterialCommunityIcons
+                name={farePaid ? 'check-decagram' : 'cash'}
+                size={14}
+                color={farePaid ? colors.success : colors.textSecondary}
+              />
+              <Text style={[styles.settleChipText, farePaid && { color: colors.success }]}>
+                {farePaid ? 'Paid online — already settled' : 'Collect the fare in cash'}
+              </Text>
+            </View>
             <Text style={styles.ratingSubtitle}>Now rate your trip with {passengerName}</Text>
 
             {/* Stars */}
@@ -641,6 +732,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fareCard: { marginBottom: 20 },
+  payStateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  payStateRowPaid: { borderTopColor: colors.successLight },
+  payStateText: { ...typography.bodySmall, color: colors.textSecondary, flex: 1 },
+  settleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 8,
+  },
+  settleChipText: { ...typography.label, fontSize: 12, color: colors.textSecondary },
   fareRow: { flexDirection: 'row', alignItems: 'center' },
   fareItem: { flex: 1, alignItems: 'center' },
   fareValue: { ...typography.h3, color: colors.text, fontSize: 18 },

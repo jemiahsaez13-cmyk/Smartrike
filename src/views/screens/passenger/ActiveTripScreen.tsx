@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { ActivityIndicator, Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
@@ -36,6 +36,11 @@ export const ActiveTripScreen = () => {
   const [submitting, setSubmitting] = useState(false);
   const [driverCoords, setDriverCoords] = useState<Location | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Demo online payment, collected at pickup: sheet visibility + progress.
+  const [payVisible, setPayVisible] = useState(false);
+  const [payPhase, setPayPhase] = useState<'confirm' | 'processing' | 'success'>('confirm');
+  const [payRef, setPayRef] = useState('');
+  const autoPromptedPay = useRef(false);
 
   const status = currentBooking?.status || 'accepted';
   const driverId = currentBooking?.driver_id || null;
@@ -47,6 +52,9 @@ export const ActiveTripScreen = () => {
   const paymentMethod = currentBooking?.payment_method || 'cash';
   const isEMoney = paymentMethod !== 'cash';
   const paidViaEMoney = isEMoney && currentBooking?.payment_status === 'completed';
+  // Demo online payments settle at pickup, not at booking.
+  const isOnline = paymentMethod === 'online';
+  const onlineUnpaid = isOnline && currentBooking?.payment_status !== 'completed';
   const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'online' ? 'Online' : 'cash';
   const fareText = `₱${(currentBooking?.total_fare ?? 0).toFixed(2)}`;
 
@@ -132,10 +140,45 @@ export const ActiveTripScreen = () => {
     };
   }, [currentBooking?.id, dispatch, refresh]);
 
-  // When the driver completes the trip, prompt the passenger to rate it.
+  // The demo online payment is collected at pickup: the moment the driver
+  // marks "Passenger Picked Up" (status → in-transit), prompt the passenger to
+  // pay. Auto-opens only once; the banner button reopens it any time.
   useEffect(() => {
+    if (status === 'in-transit' && onlineUnpaid && !autoPromptedPay.current) {
+      autoPromptedPay.current = true;
+      setPayPhase('confirm');
+      setPayVisible(true);
+    }
+  }, [status, onlineUnpaid]);
+
+  // When the driver completes the trip, prompt the passenger to rate it
+  // (but never stack it on top of an open payment sheet).
+  useEffect(() => {
+    if (status === 'completed' && !payVisible) setRatingVisible(true);
+  }, [status, payVisible]);
+
+  // Simulates the online charge: gateway latency, then persist "paid" so the
+  // driver's screen flips to PAID too. Demo only — no real money moves.
+  const handlePayNow = async () => {
+    if (!currentBooking?.id) return;
+    setPayPhase('processing');
+    try {
+      await new Promise((r) => setTimeout(r, 1600));
+      const updated = await bookingRepo.markPaid(currentBooking.id);
+      dispatch(updateBookingStatus(updated));
+      setPayRef(`STK-${Date.now().toString(36).toUpperCase().slice(-8)}`);
+      setPayPhase('success');
+    } catch {
+      setPayPhase('confirm');
+      await notify('Payment failed', 'Could not record the payment. Please try again.');
+    }
+  };
+
+  const closePaySheet = () => {
+    setPayVisible(false);
+    // If the trip already ended behind the sheet, move on to rating.
     if (status === 'completed') setRatingVisible(true);
-  }, [status]);
+  };
 
   const handleCallDriver = () => {
     const phone = driver?.phone;
@@ -327,10 +370,28 @@ export const ActiveTripScreen = () => {
         {/* The driver marks the trip complete; the passenger just waits and is
             prompted to rate afterwards. Before pickup the passenger may cancel. */}
         {status === 'in-transit' ? (
-          <View style={styles.waitBanner}>
-            <MaterialCommunityIcons name="navigation-variant" size={20} color={colors.primary} />
-            <Text style={styles.waitText}>Enjoy your ride — your driver will end the trip on arrival.</Text>
-          </View>
+          <>
+            {isOnline && (onlineUnpaid ? (
+              <TouchableOpacity
+                style={styles.payNowBanner}
+                onPress={() => { setPayPhase('confirm'); setPayVisible(true); }}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="credit-card-clock-outline" size={20} color="#fff" />
+                <Text style={styles.payNowText}>Payment due — tap to pay {fareText} online</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.paidBanner}>
+                <MaterialCommunityIcons name="check-decagram" size={20} color={colors.success} />
+                <Text style={styles.paidText}>Paid {fareText} via {providerLabel}</Text>
+              </View>
+            ))}
+            <View style={styles.waitBanner}>
+              <MaterialCommunityIcons name="navigation-variant" size={20} color={colors.primary} />
+              <Text style={styles.waitText}>Enjoy your ride — your driver will end the trip on arrival.</Text>
+            </View>
+          </>
         ) : status === 'completed' ? (
           <>
             {paidViaEMoney ? (
@@ -338,6 +399,16 @@ export const ActiveTripScreen = () => {
                 <MaterialCommunityIcons name="check-decagram" size={20} color={colors.success} />
                 <Text style={styles.paidText}>Paid {fareText} via {providerLabel}</Text>
               </View>
+            ) : isOnline ? (
+              <TouchableOpacity
+                style={styles.payNowBanner}
+                onPress={() => { setPayPhase('confirm'); setPayVisible(true); }}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="credit-card-clock-outline" size={20} color="#fff" />
+                <Text style={styles.payNowText}>Settle your fare — pay {fareText} online</Text>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#fff" />
+              </TouchableOpacity>
             ) : isEMoney ? (
               <View style={styles.waitBanner}>
                 <MaterialCommunityIcons name="cash" size={20} color={colors.primary} />
@@ -373,6 +444,84 @@ export const ActiveTripScreen = () => {
           Emergency SOS
         </Button>
       </Animated.View>
+
+      {/* ── Demo online payment sheet (collected at pickup) ─────────── */}
+      <Modal
+        visible={payVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (payPhase !== 'processing') closePaySheet(); }}
+      >
+        <View style={styles.modalOverlay}>
+          <Surface style={styles.payCard} elevation={5}>
+            {payPhase === 'success' ? (
+              <>
+                <View style={[styles.payIconWrap, { backgroundColor: colors.successLight }]}>
+                  <MaterialCommunityIcons name="check-decagram" size={44} color={colors.success} />
+                </View>
+                <Text style={styles.payTitle}>Payment successful</Text>
+                <Text style={styles.paySubtitle}>You paid {fareText} for this trip. Your driver has been notified.</Text>
+                <View style={styles.payRefChip}>
+                  <MaterialCommunityIcons name="receipt" size={14} color={colors.textSecondary} />
+                  <Text style={styles.payRefText}>Ref {payRef}</Text>
+                </View>
+                <TouchableOpacity style={styles.payBtn} onPress={closePaySheet} activeOpacity={0.85}>
+                  <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.payBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                    <Text style={styles.payBtnText}>Done</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <Text style={styles.demoNote}>Demo payment — no real money moved.</Text>
+              </>
+            ) : (
+              <>
+                <View style={styles.demoBadge}>
+                  <Text style={styles.demoBadgeText}>DEMO PAYMENT</Text>
+                </View>
+                <View style={styles.payIconWrap}>
+                  <MaterialCommunityIcons name="credit-card-outline" size={40} color={colors.primary} />
+                </View>
+                <Text style={styles.payTitle}>Pay for your trip</Text>
+                <Text style={styles.paySubtitle}>
+                  {driverName} picked you up — settle the fare online to ride cash-free.
+                </Text>
+                <Text style={[styles.payAmount, typography.currency]}>{fareText}</Text>
+                <View style={styles.payMetaRow}>
+                  <MaterialCommunityIcons name="map-marker-radius" size={16} color={colors.textSecondary} />
+                  <Text style={styles.payMetaText} numberOfLines={1}>
+                    {currentBooking?.dropoff_location?.address || 'Destination'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.payBtn, payPhase === 'processing' && { opacity: 0.8 }]}
+                  onPress={handlePayNow}
+                  disabled={payPhase === 'processing'}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.payBtnGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                    {payPhase === 'processing' ? (
+                      <>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={styles.payBtnText}>Processing…</Text>
+                      </>
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="lock" size={18} color="#fff" />
+                        <Text style={styles.payBtnText}>Pay {fareText} securely</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+                {payPhase !== 'processing' && (
+                  <TouchableOpacity onPress={closePaySheet} style={styles.payLaterBtn} activeOpacity={0.7}>
+                    <Text style={styles.payLaterText}>Pay later</Text>
+                  </TouchableOpacity>
+                )}
+                <Text style={styles.demoNote}>No real charge is made — this simulates an online payment.</Text>
+              </>
+            )}
+          </Surface>
+        </View>
+      </Modal>
 
       <Modal visible={ratingVisible} transparent animationType="fade" onRequestClose={() => setRatingVisible(false)}>
         <View style={styles.modalOverlay}>
@@ -550,6 +699,58 @@ const styles = StyleSheet.create({
   },
   paidChipText: { ...typography.label, fontSize: 12, color: colors.success },
   sosBtn: { borderColor: colors.error, borderRadius: 14 },
+  // Pay-at-pickup (demo online payment)
+  payNowBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  payNowText: { ...typography.label, fontSize: 13, color: '#fff', flex: 1 },
+  payCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
+  payIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  payTitle: { ...typography.title, fontSize: 22, color: colors.text },
+  paySubtitle: { ...typography.body, fontSize: 14, color: colors.textSecondary, marginTop: 4, marginBottom: spacing.md, textAlign: 'center' },
+  payAmount: { ...typography.h1, fontSize: 36, color: colors.text, marginBottom: spacing.sm },
+  payMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.lg, maxWidth: '92%' },
+  payMetaText: { ...typography.bodySmall, color: colors.textSecondary, flexShrink: 1 },
+  payBtn: { width: '100%', height: 52, borderRadius: 14, overflow: 'hidden' },
+  payBtnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  payBtnText: { ...typography.label, color: '#fff', fontSize: 16, letterSpacing: 0 },
+  payLaterBtn: { paddingVertical: spacing.sm, marginTop: spacing.xs },
+  payLaterText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
+  demoBadge: {
+    backgroundColor: colors.infoLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    marginBottom: spacing.md,
+  },
+  demoBadgeText: { ...typography.label, fontSize: 10, letterSpacing: 1.2, color: colors.info },
+  demoNote: { ...typography.bodySmall, fontSize: 11, color: colors.textMuted, marginTop: spacing.md, textAlign: 'center' },
+  payRefChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginBottom: spacing.lg,
+  },
+  payRefText: { ...typography.label, fontSize: 12, color: colors.textSecondary },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.lg },
   ratingCard: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
   ratingDriverAvatar: {
