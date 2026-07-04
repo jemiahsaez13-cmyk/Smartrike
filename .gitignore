@@ -57,3 +57,6 @@ __azurite_db_blob_extent__.json
 # Screenshots
 Screenshot_*.png
 Screenshot_*.jpg
+
+# Project archives
+*.zip
