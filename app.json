@@ -11,6 +11,11 @@
     ],
     "android": {
       "package": "com.smarttrike.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAPwLes_QZQNKO0AdUI2jsF-qHT4a-Xkjg"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -29,8 +34,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "b6be5f97-7fbc-4ce7-bd43-c9f222f67e73"
+        "projectId": "42488411-c12e-483c-a40b-313a335e10ce"
       }
-    }
+    },
+    "owner": "elpieee"
   }
 }
