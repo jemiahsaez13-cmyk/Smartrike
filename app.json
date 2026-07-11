@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#3B634E"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -19,7 +19,7 @@
       "package": "com.smarttrike.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#3B634E"
       },
       "config": {
         "googleMaps": {
@@ -39,7 +39,7 @@
         "expo-notifications",
         {
           "icon": "./assets/splash-icon.png",
-          "color": "#000000"
+          "color": "#3B634E"
         }
       ],
       [

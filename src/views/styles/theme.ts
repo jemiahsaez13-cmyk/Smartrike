@@ -1,49 +1,49 @@
 import { MD3LightTheme } from 'react-native-paper';
 
 // ────────────────────────────────────────────────────────────────
-// Uber-inspired design system
-// Monochrome base (black / white / gray) with minimal, purposeful
-// accent color. Bold geometric type, tight radii, whisper-soft shadows.
+// Smart Trike design system — fresh green & white
+// Brand palette: #FFFFFF · #3B634E · #545454 · #B6E4A8 · #AFDDA9 · #A7A7A7
+// White-first surfaces, deep forest-green brand, soft leaf-green accents.
 // ────────────────────────────────────────────────────────────────
 const palette = {
-  primary: '#000000',      // Uber Black (brand, primary CTAs, headings)
-  primaryHover: '#1A1A1A', // Near-black pressed state
-  primaryDark: '#000000',  // Deepest brand
+  primary: '#3B634E',      // Forest green (brand, primary CTAs, headings)
+  primaryHover: '#31523F', // Darker green pressed state
+  primaryDark: '#2A4638',  // Deepest brand
   primary500: '#545454',   // Mid gray (secondary icons, gradient mid)
-  primary700: '#1F1F1F',   // Charcoal (gradient start)
-  primaryLight: '#F2F2F2', // Soft gray tint (icon backgrounds)
-  primarySoft: '#F6F6F6',  // Soft fills
+  primary700: '#2A4638',   // Deep green (gradient start)
+  primaryLight: '#E7F4E0', // Soft leaf tint (icon backgrounds)
+  primarySoft: '#F3FAEF',  // Soft fills
 
-  accent: '#276EF1',       // Uber Blue (links, interactive accents)
-  accentHover: '#1E54C9',  // Blue pressed
-  secondary: '#06C167',    // Uber Green (go / success / confirm)
-  secondaryLight: '#E6F8EF',// Green tint
-  coral: '#E11900',        // Uber Red (alerts / destructive)
+  accent: '#3B634E',       // Forest green (links, interactive accents)
+  accentHover: '#31523F',  // Green pressed
+  secondary: '#3B634E',    // Go / success / confirm
+  secondaryLight: '#B6E4A8',// Leaf-green tint (chips, highlights)
+  coral: '#E11900',        // Red (alerts / destructive)
 
-  background: '#FFFFFF',   // App background (Uber is white-first)
+  background: '#FFFFFF',   // App background (white-first)
   surface: '#FFFFFF',      // Cards, sheets, modals
-  surfaceHover: '#F6F6F6', // Pressed / hovered surfaces
-  surfaceAlt: '#F6F6F6',   // Tracks, alternate surfaces, filled inputs
+  surfaceHover: '#F2F7F0', // Pressed / hovered surfaces (whisper of green)
+  surfaceAlt: '#F2F7F0',   // Tracks, alternate surfaces, filled inputs
 
-  text: '#000000',         // Primary text / headings
-  textSecondary: '#6B6B6B',// Body / secondary
-  textMuted: '#AFAFAF',    // Placeholders, meta
-  textLight: '#AFAFAF',    // Meta, chevrons
+  text: '#3B634E',         // Primary text / headings (deep green)
+  textSecondary: '#545454',// Body / secondary
+  textMuted: '#A7A7A7',    // Placeholders, meta
+  textLight: '#A7A7A7',    // Meta, chevrons
 
-  border: '#E2E2E2',       // Default borders
-  borderLight: '#EEEEEE',  // Subtle dividers
-  borderFocus: '#000000',  // Focused / active border
+  border: '#E0E8E1',       // Default borders (green-tinged gray)
+  borderLight: '#EDF2ED',  // Subtle dividers
+  borderFocus: '#3B634E',  // Focused / active border
 
-  overlay: 'rgba(13,27,42,0.6)', // Single scrim for all modal / sheet backdrops
+  overlay: 'rgba(24,38,30,0.6)', // Single scrim for all modal / sheet backdrops
 
-  error: '#E11900',        // Uber Red
+  error: '#E11900',        // Red
   errorLight: '#FFEFED',
-  success: '#06C167',      // Uber Green
-  successLight: '#E6F8EF',
-  warning: '#FFC043',      // Uber Yellow
+  success: '#3B634E',      // Brand green
+  successLight: '#AFDDA9', // Leaf-green success tint
+  warning: '#FFC043',      // Amber
   warningLight: '#FFF6E0',
-  info: '#276EF1',         // Uber Blue
-  infoLight: '#EBF1FE',
+  info: '#3B634E',         // Forest green
+  infoLight: '#E7F4E0',
 };
 
 const paperFonts = {
@@ -77,7 +77,7 @@ export const theme = {
 
 export const colors = palette;
 
-// Minimal gradients (used sparingly — Uber leans on flat black)
+// Minimal gradients (used sparingly — flat green-first look)
 export const gradients = {
   brand: [palette.primary700, palette.primary] as [string, string],
   accent: [palette.accent, palette.accentHover] as [string, string],

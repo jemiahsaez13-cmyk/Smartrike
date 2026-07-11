@@ -43,7 +43,7 @@ export const NotificationListener = () => {
             name: 'Smart Trike alerts',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 180, 90, 180],
-            lightColor: '#276EF1',
+            lightColor: '#3B634E',
           });
         }
         const { status } = await Notifications.getPermissionsAsync();

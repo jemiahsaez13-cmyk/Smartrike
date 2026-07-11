@@ -256,7 +256,7 @@ export const DriverProfileScreen = () => {
       {/* ── Animated header ── */}
       <Animated.View style={[styles.headerWrap, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#1F1F1F', '#000000']}
+          colors={['#2A4638', '#3B634E']}
           style={StyleSheet.absoluteFillObject}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

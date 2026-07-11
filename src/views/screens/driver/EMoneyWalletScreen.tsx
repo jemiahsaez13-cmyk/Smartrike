@@ -217,7 +217,7 @@ export const EMoneyWalletScreen = () => {
       >
         {/* Balance Card */}
         <LinearGradient
-          colors={['#2C5F2D', '#1E4620']}
+          colors={['#3B634E', '#2A4638']}
           style={styles.balanceCard}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}

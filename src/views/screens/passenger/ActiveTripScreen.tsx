@@ -302,9 +302,9 @@ export const ActiveTripScreen = () => {
 
   const StatusBadge = ({ status }: { status: string }) => {
     const map: Record<string, { bg: string; dot: string; fg: string; label: string }> = {
-      accepted: { bg: '#DBEAFE', dot: '#2563EB', fg: '#1E40AF', label: 'Driver is arriving' },
-      'in-transit': { bg: '#DCFCE7', dot: '#16A34A', fg: '#166534', label: 'On your way' },
-      completed: { bg: '#DCFCE7', dot: '#16A34A', fg: '#166534', label: 'Trip completed' },
+      accepted: { bg: '#E7F4E0', dot: '#3B634E', fg: '#3B634E', label: 'Driver is arriving' },
+      'in-transit': { bg: '#B6E4A8', dot: '#2A4638', fg: '#2A4638', label: 'On your way' },
+      completed: { bg: '#B6E4A8', dot: '#2A4638', fg: '#2A4638', label: 'Trip completed' },
     };
     const s = map[status] || map.accepted;
     return (
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   trackingOverlay: { position: 'absolute', top: layout.headerTop, alignSelf: 'center', zIndex: 5 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surface, ...shadows.md },
   liveEtaChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface, ...shadows.sm },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#16A34A', marginRight: 6 },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#3B634E', marginRight: 6 },
   liveEtaText: { ...typography.label, fontSize: 12, color: colors.text },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { ...typography.label, fontSize: 13 },

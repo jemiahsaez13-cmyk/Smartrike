@@ -518,7 +518,7 @@ export const DriverTripScreen = () => {
               activeOpacity={0.85}
             >
               <LinearGradient
-                colors={['#000000', '#1F1F1F']}
+                colors={['#2A4638', '#3B634E']}
                 style={styles.submitGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}

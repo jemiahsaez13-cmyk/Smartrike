@@ -1310,7 +1310,7 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     flexDirection: 'row',
     gap: spacing.xs,
-    backgroundColor: 'rgba(13,27,42,0.85)',
+    backgroundColor: 'rgba(24,38,30,0.85)',
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
