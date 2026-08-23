@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, Modal, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -217,7 +217,7 @@ export const FranchiseManagementScreen = () => {
   if (loading && applications.length === 0) return <Loading message="Loading applications..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Franchise / MTOP</Text>
@@ -400,7 +400,7 @@ export const FranchiseManagementScreen = () => {
         onSetReview={setDocReview}
         onApproveAll={approveAllDocs}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

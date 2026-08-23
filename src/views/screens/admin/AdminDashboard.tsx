@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView, RefreshControl } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,8 @@ import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
+
+const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 16) / 2;
 
 const adminService = new AdminService();
 const reportService = new ReportService();
@@ -100,7 +102,7 @@ export const AdminDashboard = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -359,7 +361,7 @@ export const AdminDashboard = () => {
           </Card>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -446,7 +448,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   kpiCard: {
-    width: '47.5%',
+    width: CARD_WIDTH,
     minHeight: 130,
   },
   kpiHeader: {

@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   RefreshControl,
   Modal,
@@ -202,7 +201,7 @@ export const PlaceManagementScreen = () => {
   if (loading) return <Loading message="Loading places..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7} hitSlop={8}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
@@ -355,7 +354,7 @@ export const PlaceManagementScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   goalNote: { ...typography.bodySmall, color: colors.textSecondary },
   filterRow: { marginBottom: 24 },
-  filterContent: { paddingRight: 8, gap: 8 },
+  filterContent: { paddingRight: 8 },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+    marginRight: 8,
   },
   filterChipActive: {
     backgroundColor: colors.primary,

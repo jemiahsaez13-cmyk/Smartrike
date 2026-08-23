@@ -6,7 +6,7 @@ import { useAppSelector, useAppDispatch } from '@/controllers/store';
 import { acceptBooking, removeIncomingRequest } from '@/controllers/slices/driverSlice';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
-import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
+import { colors, HEADER_PADDING_TOP, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { notify } from '@/utils/confirm';
 
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingTop: layout.headerTop - 10, 
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: 10,
     backgroundColor: colors.surface,
     ...shadows.sm

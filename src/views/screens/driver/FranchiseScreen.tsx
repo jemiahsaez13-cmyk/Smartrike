@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Platform, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, View } from 'react-native';
+import { Image, Platform, StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -185,7 +185,7 @@ export const FranchiseScreen = () => {
   // --- Active MTOP ---
   if (isActive) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header subtitle={`Operational status: ${recordStatusLabel}`} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Surface style={styles.mtopCard} elevation={0}>
@@ -247,7 +247,7 @@ export const FranchiseScreen = () => {
             Keep your OR/CR and TODA membership updated. Renew before expiry to avoid penalties.
           </Text>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -255,7 +255,7 @@ export const FranchiseScreen = () => {
   if (inProgress) {
     const currentIdx = FRANCHISE_FLOW.indexOf(myApplication!.status);
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header subtitle={`Application ${myApplication!.type === 'renewal' ? '(Renewal)' : '(New)'} in review`} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Card variant="elevated" padding="lg" style={styles.statusCard}>
@@ -342,13 +342,13 @@ export const FranchiseScreen = () => {
             </Card>
           ) : null}
         </ScrollView>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // --- Apply form (no application or rejected) ---
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <Header subtitle="Apply for a tricycle franchise" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {myApplication?.status === 'rejected' && (
@@ -411,7 +411,7 @@ export const FranchiseScreen = () => {
           Submit Application
         </Button>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

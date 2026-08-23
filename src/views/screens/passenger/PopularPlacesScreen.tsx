@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   TextInput as RNTextInput,
 } from 'react-native';
@@ -47,7 +46,7 @@ export const PopularPlacesScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7} hitSlop={8}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
@@ -102,7 +101,7 @@ export const PopularPlacesScreen = () => {
           filtered.map((place) => <PlaceCard key={place.id} place={place} onPress={() => book(place)} />)
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

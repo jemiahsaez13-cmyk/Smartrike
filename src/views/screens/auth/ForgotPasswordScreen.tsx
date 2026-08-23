@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, StyleSheet, TouchableOpacity, SafeAreaView,
+  View, StyleSheet, TouchableOpacity,
   KeyboardAvoidingView, Platform, ScrollView, Animated,
 } from 'react-native';
 import { Text, TextInput } from 'react-native-paper';
@@ -49,7 +49,7 @@ export const ForgotPasswordScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -114,7 +114,7 @@ export const ForgotPasswordScreen = () => {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 

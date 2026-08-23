@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import { Animated, Dimensions, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +21,8 @@ import { PlaceCard } from '@/views/components/booking/PlaceCard';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { DriverMatchingService } from '@/models/services/DriverMatchingService';
 import { FareCalculationService } from '@/models/services/FareCalculationService';
+
+const ACTION_WIDTH = (Dimensions.get('window').width - 24 * 2 - 12) / 2;
 
 const placeService = new PopularPlaceService();
 const driverMatching = new DriverMatchingService();
@@ -583,7 +585,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   quickAction: {
-    width: '48%',
+    width: ACTION_WIDTH,
   },
   quickActionCard: {
     flexDirection: 'row',

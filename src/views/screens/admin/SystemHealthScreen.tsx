@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, SafeAreaView } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -65,7 +65,7 @@ export const SystemHealthScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Platform Health</Text>
         <View style={[styles.statusIndicator, !reachable && { backgroundColor: colors.errorLight }]}>
@@ -108,7 +108,7 @@ export const SystemHealthScreen = () => {
           </Text>
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

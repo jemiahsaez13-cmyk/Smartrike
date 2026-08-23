@@ -153,8 +153,10 @@ export const fonts = {
 };
 
 // Shared layout metrics (safe-area offsets, nav bar sizing)
+export const HEADER_PADDING_TOP = 60;
+
 export const layout = {
-  headerTop: 60,
+  headerTop: HEADER_PADDING_TOP,
   tabBarHeight: 76,
   contentBottom: 108,
 };

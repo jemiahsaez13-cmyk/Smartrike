@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView, RefreshControl } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -8,6 +8,8 @@ import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
 import { AdminService, Analytics, AnalyticsPeriod } from '@/models/services/AdminService';
 import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
+
+const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 12) / 2;
 
 const adminService = new AdminService();
 
@@ -62,7 +64,7 @@ export const AnalyticsScreen = () => {
   const driverPerf = data?.topDrivers ?? [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <LinearGradient
         colors={gradients.admin}
         start={{ x: 0, y: 0 }}
@@ -195,7 +197,7 @@ export const AnalyticsScreen = () => {
           </View>
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -240,7 +242,7 @@ const styles = StyleSheet.create({
   periodText: { ...typography.label, color: colors.textSecondary, fontSize: 13 },
   periodTextActive: { color: '#fff' },
   kpiRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: spacing.xl },
-  kpiCard: { width: '47.5%', alignItems: 'flex-start' },
+  kpiCard: { width: CARD_WIDTH, alignItems: 'flex-start' },
   kpiIcon: {
     width: 36,
     height: 36,

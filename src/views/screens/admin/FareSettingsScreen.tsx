@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   TextInput as RNTextInput,
 } from 'react-native';
@@ -109,7 +108,7 @@ export const FareSettingsScreen = () => {
   if (loading) return <Loading message="Loading fare settings..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7} hitSlop={8}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
@@ -193,7 +192,7 @@ export const FareSettingsScreen = () => {
           <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Fare'}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

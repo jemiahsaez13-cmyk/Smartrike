@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, RefreshControl, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -135,7 +135,7 @@ export const ActivityLogsScreen = () => {
   if (loading) return <Loading message="Loading activity logs..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>System Logs</Text>
@@ -222,7 +222,7 @@ export const ActivityLogsScreen = () => {
           </Card>
         ))}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

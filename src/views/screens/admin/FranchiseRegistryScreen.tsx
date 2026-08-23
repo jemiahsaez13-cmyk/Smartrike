@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Modal,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -214,7 +213,7 @@ export const FranchiseRegistryScreen = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
@@ -406,7 +405,7 @@ export const FranchiseRegistryScreen = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -185,7 +185,7 @@ export const DriverDashboard = () => {
         <Card variant="elevated" padding="md" style={styles.statusCard}>
           <View style={styles.statusInfo}>
             <View style={[styles.statusDot, { backgroundColor: !isVerified ? colors.warning : isOnline ? colors.success : colors.textMuted }]} />
-            <View style={{ flex: 1 }}>
+            <View style={styles.statusText}>
               <Text style={styles.statusTitle}>
                 {!isVerified ? 'Pending Approval' : isOnline ? 'Online & Ready' : 'Currently Offline'}
               </Text>
@@ -198,7 +198,9 @@ export const DriverDashboard = () => {
               </Text>
             </View>
           </View>
-          <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} disabled={!isVerified} />
+          <View style={{ flexShrink: 0, marginLeft: 8 }}>
+            <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} disabled={!isVerified} />
+          </View>
         </Card>
       </LinearGradient>
 
@@ -389,11 +391,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
+    overflow: 'hidden',
   },
   statusInfo: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  statusText: {
+    flex: 1,
+    minWidth: 0,
   },
   statusDot: {
     width: 12,
@@ -404,10 +413,12 @@ const styles = StyleSheet.create({
     ...typography.h3,
     color: colors.text,
     fontSize: 16,
+    flexShrink: 1,
   },
   statusSub: {
     ...typography.bodySmall,
     color: colors.textSecondary,
+    flexShrink: 1,
   },
   content: {
     flex: 1,
@@ -631,4 +642,3 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 });
-

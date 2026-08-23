@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
-  SafeAreaView, Animated,
+  Animated,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -120,7 +120,7 @@ export const LoginScreen = () => {
   if (loading) return <Loading message="Authenticating..." />;
 
   return (
-    <SafeAreaView style={styles.root}>
+    <View style={[styles.root, { paddingTop: Platform.OS === 'android' ? 0 : undefined }]}>
       {/* ── Black Hero ── */}
       <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
         <TricycleIcon size={50} color="#fff" />
@@ -221,7 +221,7 @@ export const LoginScreen = () => {
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 };
 

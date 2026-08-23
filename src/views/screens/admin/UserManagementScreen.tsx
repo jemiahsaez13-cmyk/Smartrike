@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   RefreshControl,
   Modal,
@@ -260,7 +259,7 @@ export const UserManagementScreen = () => {
   if (loading) return <Loading message="Loading users..." />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7} hitSlop={8}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
@@ -558,7 +557,7 @@ export const UserManagementScreen = () => {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 };
 
