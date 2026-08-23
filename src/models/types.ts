@@ -7,3 +7,4 @@ export * from './entities/Transaction';
 export * from './entities/Message';
 export * from './entities/ActivityLog';
 export * from './entities/Franchise';
+export * from './entities/RidePayment';

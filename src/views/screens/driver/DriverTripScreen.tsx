@@ -29,12 +29,15 @@ import { colors, gradients, radius, shadows, spacing, typography } from '@/views
 import { formatETA, formatDistance } from '@/utils/locationUtils';
 import { confirm, notify } from '@/utils/confirm';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
+import { RidePaymentService } from '@/models/services/RidePaymentService';
+import { RidePaymentStatus } from '@/models/entities/RidePayment';
 
 const { height } = Dimensions.get('window');
 const userRepo = new UserRepository();
 const bookingRepo = new BookingRepository();
 const reportService = new ReportService();
 const directionsService = new DirectionsService();
+const ridePaymentService = new RidePaymentService();
 
 const UBER_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
@@ -74,11 +77,11 @@ export const DriverTripScreen = () => {
   // Real road-following path (Directions API) between pickup and drop-off;
   // falls back to a straight segment while loading or if the API fails.
   const [roadPoints, setRoadPoints] = useState<{ latitude: number; longitude: number }[]>([]);
-  // Live fare payment state — flips to 'completed' the moment the passenger
-  // settles the demo online payment after pickup.
+  // Live fare payment state changes only after an authorized proof review.
   const [paymentStatus, setPaymentStatus] = useState(currentBooking?.payment_status ?? 'pending');
+  const [proofStatus, setProofStatus] = useState<RidePaymentStatus | null>(null);
   const paymentMethod = currentBooking?.payment_method ?? 'cash';
-  const isOnlinePay = paymentMethod !== 'cash';
+  const isOnlinePay = paymentMethod === 'online';
   const farePaid = paymentStatus === 'completed';
 
   // Open the report sheet without ever stacking it on top of the rating sheet.
@@ -166,8 +169,7 @@ export const DriverTripScreen = () => {
     currentBooking?.dropoff_location?.longitude,
   ]);
 
-  // Keep the fare's payment state live (realtime + polling fallback) so the
-  // driver sees PAID the moment the passenger settles the online demo payment.
+  // Keep fare and proof review state live with realtime plus polling fallback.
   useEffect(() => {
     if (!currentBooking?.id) return;
     setPaymentStatus(currentBooking.payment_status ?? 'pending');
@@ -175,10 +177,14 @@ export const DriverTripScreen = () => {
     const key = realtime.subscribeToBooking(currentBooking.id, (payload) => {
       if (payload?.new?.payment_status) setPaymentStatus(payload.new.payment_status);
     });
+    if (isOnlinePay) {
+      void ridePaymentService.getForBooking(currentBooking.id).then((row) => setProofStatus(row?.status ?? null));
+    }
     const poll = setInterval(async () => {
       try {
         const fresh = await bookingRepo.findById(currentBooking.id);
         if (fresh?.payment_status) setPaymentStatus(fresh.payment_status);
+        if (isOnlinePay) setProofStatus((await ridePaymentService.getForBooking(currentBooking.id))?.status ?? null);
       } catch {
         /* ignore */
       }
@@ -187,7 +193,7 @@ export const DriverTripScreen = () => {
       realtime.unsubscribe(key);
       clearInterval(poll);
     };
-  }, [currentBooking?.id]);
+  }, [currentBooking?.id, isOnlinePay]);
 
   if (!currentBooking) {
     return (
@@ -218,6 +224,11 @@ export const DriverTripScreen = () => {
   };
 
   const handleDropOff = async () => {
+    if (isOnlinePay && !farePaid) {
+      await notify('Payment verification required', proofStatus === 'pending' ? 'Review and verify the passenger’s submitted proof before completing this ride.' : 'Wait for the passenger to submit valid payment proof, or ask them to switch to cash.');
+      if (proofStatus === 'pending') navigation.navigate('RidePaymentVerification');
+      return;
+    }
     // Web-safe confirm (Alert.alert is a no-op on react-native-web, so the old
     // popup never appeared and the trip never completed).
     const proceed = await confirm('Complete Trip', 'Confirm passenger drop-off at destination?', {
@@ -431,8 +442,7 @@ export const DriverTripScreen = () => {
               <Text style={styles.fareLabel}>ETA</Text>
             </View>
           </View>
-          {/* How this fare gets settled: online (demo, paid in-app at pickup)
-              vs cash collected at drop-off. */}
+          {/* Payment status is synchronized with the passenger proof workflow. */}
           <View style={[styles.payStateRow, farePaid ? styles.payStateRowPaid : null]}>
             <MaterialCommunityIcons
               name={farePaid ? 'check-decagram' : isOnlinePay ? 'credit-card-clock-outline' : 'cash'}
@@ -443,10 +453,21 @@ export const DriverTripScreen = () => {
               {farePaid
                 ? 'Paid online — no cash to collect'
                 : isOnlinePay
-                  ? 'Online payment — passenger pays in-app at pickup'
+                  ? proofStatus === 'pending'
+                    ? 'Payment proof submitted — review it from Payment Verification'
+                    : proofStatus === 'rejected'
+                      ? 'Payment proof rejected — waiting for replacement'
+                      : 'Online payment — waiting for passenger proof'
                   : 'Cash — collect the fare at drop-off'}
             </Text>
           </View>
+          {isOnlinePay && proofStatus === 'pending' ? (
+            <TouchableOpacity style={styles.reviewPaymentBtn} onPress={() => navigation.navigate('RidePaymentVerification')} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="receipt-text-check-outline" size={18} color={colors.primary} />
+              <Text style={styles.reviewPaymentText}>Review payment proof</Text>
+              <MaterialCommunityIcons name="chevron-right" size={19} color={colors.primary} />
+            </TouchableOpacity>
+          ) : null}
         </Card>
 
         {/* Location display */}
@@ -726,6 +747,8 @@ const styles = StyleSheet.create({
   },
   payStateRowPaid: { borderTopColor: colors.successLight },
   payStateText: { ...typography.bodySmall, color: colors.textSecondary, flex: 1 },
+  reviewPaymentBtn: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderLight },
+  reviewPaymentText: { ...typography.label, color: colors.primary, flex: 1 },
   settleChip: {
     flexDirection: 'row',
     alignItems: 'center',

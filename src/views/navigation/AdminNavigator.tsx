@@ -23,6 +23,7 @@ import { DriverProfileScreen } from '@/views/screens/passenger/DriverProfileScre
 import { FranchiseRegistryScreen } from '@/views/screens/admin/FranchiseRegistryScreen';
 import { InventoryManagementScreen } from '@/views/screens/admin/InventoryManagementScreen';
 import { ManagementReportsScreen } from '@/views/screens/admin/ManagementReportsScreen';
+import { RidePaymentManagementScreen } from '@/views/screens/admin/RidePaymentManagementScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -78,5 +79,6 @@ export const AdminNavigator = () => (
     <Stack.Screen name="FranchiseRegistry" component={FranchiseRegistryScreen} />
     <Stack.Screen name="InventoryManagement" component={InventoryManagementScreen} />
     <Stack.Screen name="ManagementReports" component={ManagementReportsScreen} />
+    <Stack.Screen name="RidePaymentManagement" component={RidePaymentManagementScreen} />
   </Stack.Navigator>
 );

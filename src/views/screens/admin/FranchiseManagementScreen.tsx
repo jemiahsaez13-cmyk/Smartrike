@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchAllApplications, advanceApplication, patchApplication } from '@/controllers/slices/franchiseSlice';
+import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment } from '@/controllers/slices/franchiseSlice';
 import {
   FranchiseApplication,
   FranchiseDocument,
@@ -42,9 +42,6 @@ const isHttp = (url?: string | null) => !!url && (/^https?:\/\//i.test(url) || /
 // Maps the current status to the next admin action.
 const NEXT: Record<string, { label: string; status: FranchiseStatus; patch?: Partial<FranchiseApplication> }> = {
   submitted: { label: 'Start Verification', status: 'document_verification' },
-  document_verification: { label: 'Approve Documents', status: 'inspection' },
-  inspection: { label: 'Record Inspection: Pass', status: 'payment', patch: { inspection_result: 'passed' } },
-  payment: { label: 'Confirm Payment', status: 'approved', patch: { payment_status: 'paid' } },
   approved: { label: 'Issue MTOP', status: 'issued' },
 };
 
@@ -79,6 +76,7 @@ export const FranchiseManagementScreen = () => {
   // stale document arrays and silently revert earlier verdicts.
   const [docBusy, setDocBusy] = useState<string | null>(null); // doc name or '*all*'
   const [actionBusy, setActionBusy] = useState<string | null>(null); // app id
+  const [paymentPreview, setPaymentPreview] = useState<string | null>(null);
 
   useEffect(() => {
     dispatch(fetchAllApplications());
@@ -92,9 +90,12 @@ export const FranchiseManagementScreen = () => {
     docName: string,
     status: DocumentReviewStatus
   ) => {
-    if (docBusy) return;
+    if (docBusy || app.documents_verified_at) return;
     setDocBusy(docName);
     try {
+      if (app.status === 'submitted') {
+        await dispatch(advanceApplication({ id: app.id, status: 'document_verification' })).unwrap();
+      }
       const documents: FranchiseDocument[] = app.documents.map((d) =>
         d.name === docName
           ? {
@@ -111,6 +112,7 @@ export const FranchiseManagementScreen = () => {
       if (allDocumentsApproved(documents)) {
         patch.documents_verified_at = new Date().toISOString();
         patch.reviewed_by = currentUser?.id ?? null;
+        patch.status = 'payment';
       } else {
         patch.documents_verified_at = null;
       }
@@ -124,9 +126,12 @@ export const FranchiseManagementScreen = () => {
 
   // Bulk-approve every uploaded document at once.
   const approveAllDocs = async (app: FranchiseApplication) => {
-    if (docBusy) return;
+    if (docBusy || app.documents_verified_at) return;
     setDocBusy('*all*');
     try {
+      if (app.status === 'submitted') {
+        await dispatch(advanceApplication({ id: app.id, status: 'document_verification' })).unwrap();
+      }
       const documents: FranchiseDocument[] = app.documents.map((d) =>
         d.uploaded ? { ...d, review_status: 'approved' as const, review_remarks: null } : d
       );
@@ -139,6 +144,7 @@ export const FranchiseManagementScreen = () => {
               ? new Date().toISOString()
               : null,
             reviewed_by: currentUser?.id ?? null,
+            status: allDocumentsApproved(documents) ? 'payment' : app.status,
           },
         })
       ).unwrap();
@@ -152,16 +158,6 @@ export const FranchiseManagementScreen = () => {
   const advance = async (app: FranchiseApplication) => {
     const next = NEXT[app.status];
     if (!next) return;
-    // Gate: the "Approve Documents" step requires every document approved first.
-    if (app.status === 'document_verification' && !allDocumentsApproved(app.documents)) {
-      const open = await confirm(
-        'Documents Not Verified',
-        'You must review and approve all submitted documents before approving this stage. Open the document review now?',
-        { confirmText: 'Review Documents' }
-      );
-      if (open) setReviewAppId(app.id);
-      return;
-    }
     if (next.status === 'issued') {
       const ok = await confirm('Issue MTOP', `Issue franchise certificate to ${app.driver_name}?`, {
         confirmText: 'Issue',
@@ -187,6 +183,10 @@ export const FranchiseManagementScreen = () => {
   };
 
   const reject = async (app: FranchiseApplication) => {
+    if (app.documents_verified_at || allDocumentsApproved(app.documents) || ['payment', 'approved', 'issued'].includes(app.status)) {
+      await notify('Decline unavailable', 'Required files were already confirmed. This application is locked against decline.');
+      return;
+    }
     const ok = await confirm('Reject Application', `Reject ${app.driver_name}'s application?`, {
       confirmText: 'Reject',
       destructive: true,
@@ -206,6 +206,28 @@ export const FranchiseManagementScreen = () => {
     } finally {
       setActionBusy(null);
     }
+  };
+
+  const reviewPayment = async (app: FranchiseApplication, decision: 'verified' | 'rejected') => {
+    const okay = await confirm(
+      decision === 'verified' ? 'Verify MTOP payment?' : 'Reject payment proof?',
+      decision === 'verified'
+        ? `Confirm ₱${Number(app.fees).toFixed(2)} with reference ${app.payment_reference}.`
+        : 'The registrant will be able to upload corrected proof.',
+      { confirmText: decision === 'verified' ? 'Verify Payment' : 'Reject Proof', destructive: decision === 'rejected' }
+    );
+    if (!okay) return;
+    setActionBusy(app.id);
+    try {
+      await dispatch(reviewFranchisePayment({
+        id: app.id,
+        decision,
+        reason: decision === 'rejected' ? 'Payment screenshot or reference could not be validated.' : undefined,
+      })).unwrap();
+      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'The application is now approved and ready for MTOP issuance.' : 'The registrant can submit corrected proof.');
+    } catch (error: any) {
+      await notify('Review failed', typeof error === 'string' ? error : error?.message || 'Please refresh and try again.');
+    } finally { setActionBusy(null); }
   };
 
   const filtered = applications.filter((a) => {
@@ -248,6 +270,8 @@ export const FranchiseManagementScreen = () => {
         <Text style={styles.resultCount}>SHOWING {filtered.length} APPLICATIONS</Text>
         {filtered.map((app) => {
           const next = NEXT[app.status];
+          const canReject = !app.documents_verified_at && !allDocumentsApproved(app.documents)
+            && (app.status === 'submitted' || app.status === 'document_verification');
           return (
             <Card key={app.id} variant="elevated" padding="md" style={styles.card}>
               <View style={styles.cardHeader}>
@@ -347,17 +371,26 @@ export const FranchiseManagementScreen = () => {
                 </View>
               ) : null}
 
-              {next ? (
+              {app.status === 'payment' ? (
+                <View style={styles.paymentReviewCard}>
+                  <View style={styles.paymentReviewHead}><MaterialCommunityIcons name="receipt-text-check-outline" size={20} color={colors.primary} /><View style={{ flex: 1 }}><Text style={styles.paymentReviewTitle}>MTOP Payment</Text><Text style={styles.paymentReviewSub}>{app.payment_review_status === 'pending_review' ? 'Proof submitted for review' : app.payment_review_status === 'rejected' ? 'Waiting for corrected proof' : 'Waiting for registrant payment'}</Text></View></View>
+                  {app.payment_reference ? <View style={styles.paymentReferenceRow}><Text style={styles.paymentReferenceLabel}>REFERENCE</Text><Text selectable style={styles.paymentReference}>{app.payment_reference}</Text></View> : null}
+                  {app.payment_proof_url ? <TouchableOpacity style={styles.viewPaymentProof} onPress={() => setPaymentPreview(app.payment_proof_url!)}><MaterialCommunityIcons name="image-search-outline" size={18} color={colors.primary} /><Text style={styles.viewPaymentProofText}>View payment screenshot</Text></TouchableOpacity> : null}
+                  {app.payment_review_status === 'pending_review' ? <View style={styles.paymentActions}><TouchableOpacity style={styles.paymentReject} onPress={() => reviewPayment(app, 'rejected')} disabled={actionBusy === app.id}><Text style={styles.paymentRejectText}>Reject Proof</Text></TouchableOpacity><TouchableOpacity style={styles.paymentVerify} onPress={() => reviewPayment(app, 'verified')} disabled={actionBusy === app.id}>{actionBusy === app.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentVerifyText}>Verify Payment</Text>}</TouchableOpacity></View> : null}
+                </View>
+              ) : null}
+
+              {next || canReject ? (
                 <View style={styles.actions}>
-                  <TouchableOpacity
+                  {canReject ? <TouchableOpacity
                     style={[styles.rejectBtn, actionBusy === app.id && { opacity: 0.5 }]}
                     onPress={() => reject(app)}
                     disabled={actionBusy === app.id}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.rejectText}>Reject</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </TouchableOpacity> : null}
+                  {next ? <TouchableOpacity
                     style={[styles.advanceBtn, actionBusy === app.id && { opacity: 0.7 }]}
                     onPress={() => advance(app)}
                     disabled={actionBusy === app.id}
@@ -371,9 +404,9 @@ export const FranchiseManagementScreen = () => {
                         <MaterialCommunityIcons name="arrow-right" size={16} color="#fff" />
                       </>
                     )}
-                  </TouchableOpacity>
+                  </TouchableOpacity> : null}
                 </View>
-              ) : (
+              ) : app.status === 'payment' ? null : (
                 <View style={styles.terminalContainer}>
                   <View style={styles.divider} />
                   <Text style={styles.terminalNote}>
@@ -400,6 +433,7 @@ export const FranchiseManagementScreen = () => {
         onSetReview={setDocReview}
         onApproveAll={approveAllDocs}
       />
+      <Modal visible={!!paymentPreview} transparent animationType="fade" onRequestClose={() => setPaymentPreview(null)}><TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={() => setPaymentPreview(null)}>{paymentPreview ? <Image source={{ uri: paymentPreview }} style={styles.paymentPreviewImage} resizeMode="contain" /> : null}<TouchableOpacity style={styles.paymentPreviewClose} onPress={() => setPaymentPreview(null)}><MaterialCommunityIcons name="close" size={26} color="#fff" /></TouchableOpacity></TouchableOpacity></Modal>
     </View>
   );
 };
@@ -423,6 +457,7 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
   if (!app) return null;
   const sum = summarizeDocuments(app.documents);
   const verified = allDocumentsApproved(app.documents);
+  const locked = !!app.documents_verified_at || ['payment', 'approved', 'issued'].includes(app.status);
 
   return (
     <Modal
@@ -524,7 +559,7 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
                     <Text style={styles.docRemark}>{doc.review_remarks}</Text>
                   ) : null}
 
-                  {doc.uploaded && (
+                  {doc.uploaded && !locked && (
                     <View style={styles.docActions}>
                       {busyDoc === doc.name ? (
                         <View style={styles.docBusyRow}>
@@ -583,10 +618,10 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
           </ScrollView>
 
           <View style={styles.modalFooter}>
-            {verified ? (
+            {verified || locked ? (
               <View style={styles.verifiedNote}>
                 <MaterialCommunityIcons name="shield-check" size={18} color={colors.success} />
-                <Text style={styles.verifiedText}>All documents verified.</Text>
+                <Text style={styles.verifiedText}>Files confirmed and locked. Decline is no longer available.</Text>
               </View>
             ) : busyDoc === '*all*' ? (
               <View style={styles.approveAllBtn}>
@@ -864,6 +899,22 @@ const styles = StyleSheet.create({
     color: colors.textMuted, 
     fontStyle: 'italic', 
   },
+  paymentReviewCard: { marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.borderLight },
+  paymentReviewHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  paymentReviewTitle: { ...typography.label, color: colors.text },
+  paymentReviewSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
+  paymentReferenceRow: { marginTop: spacing.md, padding: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.surface },
+  paymentReferenceLabel: { ...typography.labelSmall, color: colors.textMuted },
+  paymentReference: { ...typography.label, color: colors.text, marginTop: 2 },
+  viewPaymentProof: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  viewPaymentProofText: { ...typography.label, color: colors.primary },
+  paymentActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  paymentReject: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.error, borderRadius: radius.md },
+  paymentRejectText: { ...typography.label, color: colors.error },
+  paymentVerify: { flex: 2, minHeight: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.md },
+  paymentVerifyText: { ...typography.label, color: '#fff' },
+  paymentPreviewImage: { width: '100%', height: '82%' },
+  paymentPreviewClose: { position: 'absolute', top: spacing.xl, right: spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   empty: {
     alignItems: 'center',
     paddingVertical: spacing.xl * 2

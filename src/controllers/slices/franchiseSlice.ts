@@ -104,6 +104,22 @@ export const patchApplication = createAsyncThunk(
   }
 );
 
+export const submitFranchisePayment = createAsyncThunk(
+  'franchise/submitPayment',
+  async (payload: { id: string; method: 'in_person'; reference: string; proofUrl: string }, { rejectWithValue }) => {
+    try { return await service.submitPayment(payload.id, payload.method, payload.reference, payload.proofUrl); }
+    catch (error: any) { return rejectWithValue(error.message); }
+  }
+);
+
+export const reviewFranchisePayment = createAsyncThunk(
+  'franchise/reviewPayment',
+  async (payload: { id: string; decision: 'verified' | 'rejected'; reason?: string }, { rejectWithValue }) => {
+    try { return await service.reviewPayment(payload.id, payload.decision, payload.reason); }
+    catch (error: any) { return rejectWithValue(error.message); }
+  }
+);
+
 const upsert = (list: FranchiseApplication[], item: FranchiseApplication) => {
   const idx = list.findIndex((a) => a.id === item.id);
   if (idx >= 0) list[idx] = item;
@@ -149,6 +165,14 @@ const franchiseSlice = createSlice({
         if (state.myApplication?.id === action.payload.id) {
           state.myApplication = action.payload;
         }
+      })
+      .addCase(submitFranchisePayment.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(reviewFranchisePayment.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       });
   },
 });

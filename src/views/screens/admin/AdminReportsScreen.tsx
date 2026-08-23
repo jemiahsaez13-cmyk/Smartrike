@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, ScrollView, useWindowDimensions } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -27,6 +27,8 @@ const FILTERS: { key: 'all' | ReportStatus; label: string }[] = [
 
 export const AdminReportsScreen = () => {
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
+  const compact = width < 390;
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,17 +97,17 @@ export const AdminReportsScreen = () => {
 
         {item.details ? <Text style={styles.details}>"{item.details}"</Text> : null}
 
-        <View style={styles.cardFooter}>
+        <View style={[styles.cardFooter, compact && styles.cardFooterCompact]}>
           <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
           {item.status === 'open' ? (
-            <View style={styles.actions}>
-              <TouchableOpacity style={[styles.actBtn, styles.actDismiss]} onPress={() => changeStatus(item, 'dismissed')} activeOpacity={0.8}>
+            <View style={[styles.actions, compact && styles.actionsCompact]}>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actDismiss]} onPress={() => changeStatus(item, 'dismissed')} activeOpacity={0.8}>
                 <Text style={[styles.actText, { color: colors.textSecondary }]}>Dismiss</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actBtn, styles.actReview]} onPress={() => changeStatus(item, 'reviewed')} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actReview]} onPress={() => changeStatus(item, 'reviewed')} activeOpacity={0.8}>
                 <Text style={[styles.actText, { color: colors.info }]}>Reviewed</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actBtn, styles.actAction]} onPress={() => onManage(item)} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actAction]} onPress={() => onManage(item)} activeOpacity={0.8}>
                 <Text style={[styles.actText, { color: '#fff' }]}>Action</Text>
               </TouchableOpacity>
             </View>
@@ -131,7 +133,7 @@ export const AdminReportsScreen = () => {
         </View>
       </View>
 
-      <View style={styles.filterRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f.key}
@@ -142,7 +144,7 @@ export const AdminReportsScreen = () => {
             <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {loading ? (
         <View style={styles.center}>
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   title: { ...typography.h3, fontSize: 20, color: colors.text },
   subtitle: { ...typography.bodySmall, color: colors.error, fontSize: 12, marginTop: 1 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: spacing.screen, paddingVertical: spacing.md },
+  filterRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.screen, paddingVertical: spacing.md },
   filterChip: {
     paddingHorizontal: 14,
     height: 34,
@@ -225,9 +227,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderLight,
   },
+  cardFooterCompact: { alignItems: 'flex-start', flexDirection: 'column', gap: spacing.sm },
   dateText: { ...typography.bodySmall, fontSize: 12, color: colors.textLight },
   actions: { flexDirection: 'row', gap: spacing.sm },
-  actBtn: { paddingHorizontal: 12, height: 32, borderRadius: radius.md, justifyContent: 'center', alignItems: 'center' },
+  actionsCompact: { width: '100%' },
+  actBtn: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.md, justifyContent: 'center', alignItems: 'center' },
+  actBtnCompact: { flex: 1, minHeight: 44, paddingHorizontal: 8 },
   actDismiss: { backgroundColor: colors.surfaceAlt },
   actReview: { backgroundColor: colors.infoLight },
   actAction: { backgroundColor: colors.primary },

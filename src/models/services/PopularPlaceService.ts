@@ -59,12 +59,14 @@ export class PopularPlaceService {
   }
 
   async create(input: Partial<PlaceRow>): Promise<PopularPlace> {
+    this.validateCoordinates(input.latitude, input.longitude);
     const { data, error } = await supabase.from('popular_places').insert(input).select().single();
     if (error) throw error;
     return toPlace(data);
   }
 
   async update(id: string, input: Partial<PlaceRow>): Promise<PopularPlace> {
+    this.validateCoordinates(input.latitude, input.longitude);
     const { data, error } = await supabase
       .from('popular_places')
       .update({ ...input, updated_at: new Date().toISOString() })
@@ -82,6 +84,13 @@ export class PopularPlaceService {
     if (error) throw error;
     if (!data || !data.length) {
       throw new Error('The place could not be deleted. You may not have admin permission.');
+    }
+  }
+
+  private validateCoordinates(latitude?: number, longitude?: number) {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+      || latitude! < -90 || latitude! > 90 || longitude! < -180 || longitude! > 180) {
+      throw new Error('Confirm a valid location pin on the map before saving.');
     }
   }
 }

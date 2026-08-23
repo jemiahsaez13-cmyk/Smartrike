@@ -6,3 +6,4 @@ export * from '../entities/Franchise';
 export * from '../entities/Notification';
 export * from '../entities/ActivityLog';
 export * from '../entities/Association';
+export * from '../entities/RidePayment';

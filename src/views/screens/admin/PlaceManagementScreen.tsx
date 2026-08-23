@@ -20,6 +20,7 @@ import { useAppSelector } from '@/controllers/store';
 import { PopularPlace } from '@/config/constants';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
+import { MapPinPicker, PinCoordinate } from '@/views/components/location/MapPinPicker';
 
 const placeService = new PopularPlaceService();
 
@@ -54,8 +55,7 @@ export const PlaceManagementScreen = () => {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [category, setCategory] = useState('Place');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
+  const [selectedPin, setSelectedPin] = useState<PinCoordinate | null>(null);
   const [details, setDetails] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [active, setActive] = useState(true);
@@ -84,8 +84,7 @@ export const PlaceManagementScreen = () => {
     setName('');
     setAddress('');
     setCategory('Place');
-    setLat('');
-    setLng('');
+    setSelectedPin(null);
     setDetails('');
     setImage(null);
     setActive(true);
@@ -97,8 +96,7 @@ export const PlaceManagementScreen = () => {
     setName(place.name);
     setAddress(place.address);
     setCategory(place.category);
-    setLat(String(place.lat));
-    setLng(String(place.lng));
+    setSelectedPin({ latitude: place.lat, longitude: place.lng });
     setDetails(place.details || '');
     setImage(place.image || null);
     setActive(place.isActive !== false);
@@ -128,14 +126,12 @@ export const PlaceManagementScreen = () => {
   };
 
   const save = async () => {
-    const latNum = parseFloat(lat);
-    const lngNum = parseFloat(lng);
     if (!name.trim()) {
       notify('Name required', 'Enter the place name.');
       return;
     }
-    if (!isFinite(latNum) || !isFinite(lngNum)) {
-      notify('Coordinates required', 'Enter valid latitude and longitude numbers.');
+    if (!selectedPin) {
+      notify('Pin location required', 'Tap the map to confirm the exact place location.');
       return;
     }
     setSaving(true);
@@ -144,8 +140,8 @@ export const PlaceManagementScreen = () => {
       address: address.trim() || null,
       category,
       icon: iconFor(category),
-      latitude: latNum,
-      longitude: lngNum,
+      latitude: selectedPin.latitude,
+      longitude: selectedPin.longitude,
       image_url: image,
       details: details.trim() || null,
       is_active: active,
@@ -308,16 +304,8 @@ export const PlaceManagementScreen = () => {
                 ))}
               </View>
 
-              <View style={styles.coordRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>LATITUDE</Text>
-                  <RNTextInput style={styles.input} value={lat} onChangeText={setLat} keyboardType="numbers-and-punctuation" placeholder="13.4477" placeholderTextColor={colors.textMuted} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>LONGITUDE</Text>
-                  <RNTextInput style={styles.input} value={lng} onChangeText={setLng} keyboardType="numbers-and-punctuation" placeholder="121.8389" placeholderTextColor={colors.textMuted} />
-                </View>
-              </View>
+              <Text style={styles.label}>PIN EXACT LOCATION ON MAP</Text>
+              <MapPinPicker key={editingId || 'new-place'} value={selectedPin} onChange={setSelectedPin} initialCenter={selectedPin || undefined} height={280} />
 
               <Text style={styles.label}>DETAILS (OPTIONAL)</Text>
               <RNTextInput
@@ -338,7 +326,7 @@ export const PlaceManagementScreen = () => {
               </View>
 
               <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving} activeOpacity={0.85}>
-                <Text style={styles.saveText}>{saving ? 'Saving…' : editingId ? 'Save Changes' : 'Add Place'}</Text>
+                <Text style={styles.saveText}>{saving ? 'Saving…' : editingId ? 'Confirm Pin & Save Changes' : 'Confirm Pin & Add Place'}</Text>
               </TouchableOpacity>
 
               {editingId && (

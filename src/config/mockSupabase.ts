@@ -14,12 +14,16 @@
 import { buildSeedDatabase } from './mockData';
 
 type Row = Record<string, any>;
-type Result = { data: any; error: any };
+type Result = { data: any; error: any; count?: number | null };
 
 const db: Record<string, Row[]> = buildSeedDatabase();
 
 const genId = (table: string) => `${table}-${Math.random().toString(36).slice(2, 10)}`;
 const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)));
+const REQUIRED_MTOP_DOCS = ['Barangay Clearance', 'Community Tax Certificate (Cedula)', 'OR/CR of Tricycle Unit', 'Proof of Ownership', 'TODA Membership Certificate'];
+const mtopDocsApproved = (documents: any) => Array.isArray(documents) && REQUIRED_MTOP_DOCS.every((name) =>
+  documents.some((doc: any) => doc.name === name && doc.uploaded && doc.file_url && doc.review_status === 'approved')
+);
 
 // ---------------------------------------------------------------------------
 // Realtime channels
@@ -66,13 +70,15 @@ const simulateDriverMatch = (bookingId: string) => {
 // ---------------------------------------------------------------------------
 class QueryBuilder implements PromiseLike<Result> {
   private table: string;
-  private op: 'select' | 'insert' | 'update' | 'upsert' = 'select';
+  private op: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select';
   private payload: any = null;
   private filters: Array<(row: Row) => boolean> = [];
   private orderBy: { column: string; ascending: boolean } | null = null;
   private limitN: number | null = null;
   private wantSelect = false;
   private isSingle = false;
+  private countRequested = false;
+  private headOnly = false;
 
   constructor(table: string) {
     this.table = table;
@@ -80,8 +86,10 @@ class QueryBuilder implements PromiseLike<Result> {
   }
 
   // --- terminal-ish chainables ---
-  select(_cols?: string) {
+  select(_cols?: string, options?: { count?: 'exact'; head?: boolean }) {
     this.wantSelect = true;
+    this.countRequested = options?.count === 'exact';
+    this.headOnly = options?.head === true;
     return this;
   }
   insert(payload: any) {
@@ -99,6 +107,10 @@ class QueryBuilder implements PromiseLike<Result> {
     this.payload = payload;
     return this;
   }
+  delete() {
+    this.op = 'delete';
+    return this;
+  }
 
   // --- filters / modifiers ---
   eq(column: string, value: any) {
@@ -107,6 +119,10 @@ class QueryBuilder implements PromiseLike<Result> {
   }
   in(column: string, values: any[]) {
     this.filters.push((row) => values.includes(row[column]));
+    return this;
+  }
+  gte(column: string, value: any) {
+    this.filters.push((row) => row[column] >= value);
     return this;
   }
   order(column: string, opts?: { ascending?: boolean }) {
@@ -150,7 +166,22 @@ class QueryBuilder implements PromiseLike<Result> {
       data = Array.isArray(this.payload) ? inserted : inserted[0];
     } else if (this.op === 'update') {
       const rows = this.matched();
-      rows.forEach((row) => Object.assign(row, this.payload));
+      rows.forEach((row) => {
+        if (this.table === 'franchise_applications') {
+          const next = { ...row, ...this.payload };
+          if ((row.documents_verified_at || mtopDocsApproved(row.documents)) && next.status === 'rejected') {
+            throw new Error('Approved MTOP files cannot be declined.');
+          }
+          if (row.documents_verified_at && this.payload.documents && JSON.stringify(this.payload.documents) !== JSON.stringify(row.documents)) {
+            throw new Error('Verified MTOP files are locked.');
+          }
+          if (!row.documents_verified_at && next.documents_verified_at
+            && (!mtopDocsApproved(next.documents) || next.status !== 'payment')) {
+            throw new Error('File approval must move the MTOP application to payment.');
+          }
+        }
+        Object.assign(row, this.payload);
+      });
       data = rows;
     } else if (this.op === 'upsert') {
       const items = Array.isArray(this.payload) ? this.payload : [this.payload];
@@ -165,6 +196,11 @@ class QueryBuilder implements PromiseLike<Result> {
         db[this.table].push(row);
         return row;
       });
+    } else if (this.op === 'delete') {
+      const matched = this.matched();
+      const ids = new Set(matched);
+      db[this.table] = db[this.table].filter((row) => !ids.has(row));
+      data = matched;
     } else {
       data = this.matched();
     }
@@ -184,6 +220,8 @@ class QueryBuilder implements PromiseLike<Result> {
       if (this.limitN != null) data = data.slice(0, this.limitN);
     }
 
+    const count = this.countRequested && Array.isArray(data) ? data.length : null;
+    if (this.headOnly) return { data: null, error: null, count };
     if (this.isSingle) {
       const first = Array.isArray(data) ? data[0] : data;
       if (first == null) {
@@ -193,7 +231,7 @@ class QueryBuilder implements PromiseLike<Result> {
     }
 
     // insert/update without an explicit .select() still resolve OK
-    return { data: clone(data), error: null };
+    return { data: clone(data), error: null, count };
   }
 
   then<TResult1 = Result, TResult2 = never>(
@@ -337,6 +375,7 @@ export const mockSupabase: any = {
   from: (table: string) => new QueryBuilder(table),
   auth,
   rpc: async (fn: string, params: any) => {
+    const currentProfile = () => db.users.find((u) => u.auth_id === currentAuthUser?.id || u.id === currentAuthUser?.id);
     if (fn === 'find_nearby_drivers') {
       const drivers = db.users.filter(
         (u) => u.user_type === 'driver' && u.current_status === 'online'
@@ -364,6 +403,85 @@ export const mockSupabase: any = {
         })],
         error: null,
       };
+    }
+    if (fn === 'get_ride_driver_payment_methods') {
+      const booking = db.bookings.find((row) => row.id === params?.p_booking_id);
+      const me = currentProfile();
+      if (!booking || !booking.driver_id || !me || ![booking.passenger_id, booking.driver_id].includes(me.id) && me.user_type !== 'admin') {
+        return { data: null, error: { message: 'You are not authorized to view this ride’s payment details.' } };
+      }
+      return { data: clone((db.driver_payment_methods ?? []).filter((row) => row.driver_id === booking.driver_id && row.is_enabled)), error: null };
+    }
+    if (fn === 'submit_ride_payment') {
+      const booking = db.bookings.find((row) => row.id === params?.p_booking_id);
+      const me = currentProfile();
+      const method = (db.driver_payment_methods ?? []).find((row) => row.id === params?.p_method_id && row.is_enabled);
+      if (!booking || !me || !method || booking.passenger_id !== me.id || !booking.driver_id || booking.driver_id !== method.driver_id) {
+        return { data: null, error: { message: 'You cannot submit payment for this ride.' } };
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{5,63}$/.test(String(params?.p_reference || '').trim())
+        || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(String(params?.p_proof_url || ''))) {
+        return { data: null, error: { message: 'Valid payment proof and reference are required.' } };
+      }
+      const existing = (db.ride_payment_submissions ?? []).find((row) => row.booking_id === booking.id);
+      if (existing && ['pending', 'verified'].includes(existing.status)) {
+        return { data: null, error: { message: 'A payment has already been submitted for this ride.' } };
+      }
+      const row = existing ?? { id: genId('ride_payment_submissions'), booking_id: booking.id, created_at: new Date().toISOString() };
+      Object.assign(row, {
+        passenger_id: booking.passenger_id, driver_id: booking.driver_id,
+        driver_payment_method_id: method.id,
+        payment_details_snapshot: { method_type: method.method_type, display_name: method.display_name, account_name: method.account_name, account_number: method.account_number, instructions: method.instructions },
+        amount: booking.total_fare, payment_reference: String(params?.p_reference || '').trim(), proof_url: params?.p_proof_url,
+        status: 'pending', rejection_reason: null, submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, reviewed_by_role: null,
+      });
+      if (!existing) {
+        if (!db.ride_payment_submissions) db.ride_payment_submissions = [];
+        db.ride_payment_submissions.push(row);
+      }
+      return { data: [clone(row)], error: null };
+    }
+    if (fn === 'review_ride_payment') {
+      const row = (db.ride_payment_submissions ?? []).find((item) => item.id === params?.p_payment_id);
+      const me = currentProfile();
+      if (!row || !me || (row.driver_id !== me.id && me.user_type !== 'admin') || row.status !== 'pending') {
+        return { data: null, error: { message: 'You are not authorized to review this payment.' } };
+      }
+      row.status = params?.p_decision; row.rejection_reason = params?.p_reason ?? null;
+      row.reviewed_at = new Date().toISOString(); row.reviewed_by = me.id; row.reviewed_by_role = me.user_type;
+      const booking = db.bookings.find((item) => item.id === row.booking_id);
+      if (booking && row.status === 'verified') booking.payment_status = 'completed';
+      return { data: [clone(row)], error: null };
+    }
+    if (fn === 'switch_ride_payment_to_cash') {
+      const booking = db.bookings.find((row) => row.id === params?.p_booking_id);
+      const me = currentProfile();
+      const payment = (db.ride_payment_submissions ?? []).find((row) => row.booking_id === booking?.id);
+      if (!booking || !me || booking.passenger_id !== me.id || booking.status === 'completed' || ['pending', 'verified'].includes(payment?.status)) {
+        return { data: null, error: { message: 'Payment can no longer be changed for this ride.' } };
+      }
+      booking.payment_method = 'cash';
+      return { data: [clone(booking)], error: null };
+    }
+    if (fn === 'submit_mtop_payment') {
+      const app = (db.franchise_applications ?? []).find((row) => row.id === params?.p_application_id);
+      const me = currentProfile();
+      if (!app || !me || app.driver_id !== me.id || app.status !== 'payment') return { data: null, error: { message: 'This application is not ready for payment.' } };
+      if (['pending_review', 'verified'].includes(app.payment_review_status)) return { data: null, error: { message: 'A payment is already pending review or verified.' } };
+      if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{5,63}$/.test(String(params?.p_reference || '').trim())
+        || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(String(params?.p_proof_url || ''))) {
+        return { data: null, error: { message: 'Valid payment proof and reference are required.' } };
+      }
+      Object.assign(app, { payment_method: params.p_method, payment_reference: params.p_reference, payment_proof_url: params.p_proof_url, payment_review_status: 'pending_review', payment_submitted_at: new Date().toISOString(), payment_rejection_reason: null });
+      return { data: [clone(app)], error: null };
+    }
+    if (fn === 'review_mtop_payment') {
+      const app = (db.franchise_applications ?? []).find((row) => row.id === params?.p_application_id);
+      const me = currentProfile();
+      if (!app || !me || me.user_type !== 'admin' || app.payment_review_status !== 'pending_review') return { data: null, error: { message: 'Payment is not pending review.' } };
+      if (params.p_decision === 'verified') Object.assign(app, { status: 'approved', payment_status: 'paid', payment_review_status: 'verified', payment_verified_at: new Date().toISOString(), payment_verified_by: me.id, payment_rejection_reason: null });
+      else Object.assign(app, { payment_review_status: 'rejected', payment_rejection_reason: params.p_reason });
+      return { data: [clone(app)], error: null };
     }
     return { data: [], error: null };
   },

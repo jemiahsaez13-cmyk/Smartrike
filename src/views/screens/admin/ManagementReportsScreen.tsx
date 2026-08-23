@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -46,6 +47,8 @@ const pretty = (value: string) => value.replace(/_/g, ' ').replace(/\b\w/g, (c) 
 
 export const ManagementReportsScreen = () => {
   const navigation = useNavigation<any>();
+  const { width } = useWindowDimensions();
+  const compact = width < 380;
   const [filters, setFilters] = useState<ManagementReportFilters>(initialFilters);
   const [dataset, setDataset] = useState<ManagementReportDataset | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +107,7 @@ export const ManagementReportsScreen = () => {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} accessibilityLabel="Go back">
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>Management Reports</Text>
           <Text style={styles.subtitle}>Date-filtered TODA records and CSV exports</Text>
         </View>
@@ -143,9 +146,9 @@ export const ManagementReportsScreen = () => {
 
         <View style={styles.filterCard}>
           <Text style={styles.filterTitle}>Report filters</Text>
-          <View style={styles.dateRow}>
-            <DateField label="From" value={filters.dateFrom || ''} onChangeText={(dateFrom) => setFilters((value) => ({ ...value, dateFrom }))} />
-            <DateField label="To" value={filters.dateTo || ''} onChangeText={(dateTo) => setFilters((value) => ({ ...value, dateTo }))} />
+          <View style={[styles.dateRow, compact && styles.dateRowCompact]}>
+            <DateField compact={compact} label="From" value={filters.dateFrom || ''} onChangeText={(dateFrom) => setFilters((value) => ({ ...value, dateFrom }))} />
+            <DateField compact={compact} label="To" value={filters.dateTo || ''} onChangeText={(dateTo) => setFilters((value) => ({ ...value, dateTo }))} />
           </View>
 
           {filters.type === 'franchise_status' ? (
@@ -178,7 +181,7 @@ export const ManagementReportsScreen = () => {
         {filters.type === 'franchise_status' && dataset ? (
           <View style={styles.statusGrid} accessibilityLabel="Franchise status totals">
             {STATUSES.filter((status): status is FranchiseRecordStatus => status !== 'all').map((status) => (
-              <View key={status} style={styles.statusCount}>
+              <View key={status} style={[styles.statusCount, compact && styles.statusCountCompact]}>
                 <Text style={styles.statusNumber}>{dataset.statusCounts[status]}</Text>
                 <Text style={styles.statusLabel}>{FRANCHISE_RECORD_STATUS_LABEL[status]}</Text>
               </View>
@@ -222,8 +225,8 @@ export const ManagementReportsScreen = () => {
   );
 };
 
-const DateField = ({ label, value, onChangeText }: { label: string; value: string; onChangeText: (value: string) => void }) => (
-  <View style={{ flex: 1 }}>
+const DateField = ({ label, value, onChangeText, compact }: { label: string; value: string; onChangeText: (value: string) => void; compact?: boolean }) => (
+  <View style={compact ? { width: '100%' } : { flex: 1 }}>
     <Text style={styles.fieldLabel}>{label}</Text>
     <TextInput value={value} onChangeText={onChangeText} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} style={styles.dateInput} autoCapitalize="none" />
   </View>
@@ -239,6 +242,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: layout.headerTop, paddingBottom: spacing.md, paddingHorizontal: spacing.sm, paddingRight: spacing.screen, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   backBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  headerCopy: { flex: 1, minWidth: 0 },
   title: { ...typography.h2, fontSize: 22 },
   subtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
   exportBtn: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
@@ -256,6 +260,7 @@ const styles = StyleSheet.create({
   filterCard: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, padding: spacing.md, marginBottom: spacing.lg, ...shadows.sm },
   filterTitle: { ...typography.h3, marginBottom: spacing.md },
   dateRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  dateRowCompact: { flexDirection: 'column', gap: spacing.sm },
   fieldLabel: { ...typography.labelSmall, color: colors.textSecondary, marginBottom: spacing.sm },
   dateInput: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, ...typography.body, color: colors.text },
   optionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
@@ -267,6 +272,7 @@ const styles = StyleSheet.create({
   generateText: { ...typography.button, color: '#fff' },
   statusGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.lg },
   statusCount: { width: '31%', minHeight: 76, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, padding: spacing.sm, justifyContent: 'center' },
+  statusCountCompact: { width: '47%', flexGrow: 1 },
   statusNumber: { ...typography.number, fontSize: 22, color: colors.primary },
   statusLabel: { ...typography.bodySmall, fontSize: 10, color: colors.textSecondary },
   resultsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },

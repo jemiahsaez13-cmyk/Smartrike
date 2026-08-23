@@ -6,19 +6,18 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
-import { MapView, Marker, PROVIDER_GOOGLE } from '@/config/maps';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { GeocodingService } from '@/models/services/GeocodingService';
 import { SavedAddress } from '@/models/types';
 import { notify } from '@/utils/confirm';
 import { Input } from '@/views/components/common/Input';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { MapPinPicker } from '@/views/components/location/MapPinPicker';
 
 const addressRepo = new AddressRepository();
 const geocoder = new GeocodingService();
 const QUICK_LABELS = ['Home', 'Work', 'Other'];
 const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
-const MAP_DELTA = { latitudeDelta: 0.025, longitudeDelta: 0.025 };
 
 type PinCoordinate = { latitude: number; longitude: number };
 type PinSource = 'saved' | 'manual' | 'suggestion';
@@ -56,13 +55,7 @@ export const AddressFormScreen = () => {
   const [pinDescription, setPinDescription] = useState(savedPin ? 'Previously saved pin' : '');
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
-  const mapRef = useRef<any>(null);
   const lookupSequence = useRef(0);
-  const canUseNativeMap = Platform.OS !== 'web' && Boolean(MapView);
-
-  const moveMapTo = (coordinate: PinCoordinate) => {
-    mapRef.current?.animateToRegion?.({ ...coordinate, ...MAP_DELTA }, 300);
-  };
 
   const placePendingPin = (coordinate: PinCoordinate, source: Exclude<PinSource, 'saved'>) => {
     if (!isValidPin(coordinate)) return;
@@ -73,7 +66,6 @@ export const AddressFormScreen = () => {
     setPinSource(source);
     setPinConfirmed(false);
     setPinDescription(source === 'suggestion' ? 'Address lookup suggestion — check the pin carefully' : 'Checking map reference…');
-    moveMapTo(exactPin);
 
     // This text is informational only. Reverse geocoding never changes the
     // typed address or the selected coordinates.
@@ -231,38 +223,7 @@ export const AddressFormScreen = () => {
           </Text>
 
           <View style={styles.mapCard}>
-            {canUseNativeMap ? (
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={{ ...mapStart, ...MAP_DELTA }}
-                onPress={(event: any) => placePendingPin(event.nativeEvent.coordinate, 'manual')}
-                showsUserLocation={false}
-                showsMyLocationButton={false}
-                showsCompass
-                rotateEnabled={false}
-                pitchEnabled={false}
-                toolbarEnabled={false}
-                accessibilityLabel="Address pin map"
-              >
-                {selectedPin && (
-                  <Marker
-                    coordinate={selectedPin}
-                    draggable
-                    onDragEnd={(event: any) => placePendingPin(event.nativeEvent.coordinate, 'manual')}
-                    title={pinConfirmed ? 'Confirmed address pin' : 'Selected address pin'}
-                    accessibilityLabel="Selected address pin. Drag to adjust."
-                  />
-                )}
-              </MapView>
-            ) : (
-              <View style={styles.mapFallback}>
-                <MaterialCommunityIcons name="map-marker-radius-outline" size={42} color={colors.primary} />
-                <Text style={styles.mapFallbackTitle}>Map pinning is available in the mobile app</Text>
-                <Text style={styles.mapFallbackText}>Use “Find address” to preview a point here, then confirm its exact coordinates.</Text>
-              </View>
-            )}
+            <MapPinPicker value={selectedPin} initialCenter={mapStart} onChange={(coordinate) => placePendingPin(coordinate, 'manual')} height={260} />
           </View>
 
           <View style={[styles.pinStatus, pinConfirmed && styles.pinStatusConfirmed]}>

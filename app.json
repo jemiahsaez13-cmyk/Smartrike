@@ -45,7 +45,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Smart Trike needs access to your photos so you can set a profile picture."
+          "photosPermission": "Smart Trike needs photo access for profile pictures, payment QR codes, and payment proof uploads."
         }
       ]
     ],

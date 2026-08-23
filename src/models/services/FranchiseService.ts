@@ -7,6 +7,7 @@ import {
   FranchiseStatus,
   PublicDriverFranchise,
   SuccessorRelationship,
+  allDocumentsApproved,
 } from '@/models/entities/Franchise';
 
 export interface RecordFranchiseEventInput {
@@ -213,6 +214,21 @@ export class FranchiseService {
     status: FranchiseStatus,
     patch: Partial<FranchiseApplication> = {}
   ): Promise<FranchiseApplication> {
+    const current = await this.getById(id);
+    if (!current) throw new Error('MTOP application not found.');
+    if (status === 'rejected' && (current.documents_verified_at || allDocumentsApproved(current.documents))) {
+      throw new Error('Approved MTOP files cannot be declined.');
+    }
+    const allowed: Partial<Record<FranchiseStatus, FranchiseStatus[]>> = {
+      submitted: ['document_verification', 'rejected'],
+      document_verification: ['payment', 'rejected'],
+      inspection: ['payment'],
+      payment: ['approved'],
+      approved: ['issued'],
+    };
+    if (status !== current.status && !allowed[current.status]?.includes(status)) {
+      throw new Error(`Invalid MTOP transition from ${current.status} to ${status}.`);
+    }
     const { data, error } = await supabase
       .from('franchise_applications')
       .update({ status, ...patch, updated_at: new Date().toISOString() })
@@ -229,6 +245,14 @@ export class FranchiseService {
     id: string,
     patch: Partial<FranchiseApplication>
   ): Promise<FranchiseApplication> {
+    const current = await this.getById(id);
+    if (!current) throw new Error('MTOP application not found.');
+    if (current.documents_verified_at && (patch.documents || patch.status === 'rejected')) {
+      throw new Error('Verified MTOP files are locked and cannot be declined.');
+    }
+    if (patch.documents_verified_at && (!patch.documents || !allDocumentsApproved(patch.documents))) {
+      throw new Error('Every required file must be approved before confirmation.');
+    }
     const { data, error } = await supabase
       .from('franchise_applications')
       .update({ ...patch, updated_at: new Date().toISOString() })
@@ -237,5 +261,37 @@ export class FranchiseService {
       .single();
     if (error) throw error;
     return data;
+  }
+
+  async getById(id: string): Promise<FranchiseApplication | null> {
+    const { data, error } = await supabase.from('franchise_applications').select('*').eq('id', id).single();
+    if (error) return null;
+    return data as FranchiseApplication;
+  }
+
+  async submitPayment(id: string, method: 'in_person', reference: string, proofUrl: string): Promise<FranchiseApplication> {
+    if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{5,63}$/.test(reference.trim())) {
+      throw new Error('Enter a valid payment reference (6 to 64 characters).');
+    }
+    if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(proofUrl) || proofUrl.length > 3_500_000) {
+      throw new Error('Upload a valid payment screenshot under 2.5 MB.');
+    }
+    const { data, error } = await supabase.rpc('submit_mtop_payment', {
+      p_application_id: id, p_method: method, p_reference: reference.trim(), p_proof_url: proofUrl,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The MTOP payment could not be submitted.');
+    return row as FranchiseApplication;
+  }
+
+  async reviewPayment(id: string, decision: 'verified' | 'rejected', reason?: string): Promise<FranchiseApplication> {
+    const { data, error } = await supabase.rpc('review_mtop_payment', {
+      p_application_id: id, p_decision: decision, p_reason: reason?.trim() || null,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The payment is not pending review.');
+    return row as FranchiseApplication;
   }
 }

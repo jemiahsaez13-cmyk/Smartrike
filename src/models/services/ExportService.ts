@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { Booking } from '@/models/types';
 import { ActivityLog } from '@/models/entities/ActivityLog';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 // Quotes a CSV cell so commas, quotes, and newlines don't break columns.

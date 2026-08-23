@@ -223,6 +223,17 @@ export const AdminDashboard = () => {
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
             <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('RidePaymentManagement')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="receipt-text-check-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Ride Payments</Text>
+                <Text style={styles.queueLevel}>Review passenger payment proof and references</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('Reports')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="flag-outline" size={20} color={colors.primary} />

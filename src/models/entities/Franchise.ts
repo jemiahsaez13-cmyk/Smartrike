@@ -63,6 +63,14 @@ export interface FranchiseApplication {
   documents: FranchiseDocument[];
   inspection_result: 'pending' | 'passed' | 'failed' | null;
   payment_status: 'pending' | 'paid';
+  payment_method?: 'in_person' | null;
+  payment_proof_url?: string | null;
+  payment_reference?: string | null;
+  payment_review_status?: 'awaiting_submission' | 'pending_review' | 'verified' | 'rejected';
+  payment_submitted_at?: string | null;
+  payment_verified_at?: string | null;
+  payment_verified_by?: string | null;
+  payment_rejection_reason?: string | null;
   fees: number;
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */
@@ -97,7 +105,6 @@ export const REQUIRED_DOCUMENTS = [
 export const FRANCHISE_FLOW: FranchiseStatus[] = [
   'submitted',
   'document_verification',
-  'inspection',
   'payment',
   'approved',
   'issued',

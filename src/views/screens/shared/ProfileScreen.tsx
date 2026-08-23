@@ -157,8 +157,14 @@ export const ProfileScreen = () => {
             icon="account-edit-outline"
             label="Edit Profile"
             onPress={() => navigation.navigate('EditProfile')}
-            last={user?.user_type !== 'passenger'}
+            last={user?.user_type === 'admin'}
           />
+          {user?.user_type === 'driver' && (
+            <>
+              <MenuItem icon="qrcode" label="Online Payment" value="Passenger payment details" onPress={() => navigation.navigate('OnlinePaymentSettings')} />
+              <MenuItem icon="receipt-text-check-outline" label="Payment Verification" value="Review passenger payment proof" onPress={() => navigation.navigate('RidePaymentVerification')} last />
+            </>
+          )}
           {user?.user_type === 'passenger' && (
             <>
               <MenuItem icon="map-marker-outline" label="My Addresses" onPress={() => navigation.navigate('AddressBook')} />

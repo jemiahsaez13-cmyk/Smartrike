@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Platform, StyleSheet, ScrollView, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, StyleSheet, ScrollView, TextInput, TouchableOpacity, View } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchMyApplication, submitApplication } from '@/controllers/slices/franchiseSlice';
+import { fetchMyApplication, submitApplication, submitFranchisePayment } from '@/controllers/slices/franchiseSlice';
 import {
   REQUIRED_DOCUMENTS,
   FRANCHISE_FLOW,
@@ -24,6 +24,8 @@ import { Loading } from '@/views/components/common/Loading';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
+import { pickImageDataUri } from '@/utils/pickImageDataUri';
+import { SUPPORT } from '@/config/constants';
 
 export const FranchiseScreen = () => {
   const dispatch = useAppDispatch();
@@ -43,6 +45,9 @@ export const FranchiseScreen = () => {
   );
   const [plate, setPlate] = useState<string>(driver?.vehicle_details?.plate_number || 'ABC-1234');
   const [submitting, setSubmitting] = useState(false);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentProof, setPaymentProof] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   useEffect(() => {
     if (user?.id) dispatch(fetchMyApplication(user.id));
@@ -129,6 +134,22 @@ export const FranchiseScreen = () => {
   };
 
   const allUploaded = docs.every((d) => d.uploaded);
+
+  const pickPaymentProof = async () => {
+    try { const image = await pickImageDataUri(); if (image) setPaymentProof(image); }
+    catch (error: any) { void notify('Could not use image', error?.message || 'Choose another screenshot.'); }
+  };
+
+  const handlePaymentSubmit = async () => {
+    if (!myApplication) return;
+    setSubmittingPayment(true);
+    try {
+      await dispatch(submitFranchisePayment({ id: myApplication.id, method: 'in_person', reference: paymentReference, proofUrl: paymentProof })).unwrap();
+      setPaymentReference(''); setPaymentProof('');
+      await notify('Payment proof submitted', 'An administrator will verify the screenshot and reference before approving your MTOP.');
+    } catch (error: any) { await notify('Could not submit payment', typeof error === 'string' ? error : error?.message || 'Check the proof and reference.'); }
+    finally { setSubmittingPayment(false); }
+  };
 
   const handleSubmit = async (type: FranchiseType) => {
     if (!allUploaded) {
@@ -339,6 +360,28 @@ export const FranchiseScreen = () => {
             <Card variant="outlined" padding="md" style={styles.remarkCard}>
               <MaterialCommunityIcons name="information-outline" size={18} color={colors.info} />
               <Text style={styles.remarkText}>{myApplication!.remarks}</Text>
+            </Card>
+          ) : null}
+
+          {myApplication!.status === 'payment' ? (
+            <Card variant="elevated" padding="lg" style={styles.paymentCard}>
+              <View style={styles.paymentHeading}><View style={styles.paymentIcon}><MaterialCommunityIcons name="office-building-marker-outline" size={24} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={styles.paymentTitle}>MTOP Payment Instructions</Text><Text style={styles.paymentSubtitle}>Review where and how to pay before uploading proof.</Text></View></View>
+              <View style={styles.instruction}><Text style={styles.instructionLabel}>AVAILABLE METHOD</Text><Text style={styles.instructionValue}>Pay in person</Text></View>
+              <View style={styles.instruction}><Text style={styles.instructionLabel}>PAYMENT LOCATION</Text><Text style={styles.instructionValue}>{SUPPORT.office}</Text><Text style={styles.instructionText}>{SUPPORT.address}</Text></View>
+              <View style={styles.instruction}><Text style={styles.instructionLabel}>AMOUNT DUE</Text><Text style={[styles.paymentAmount, typography.currency]}>₱{Number(myApplication!.fees).toFixed(2)}</Text><Text style={styles.instructionText}>Keep the official receipt. Upload a clear photo and enter its receipt/reference number below.</Text></View>
+
+              {myApplication!.payment_review_status === 'pending_review' ? (
+                <View style={styles.pendingPayment}><MaterialCommunityIcons name="clock-check-outline" size={26} color={colors.warning} /><View style={{ flex: 1 }}><Text style={styles.pendingTitle}>Waiting for admin verification</Text><Text style={styles.instructionText}>Reference {myApplication!.payment_reference}</Text></View></View>
+              ) : (
+                <>
+                  {myApplication!.payment_review_status === 'rejected' ? <View style={styles.rejectedPayment}><Text style={styles.rejectedPaymentTitle}>Payment proof needs replacement</Text><Text style={styles.instructionText}>{myApplication!.payment_rejection_reason || 'Upload a clearer receipt and check the reference number.'}</Text></View> : null}
+                  <Text style={styles.paymentFieldLabel}>PAYMENT SCREENSHOT / RECEIPT</Text>
+                  <TouchableOpacity style={styles.paymentProofPicker} onPress={pickPaymentProof} activeOpacity={0.8}>{paymentProof ? <Image source={{ uri: paymentProof }} style={styles.paymentProofImage} resizeMode="contain" /> : <MaterialCommunityIcons name="image-plus" size={38} color={colors.primary} />}<Text style={styles.paymentProofText}>{paymentProof ? 'Replace screenshot' : 'Upload payment screenshot'}</Text></TouchableOpacity>
+                  <Text style={styles.paymentFieldLabel}>PAYMENT REFERENCE NUMBER</Text>
+                  <TextInput style={styles.paymentInput} value={paymentReference} onChangeText={setPaymentReference} placeholder="Receipt/reference number" placeholderTextColor={colors.textMuted} autoCapitalize="characters" maxLength={64} />
+                  <Button variant="primary" onPress={handlePaymentSubmit} loading={submittingPayment} disabled={submittingPayment || !paymentProof || !paymentReference.trim()}>Submit Payment for Verification</Button>
+                </>
+              )}
             </Card>
           ) : null}
         </ScrollView>
@@ -707,4 +750,23 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.text 
   },
+  paymentCard: { marginTop: spacing.md, marginBottom: spacing.xl },
+  paymentHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
+  paymentIcon: { width: 46, height: 46, borderRadius: radius.md, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  paymentTitle: { ...typography.h3, fontSize: 17 },
+  paymentSubtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
+  instruction: { padding: spacing.md, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, marginBottom: spacing.sm },
+  instructionLabel: { ...typography.labelSmall, color: colors.textMuted, marginBottom: 3 },
+  instructionValue: { ...typography.label, color: colors.text },
+  instructionText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 3 },
+  paymentAmount: { ...typography.h2, color: colors.primary },
+  paymentFieldLabel: { ...typography.labelSmall, color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
+  paymentProofPicker: { minHeight: 130, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: radius.lg, backgroundColor: colors.primaryLight, overflow: 'hidden' },
+  paymentProofImage: { width: '100%', height: 170 },
+  paymentProofText: { ...typography.label, color: colors.primary, marginVertical: spacing.sm },
+  paymentInput: { ...typography.body, minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, color: colors.text, marginBottom: spacing.lg },
+  pendingPayment: { flexDirection: 'row', gap: spacing.md, alignItems: 'center', padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningLight, marginTop: spacing.sm },
+  pendingTitle: { ...typography.label, color: colors.text },
+  rejectedPayment: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.errorLight, marginTop: spacing.sm },
+  rejectedPaymentTitle: { ...typography.label, color: colors.error },
 });

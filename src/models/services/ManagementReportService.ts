@@ -52,11 +52,14 @@ export class ManagementReportService {
     if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
       throw new Error('The report start date must be before the end date.');
     }
+    // Fetch only the report-specific table on mobile. Previously every report
+    // waited for all four APIs, so one unavailable unrelated table broke all
+    // report types on slower/native connections.
     const [franchises, events, inventory, violations] = await Promise.all([
       franchiseService.getRegistry(),
       franchiseService.getEvents(),
-      inventoryService.list(),
-      violationService.list(),
+      filters.type === 'inventory' ? inventoryService.list() : Promise.resolve([]),
+      filters.type === 'violations' ? violationService.list() : Promise.resolve([]),
     ]);
 
     const counts = emptyCounts();

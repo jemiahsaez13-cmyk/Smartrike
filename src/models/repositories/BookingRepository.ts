@@ -38,18 +38,6 @@ export class BookingRepository {
     return data;
   }
 
-  // Marks the fare as paid (demo online payment settles at pickup).
-  async markPaid(id: string): Promise<Booking> {
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({ payment_status: 'completed' })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
-
   async assignDriver(bookingId: string, driverId: string): Promise<Booking> {
     const { data, error } = await supabase
       .from('bookings')
