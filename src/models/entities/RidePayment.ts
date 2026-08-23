@@ -8,7 +8,7 @@ export interface DriverPaymentMethod {
   account_name: string;
   account_number: string;
   instructions: string | null;
-  qr_code_url: string;
+  qr_code_url: string | null;
   is_enabled: boolean;
   created_at?: string;
   updated_at?: string;

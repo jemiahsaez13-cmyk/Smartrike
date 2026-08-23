@@ -13,6 +13,48 @@ const login = async (email: string) => {
 };
 
 const run = async () => {
+  const passengerEmail = `passenger-registration-${Date.now()}@example.com`;
+  const passengerSignup = await db.auth.signUp({
+    email: passengerEmail,
+    password: 'StrongPass123',
+    options: { data: { name: 'Passenger Registration Test', user_type: 'passenger' } },
+  });
+  expect(!passengerSignup.error && !!passengerSignup.data.session, 'passenger registration creates an immediately usable account session');
+  await db.auth.signOut();
+  const passengerLogin = await db.auth.signInWithPassword({ email: passengerEmail, password: 'StrongPass123' });
+  expect(!passengerLogin.error && !!passengerLogin.data.session, 'passenger can log in after registration');
+
+  const signupEmail = `registration-${Date.now()}@example.com`;
+  const signup = await db.auth.signUp({
+    email: signupEmail,
+    password: 'StrongPass123',
+    options: {
+      data: {
+        name: 'Pending Driver Test',
+        user_type: 'driver',
+        license_number: 'TEST-LICENSE',
+        vehicle_details: { plate_number: 'TEST-REG' },
+      },
+    },
+  });
+  expect(!signup.error && !!signup.data.session, 'driver registration creates an immediately usable account session');
+  const { data: pendingDriver } = await db.from('users').select('*').eq('auth_id', signup.data.user.id).single();
+  expect(pendingDriver.verification_status === 'pending' && pendingDriver.current_status === 'offline', 'new driver remains pending and offline until admin verification');
+  await db.auth.signOut();
+  const pendingLogin = await db.auth.signInWithPassword({ email: signupEmail, password: 'StrongPass123' });
+  expect(!pendingLogin.error && !!pendingLogin.data.session, 'pending driver can log in before admin approval');
+  const pendingOnline = await db.from('users').update({ current_status: 'online' }).eq('id', pendingDriver.id).select().single();
+  expect(!!pendingOnline.error, 'pending driver cannot go online before admin approval');
+  await login('admin@demo.com');
+  const approvedDriver = await db.from('users').update({ verification_status: 'verified' }).eq('id', pendingDriver.id).select().single();
+  expect(!approvedDriver.error && approvedDriver.data.verification_status === 'verified', 'admin can approve a pending driver');
+  await db.auth.signInWithPassword({ email: signupEmail, password: 'StrongPass123' });
+  const approvedOnline = await db.from('users').update({ current_status: 'online' }).eq('id', pendingDriver.id).select().single();
+  expect(!approvedOnline.error && approvedOnline.data.current_status === 'online', 'approved driver can go online');
+  await login('admin@demo.com');
+  const rejectedDriver = await db.from('users').update({ verification_status: 'rejected' }).eq('id', pendingDriver.id).select().single();
+  expect(!rejectedDriver.error && rejectedDriver.data.current_status === 'offline', 'rejecting driver verification forces the driver offline');
+
   await login('driver@demo.com');
   const { data: method, error: methodError } = await db.from('driver_payment_methods').insert({
     driver_id: 'demo-driver', method_type: 'gcash', display_name: 'GCash',
@@ -20,6 +62,12 @@ const run = async () => {
     qr_code_url: image, is_enabled: true,
   }).select().single();
   expect(!methodError && method?.driver_id === 'demo-driver', 'driver adds an owned online payment method');
+  const { data: methodWithoutQr, error: optionalQrError } = await db.from('driver_payment_methods').insert({
+    driver_id: 'demo-driver', method_type: 'bank', display_name: 'Test Bank',
+    account_name: 'Test Driver', account_number: '1234567890', instructions: null,
+    qr_code_url: null, is_enabled: true,
+  }).select().single();
+  expect(!optionalQrError && methodWithoutQr?.qr_code_url === null, 'driver adds a payment method without a QR code');
 
   const bookingId = `test-online-${Date.now()}`;
   await db.from('bookings').insert({
@@ -31,7 +79,7 @@ const run = async () => {
 
   await login('passenger@demo.com');
   const visible = await db.rpc('get_ride_driver_payment_methods', { p_booking_id: bookingId });
-  expect(!visible.error && visible.data.length === 1 && visible.data[0].driver_id === 'demo-driver', 'passenger sees only the assigned driver payment method');
+  expect(!visible.error && visible.data.length === 2 && visible.data.every((row: any) => row.driver_id === 'demo-driver'), 'passenger sees only the assigned driver payment methods, including one without QR');
 
   const invalid = await db.rpc('submit_ride_payment', { p_booking_id: bookingId, p_method_id: method.id, p_reference: '', p_proof_url: '' });
   expect(!!invalid.error, 'missing ride proof and reference are rejected');
@@ -49,6 +97,8 @@ const run = async () => {
   expect(!verified.error && verified.data[0].status === 'verified', 'assigned driver verifies passenger payment');
   const { data: paidBooking } = await db.from('bookings').select('*').eq('id', bookingId).single();
   expect(paidBooking.payment_status === 'completed', 'verified payment synchronizes the booking paid status');
+  const { data: passengerHistory } = await db.from('transactions').select('*').eq('passenger_id', 'demo-passenger');
+  expect(passengerHistory.some((transaction: any) => transaction.booking_id === bookingId && transaction.status === 'completed'), 'verified payment appears in passenger payment history');
   const repeatedReview = await db.rpc('review_ride_payment', { p_payment_id: submitted.data[0].id, p_decision: 'verified', p_reason: null });
   expect(!!repeatedReview.error, 'verified payment cannot be reviewed twice');
 

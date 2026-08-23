@@ -180,6 +180,24 @@ class QueryBuilder implements PromiseLike<Result> {
             throw new Error('File approval must move the MTOP application to payment.');
           }
         }
+        if (this.table === 'users') {
+          const actor = db.users.find((user) => user.auth_id === currentAuthUser?.id || user.id === currentAuthUser?.id);
+          const next = { ...row, ...this.payload };
+          if (this.payload.verification_status !== undefined
+            && this.payload.verification_status !== row.verification_status
+            && actor?.user_type !== 'admin') {
+            throw new Error('Driver verification can only be changed by an administrator.');
+          }
+          if (next.user_type === 'driver'
+            && (next.verification_status || 'pending') !== 'verified'
+            && (next.current_status || 'offline') !== 'offline') {
+            if (actor?.user_type === 'admin' && next.verification_status !== row.verification_status) {
+              this.payload = { ...this.payload, current_status: 'offline' };
+            } else {
+              throw new Error('Driver verification is required before going online or operating trips.');
+            }
+          }
+        }
         Object.assign(row, this.payload);
       });
       data = rows;
@@ -291,6 +309,7 @@ const auth = {
       rating: 5,
       total_trips: 0,
       verification_status: userType === 'driver' ? 'pending' : null,
+      current_status: userType === 'driver' ? 'offline' : undefined,
       profile_completed: false,
       license_number: options?.data?.license_number || null,
       toda_membership: options?.data?.toda_membership || null,
@@ -450,7 +469,28 @@ export const mockSupabase: any = {
       row.status = params?.p_decision; row.rejection_reason = params?.p_reason ?? null;
       row.reviewed_at = new Date().toISOString(); row.reviewed_by = me.id; row.reviewed_by_role = me.user_type;
       const booking = db.bookings.find((item) => item.id === row.booking_id);
-      if (booking && row.status === 'verified') booking.payment_status = 'completed';
+      if (booking && row.status === 'verified') {
+        booking.payment_status = 'completed';
+        const existingTransaction = (db.transactions ?? []).find((item) => item.booking_id === booking.id);
+        const transaction = {
+          id: existingTransaction?.id ?? genId('transactions'),
+          booking_id: booking.id,
+          passenger_id: row.passenger_id,
+          driver_id: row.driver_id,
+          amount: row.amount,
+          payment_method: 'online',
+          status: 'completed',
+          created_at: existingTransaction?.created_at ?? new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          receipt_url: row.proof_url,
+          notes: `Reference ${row.payment_reference}`,
+        };
+        if (existingTransaction) Object.assign(existingTransaction, transaction);
+        else {
+          if (!db.transactions) db.transactions = [];
+          db.transactions.push(transaction);
+        }
+      }
       return { data: [clone(row)], error: null };
     }
     if (fn === 'switch_ride_payment_to_cash') {

@@ -13,7 +13,7 @@ export interface SaveDriverPaymentMethodInput {
   accountName: string;
   accountNumber: string;
   instructions?: string;
-  qrCodeUrl: string;
+  qrCodeUrl?: string | null;
   isEnabled: boolean;
 }
 
@@ -39,7 +39,8 @@ export class RidePaymentService {
     if (displayName.length < 2) throw new Error('Enter a payment method name.');
     if (accountName.length < 2) throw new Error('Enter the account holder name.');
     if (accountNumber.length < 4) throw new Error('Enter a valid account or mobile number.');
-    if (!validImage(input.qrCodeUrl)) throw new Error('Upload a valid QR image under 2.5 MB.');
+    const qrCodeUrl = input.qrCodeUrl?.trim() || null;
+    if (qrCodeUrl && !validImage(qrCodeUrl)) throw new Error('Choose a valid QR image under 2.5 MB, or leave it empty.');
     const row = {
       driver_id: input.driverId,
       method_type: input.methodType,
@@ -47,7 +48,7 @@ export class RidePaymentService {
       account_name: accountName,
       account_number: accountNumber,
       instructions: input.instructions?.trim() || null,
-      qr_code_url: input.qrCodeUrl,
+      qr_code_url: qrCodeUrl,
       is_enabled: input.isEnabled,
       updated_at: new Date().toISOString(),
     };

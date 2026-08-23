@@ -29,6 +29,12 @@ export const ProfileScreen = () => {
 
   const roleLabel =
     user?.user_type === 'driver' ? 'Driver' : user?.user_type === 'admin' ? 'Administrator' : 'Passenger';
+  const driverVerification = user?.user_type === 'driver'
+    ? ((user as any).verification_status || 'pending') as 'pending' | 'verified' | 'rejected'
+    : null;
+  const driverVerificationLabel = driverVerification
+    ? driverVerification.charAt(0).toUpperCase() + driverVerification.slice(1)
+    : '';
 
   const Stat = ({ icon, value, label }: { icon: any; value: string; label: string }) => (
     <View style={styles.stat}>
@@ -119,7 +125,11 @@ export const ProfileScreen = () => {
               <View style={styles.statDivider} />
               <Stat icon="map-marker-path" value={`${user?.total_trips ?? 0}`} label="Trips" />
               <View style={styles.statDivider} />
-              <Stat icon="shield-check" value="Active" label="Status" />
+              <Stat
+                icon={driverVerification === 'verified' ? 'shield-check' : driverVerification === 'rejected' ? 'shield-alert' : 'clock-outline'}
+                value={driverVerificationLabel}
+                label="Verification"
+              />
             </>
           ) : (
             <>
@@ -168,7 +178,7 @@ export const ProfileScreen = () => {
           {user?.user_type === 'passenger' && (
             <>
               <MenuItem icon="map-marker-outline" label="My Addresses" onPress={() => navigation.navigate('AddressBook')} />
-              <MenuItem icon="credit-card-outline" label="Payment Methods" onPress={() => navigation.navigate('Payment')} last />
+              <MenuItem icon="receipt-text-clock-outline" label="Payment History" value="Previous trip payments" onPress={() => navigation.navigate('Payment')} last />
             </>
           )}
         </View>

@@ -4,7 +4,7 @@ export interface Transaction {
   passenger_id: string;
   driver_id: string;
   amount: number;
-  payment_method: 'cash' | 'gcash' | 'paymaya';
+  payment_method: 'cash' | 'gcash' | 'paymaya' | 'online';
   status: 'pending' | 'completed' | 'failed';
   created_at: Date;
   completed_at: Date | null;

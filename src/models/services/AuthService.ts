@@ -159,19 +159,34 @@ export class AuthService {
       throw new Error('Unable to create this account. Check your details or sign in instead.');
     }
 
-    // With email confirmation enabled Supabase returns no session. The client
-    // now opens a required code-entry screen instead of bypassing verification.
-    if (!authData.session) {
+    // Preserve the original registration behavior when the project confirms
+    // new email accounts server-side: hosted Auth can still return no session
+    // from signUp even though the database confirmation trigger has completed.
+    // An immediate password sign-in obtains that session without relying on an
+    // SMTP code that this deployment has not configured.
+    let session = authData.session;
+    if (!session) {
+      const { data: signInData } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      session = signInData?.session ?? null;
+    }
+
+    // If a future deployment explicitly enables email confirmation and SMTP,
+    // keep the existing code-verification route as a safe fallback.
+    if (!session) {
       return { user: null, session: null, needsEmailConfirmation: true as const };
     }
 
-    // Confirmation disabled: registration is complete immediately.
+    // Registration is complete immediately and the trigger-created profile is
+    // available to both passengers and still-pending drivers.
     const user = await this.fetchProfileWithRetry(authData.user.id);
     if (!user) {
       throw new Error('Account created, but your profile could not be loaded. Please sign in.');
     }
 
-    return { user, session: authData.session, needsEmailConfirmation: false as const };
+    return { user, session, needsEmailConfirmation: false as const };
   }
 
   async verifySignupCode(email: string, code: string) {

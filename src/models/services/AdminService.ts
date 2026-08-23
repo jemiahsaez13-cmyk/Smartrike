@@ -97,9 +97,13 @@ export class AdminService {
   }
 
   async setDriverVerification(id: string, verification_status: 'pending' | 'verified' | 'rejected'): Promise<User> {
+    const updates: Record<string, unknown> = { verification_status };
+    // A rejected or re-opened application must immediately stop operating,
+    // while the account itself remains active and can still sign in.
+    if (verification_status !== 'verified') updates.current_status = 'offline';
     const { data, error } = await supabase
       .from('users')
-      .update({ verification_status })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();

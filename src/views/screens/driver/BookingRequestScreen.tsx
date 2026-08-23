@@ -15,8 +15,16 @@ export const BookingRequestScreen = () => {
   const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
   const { incomingRequests, loading } = useAppSelector(state => state.driver);
+  const isVerified = (user as any)?.verification_status === 'verified';
 
   const handleAccept = async (bookingId: string) => {
+    if (!isVerified) {
+      await notify(
+        'Account Pending Approval',
+        'You can sign in and manage your account, but an admin must verify you before you can accept passenger trips.'
+      );
+      return;
+    }
     try {
       await dispatch(acceptBooking({ bookingId, driverId: user!.id })).unwrap();
       navigation.navigate('DriverTrip');
@@ -117,7 +125,7 @@ export const BookingRequestScreen = () => {
                 variant="primary" 
                 onPress={() => handleAccept(request.id)} 
                 loading={loading}
-                disabled={loading}
+                disabled={loading || !isVerified}
                 style={styles.acceptBtn}
                 containerStyle={{ flex: 2 }}
               >
