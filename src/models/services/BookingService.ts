@@ -1,6 +1,6 @@
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { UserRepository } from '@/models/repositories/UserRepository';
-import { FareCalculationService } from './FareCalculationService';
+import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculationService';
 import { NotificationService } from './NotificationService';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
@@ -15,11 +15,32 @@ export class BookingService {
     passengerId: string,
     pickup: Location,
     dropoff: Location,
-    options: { scheduledTime?: Date; notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online' } = {}
+    options: {
+      scheduledTime?: Date;
+      notes?: string;
+      paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online';
+      passengerCount?: number;
+      rideType?: 'standard' | 'priority';
+      distanceKm?: number;
+    } = {}
   ): Promise<Booking> {
-    const distance = await this.fareService.calculateDistance(pickup, dropoff);
+    const passengerCount = Math.floor(options.passengerCount ?? 1);
+    if (passengerCount < 1 || passengerCount > MAX_TRICYCLE_PASSENGERS) {
+      throw new Error(`A tricycle can carry 1 to ${MAX_TRICYCLE_PASSENGERS} passengers.`);
+    }
+    const rideType = options.rideType ?? 'standard';
+    const distance = options.distanceKm && options.distanceKm > 0
+      ? options.distanceKm
+      : await this.fareService.calculateDistance(pickup, dropoff);
     const { baseFare, perKmRate, multiplier } = await this.fareService.getFareConfig();
-    const totalFare = this.fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
+    const totalFare = this.fareService.calculateFareForPassengers(
+      distance,
+      baseFare,
+      perKmRate,
+      passengerCount,
+      multiplier,
+      rideType
+    );
     const estimatedDuration = Math.ceil(distance / 30 * 60);
 
     const booking = await this.bookingRepo.create({
@@ -36,6 +57,8 @@ export class BookingService {
       per_km_rate: perKmRate,
       total_fare: totalFare,
       peak_hour_multiplier: multiplier,
+      passenger_count: passengerCount,
+      ride_type: rideType,
       payment_method: options.paymentMethod || 'cash',
       // Every method starts unpaid. Online (demo) settles at pickup — the
       // passenger is prompted to pay when the driver confirms pickup; cash and

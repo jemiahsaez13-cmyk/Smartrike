@@ -80,7 +80,9 @@ export const BookingRequestScreen = () => {
               </View>
               <View style={styles.requestMeta}>
                 <MaterialCommunityIcons name="cash" size={16} color={colors.success} />
-                <Text style={styles.requestMetaText}>{(request.payment_method || 'cash')} fare</Text>
+                <Text style={styles.requestMetaText}>
+                  {request.passenger_count ?? 1} passenger{(request.passenger_count ?? 1) > 1 ? 's' : ''} • {(request.payment_method || 'cash')} fare
+                </Text>
               </View>
             </View>
 

@@ -82,11 +82,12 @@ export const seedUsers = () => [
     verification_status: 'verified',
     vehicle_details: {
       plate_number: 'ABC-1234',
+      body_number: 'B-017',
       make: 'Honda',
       model: 'TMX 155',
       year: 2021,
       color: 'Blue',
-      capacity: 4,
+      capacity: 5,
     },
     toda_membership: 'FEDTODAB',
     bank_account: null,
@@ -112,11 +113,12 @@ export const seedUsers = () => [
     verification_status: 'verified',
     vehicle_details: {
       plate_number: 'XYZ-5678',
+      body_number: 'B-028',
       make: 'Yamaha',
       model: 'Sniper 155',
       year: 2020,
       color: 'Red',
-      capacity: 4,
+      capacity: 5,
     },
     toda_membership: 'FEDTODAB',
     bank_account: null,
@@ -142,11 +144,12 @@ export const seedUsers = () => [
     verification_status: 'pending',
     vehicle_details: {
       plate_number: 'LMN-9012',
+      body_number: 'B-039',
       make: 'Kawasaki',
       model: 'Barako',
       year: 2019,
       color: 'Black',
-      capacity: 4,
+      capacity: 5,
     },
     toda_membership: 'FEDTODAB',
     bank_account: null,
@@ -203,6 +206,8 @@ const completedBooking = (
   per_km_rate: 8,
   total_fare: fare(distance),
   peak_hour_multiplier: 1,
+  passenger_count: 1,
+  ride_type: 'standard',
   payment_method: 'cash',
   payment_status: 'completed',
   passenger_rating: null,
@@ -245,6 +250,8 @@ export const seedBookings = () => [
     per_km_rate: 8,
     total_fare: fare(9.8),
     peak_hour_multiplier: 1,
+    passenger_count: 2,
+    ride_type: 'standard',
     payment_method: 'cash',
     payment_status: 'pending',
     passenger_rating: null,
@@ -270,6 +277,8 @@ export const seedBookings = () => [
     per_km_rate: 8,
     total_fare: fare(4.2),
     peak_hour_multiplier: 1,
+    passenger_count: 1,
+    ride_type: 'standard',
     payment_method: 'cash',
     payment_status: 'pending',
     passenger_rating: null,
@@ -462,6 +471,14 @@ export const seedFranchiseApplications = () => [
     payment_status: 'paid',
     fees: 1500,
     mtop_number: 'MTOP-2024-0147',
+    body_number: 'B-017',
+    franchise_status: 'active',
+    original_holder_name: 'Kuya Jojo',
+    current_holder_name: 'Kuya Jojo',
+    issued_at: iso(150 * DAY).slice(0, 10),
+    expiry_date: iso(-215 * DAY).slice(0, 10),
+    last_renewed_at: iso(150 * DAY).slice(0, 10),
+    renewal_year: new Date().getFullYear(),
     remarks: 'Franchise active and in good standing.',
     created_at: iso(180 * DAY),
     updated_at: iso(150 * DAY),
@@ -502,6 +519,53 @@ export const seedFranchiseApplications = () => [
   },
 ];
 
+export const seedFranchiseEvents = () => [
+  {
+    id: 'fe-1',
+    franchise_id: 'fr-1',
+    event_type: 'renewal',
+    from_holder: 'Kuya Jojo',
+    to_holder: null,
+    relationship: null,
+    reason: null,
+    effective_date: iso(150 * DAY).slice(0, 10),
+    agreement_number: null,
+    agreement_text: null,
+    created_by: 'demo-admin',
+    created_at: iso(150 * DAY),
+  },
+];
+
+export const seedAssociationInventory = () => [
+  {
+    id: 'inv-1', item_name: 'Reflective Safety Vests', category: 'safety',
+    quantity: 50, issued_quantity: 34, remaining_stock: 16, low_stock_threshold: 10,
+    status: 'in_stock', notes: 'Annual road-safety allocation.', created_by: 'demo-admin',
+    created_at: iso(60 * DAY), updated_at: iso(2 * DAY),
+  },
+  {
+    id: 'inv-2', item_name: 'Receipt Booklets', category: 'office',
+    quantity: 100, issued_quantity: 94, remaining_stock: 6, low_stock_threshold: 10,
+    status: 'low_stock', notes: null, created_by: 'demo-admin',
+    created_at: iso(45 * DAY), updated_at: iso(1 * DAY),
+  },
+  {
+    id: 'inv-3', item_name: 'First Aid Kits', category: 'equipment',
+    quantity: 20, issued_quantity: 20, remaining_stock: 0, low_stock_threshold: 5,
+    status: 'out_of_stock', notes: 'For replenishment.', created_by: 'demo-admin',
+    created_at: iso(90 * DAY), updated_at: iso(5 * DAY),
+  },
+];
+
+export const seedDriverViolations = () => [
+  {
+    id: 'vio-1', driver_id: 'drv-2', franchise_id: 'fr-2',
+    violation_type: 'Overcharging complaint', description: 'Passenger report validated by TODA admin.',
+    incident_date: iso(8 * DAY).slice(0, 10), penalty: 'Written warning', status: 'resolved',
+    created_by: 'demo-admin', created_at: iso(7 * DAY),
+  },
+];
+
 export const seedDriverLocations = () => [
   { driver_id: 'demo-driver', latitude: 13.4452, longitude: 121.8401, timestamp: iso(2 * MIN) },
   { driver_id: 'drv-2', latitude: 13.4477, longitude: 121.8389, timestamp: iso(5 * MIN) },
@@ -516,4 +580,7 @@ export const buildSeedDatabase = (): Record<string, any[]> => ({
   notifications: seedNotifications(),
   driver_locations: seedDriverLocations(),
   franchise_applications: seedFranchiseApplications(),
+  franchise_events: seedFranchiseEvents(),
+  association_inventory: seedAssociationInventory(),
+  driver_violations: seedDriverViolations(),
 });

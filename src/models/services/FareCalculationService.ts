@@ -1,6 +1,9 @@
 import { supabase } from '@/config/supabase';
 import { Location } from '@/models/types';
 
+/** LGU/TODA capacity ceiling for one tricycle booking. */
+export const MAX_TRICYCLE_PASSENGERS = 5;
+
 export class FareCalculationService {
   async getFareConfig() {
     // Tolerate 0 or >1 fare_matrix rows: take the first, fall back to LGU defaults.
@@ -38,6 +41,26 @@ export class FareCalculationService {
     const km = Math.max(1, Math.ceil(distance || 0));
     const fare = baseFare + (km - 1) * perKmRate;
     return Math.round(fare * (multiplier || 1) * 100) / 100;
+  }
+
+  /**
+   * The configured route fare is a per-passenger fare. Group bookings are
+   * therefore billed by multiplying the route fare by the validated headcount.
+   */
+  calculateFareForPassengers(
+    distance: number,
+    baseFare: number,
+    perKmRate: number,
+    passengerCount: number,
+    multiplier: number = 1,
+    rideType: 'standard' | 'priority' = 'standard'
+  ): number {
+    const count = Math.min(MAX_TRICYCLE_PASSENGERS, Math.max(1, Math.floor(passengerCount || 1)));
+    const routeFare = this.calculateFare(distance, baseFare, perKmRate, multiplier);
+    const adjustedRouteFare = rideType === 'priority'
+      ? routeFare + Math.max(12, routeFare * 0.15)
+      : routeFare;
+    return Math.round(adjustedRouteFare * count * 100) / 100;
   }
 
   async calculateDistance(pickup: Location, dropoff: Location): Promise<number> {

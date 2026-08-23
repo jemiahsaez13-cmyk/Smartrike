@@ -5,3 +5,4 @@ export * from '../entities/Message';
 export * from '../entities/Franchise';
 export * from '../entities/Notification';
 export * from '../entities/ActivityLog';
+export * from '../entities/Association';

@@ -216,12 +216,20 @@ class QueryBuilder implements PromiseLike<Result> {
 let currentAuthUser: { id: string; email: string } | null = null;
 
 const auth = {
-  async signUp({ email }: { email: string; password: string }) {
+  async signUp({
+    email,
+    options,
+  }: {
+    email: string;
+    password: string;
+    options?: { data?: Record<string, any> };
+  }) {
     // Simulate network delay
     await new Promise(r => setTimeout(r, 800));
 
     // Check if email already exists in mock DB
-    const existing = db.users.find(u => u.email === email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = db.users.find(u => String(u.email).toLowerCase() === normalizedEmail);
     if (existing) {
       return { 
         data: { user: null, session: null }, 
@@ -230,51 +238,84 @@ const auth = {
     }
 
     const authId = `auth-${Math.random().toString(36).slice(2, 10)}`;
-    currentAuthUser = { id: authId, email };
-    return { data: { user: { id: authId, email }, session: { access_token: 'mock-jwt' } }, error: null };
+    const requestedType = options?.data?.user_type;
+    const userType = requestedType === 'driver' ? 'driver' : 'passenger';
+    db.users.push({
+      id: `user-${Math.random().toString(36).slice(2, 10)}`,
+      auth_id: authId,
+      user_type: userType,
+      email: normalizedEmail,
+      phone: null,
+      name: String(options?.data?.name || normalizedEmail.split('@')[0]),
+      profile_photo_url: null,
+      created_at: new Date().toISOString(),
+      status: 'active',
+      rating: 5,
+      total_trips: 0,
+      verification_status: userType === 'driver' ? 'pending' : null,
+      profile_completed: false,
+      license_number: options?.data?.license_number || null,
+      toda_membership: options?.data?.toda_membership || null,
+      vehicle_details: options?.data?.vehicle_details || null,
+    });
+    currentAuthUser = { id: authId, email: normalizedEmail };
+    return {
+      data: {
+        user: { id: authId, email: normalizedEmail, identities: [{ provider: 'email' }] },
+        session: { access_token: 'mock-jwt', user: currentAuthUser },
+      },
+      error: null,
+    };
   },
   async signInWithPassword({ email }: { email: string; password: string }) {
     await new Promise(r => setTimeout(r, 800));
 
-    const user = db.users.find((u) => u.email === email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = db.users.find((u) => String(u.email).toLowerCase() === normalizedEmail);
     if (!user) {
       return { data: { user: null, session: null }, error: { message: 'Invalid login credentials' } };
     }
     // Return auth_id as the identity so findByAuthId() can locate the profile
     const authId = user.auth_id || user.id;
-    currentAuthUser = { id: authId, email };
+    currentAuthUser = { id: authId, email: normalizedEmail };
     return {
-      data: { user: { id: authId, email }, session: { access_token: 'mock-jwt' } },
+      data: {
+        user: { id: authId, email: normalizedEmail },
+        session: { access_token: 'mock-jwt', user: currentAuthUser },
+      },
       error: null,
     };
   },
-  async signInWithOtp({ phone }: { phone: string }) {
-    await new Promise(r => setTimeout(r, 600));
-    console.log(`[Mock] OTP '123456' sent to ${phone}`);
-    return { data: {}, error: null };
-  },
-  async verifyOtp({ phone, token }: { phone: string; token: string; type: string }) {
-    await new Promise(r => setTimeout(r, 800));
-    if (token !== '123456') {
-      return { data: { user: null, session: null }, error: { message: 'Invalid OTP' } };
-    }
-    const user = db.users.find((u) => u.phone === phone);
-    if (!user) {
-      return { data: { user: null, session: null }, error: { message: 'No profile found for this phone' } };
-    }
-    const authId = user.auth_id || user.id;
-    currentAuthUser = { id: authId, email: user.email };
+  async verifyOtp() {
     return {
-      data: { user: { id: authId, email: user.email }, session: { access_token: 'mock-jwt' } },
-      error: null,
+      data: { user: null, session: null },
+      error: { message: 'Email verification is unavailable in offline demo mode.' },
     };
   },
-  async signOut() {
+  async resend() {
+    return {
+      data: {},
+      error: { message: 'Email delivery is unavailable in offline demo mode.' },
+    };
+  },
+  async signOut(_options?: { scope?: string }) {
     currentAuthUser = null;
     return { error: null };
   },
   async resetPasswordForEmail(_email: string) {
-    return { data: {}, error: null };
+    return {
+      data: null,
+      error: { message: 'Email delivery is unavailable in offline demo mode.' },
+    };
+  },
+  async updateUser(_attributes: { password?: string; nonce?: string }) {
+    if (!currentAuthUser) {
+      return { data: { user: null }, error: { message: 'No verified session is active.' } };
+    }
+    return { data: { user: currentAuthUser }, error: null };
+  },
+  async reauthenticate() {
+    return { error: { message: 'Email verification is unavailable in offline demo mode.' } };
   },
   async getUser() {
     return { data: { user: currentAuthUser }, error: null };
@@ -301,6 +342,28 @@ export const mockSupabase: any = {
         (u) => u.user_type === 'driver' && u.current_status === 'online'
       );
       return { data: clone(drivers.slice(0, params?.radius_km ? drivers.length : drivers.length)), error: null };
+    }
+    if (fn === 'get_driver_public_franchise') {
+      const record = db.franchise_applications
+        .filter((row) => row.driver_id === params?.p_driver_id && (row.status === 'issued' || row.mtop_number))
+        .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+      if (!record) return { data: [], error: null };
+      const expired = record.expiry_date && new Date(`${record.expiry_date}T23:59:59`).getTime() < Date.now();
+      const protectedStatus = ['terminated', 'transferred', 'pending_renewal'].includes(record.franchise_status);
+      return {
+        data: [clone({
+          driver_id: record.driver_id,
+          mtop_number: record.mtop_number,
+          body_number: record.body_number,
+          plate_number: record.plate_number,
+          franchise_status: expired && !protectedStatus ? 'expired' : (record.franchise_status || 'active'),
+          current_holder_name: record.current_holder_name || record.driver_name,
+          expiry_date: record.expiry_date || null,
+          last_renewed_at: record.last_renewed_at || null,
+          renewal_year: record.renewal_year || null,
+        })],
+        error: null,
+      };
     }
     return { data: [], error: null };
   },

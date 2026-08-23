@@ -17,6 +17,22 @@ export type FranchiseStatus =
 
 export type FranchiseType = 'new' | 'renewal';
 
+/** Operational standing of an issued franchise (separate from application review). */
+export type FranchiseRecordStatus =
+  | 'active'
+  | 'expired'
+  | 'terminated'
+  | 'pending_renewal'
+  | 'transferred';
+
+export type FranchiseEventType =
+  | 'renewal'
+  | 'succession_transfer'
+  | 'third_party_transfer'
+  | 'termination';
+
+export type SuccessorRelationship = 'spouse' | 'unmarried_eldest_child';
+
 // Per-document verdict the admin records while reviewing an application.
 export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected';
 
@@ -49,6 +65,16 @@ export interface FranchiseApplication {
   payment_status: 'pending' | 'paid';
   fees: number;
   mtop_number: string | null;
+  /** TODA-assigned tricycle body number shown to passengers after matching. */
+  body_number?: string | null;
+  /** Operational standing of an issued franchise. */
+  franchise_status?: FranchiseRecordStatus | null;
+  original_holder_name?: string | null;
+  current_holder_name?: string | null;
+  issued_at?: string | null;
+  expiry_date?: string | null;
+  last_renewed_at?: string | null;
+  renewal_year?: number | null;
   remarks: string | null;
   // Set the moment an admin approves every submitted document.
   documents_verified_at?: string | null;
@@ -92,6 +118,41 @@ export const DOCUMENT_REVIEW_LABEL: Record<DocumentReviewStatus, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
 };
+
+export const FRANCHISE_RECORD_STATUS_LABEL: Record<FranchiseRecordStatus, string> = {
+  active: 'Active',
+  expired: 'Expired',
+  terminated: 'Terminated',
+  pending_renewal: 'Pending Renewal',
+  transferred: 'Transferred',
+};
+
+export interface FranchiseEvent {
+  id: string;
+  franchise_id: string;
+  event_type: FranchiseEventType;
+  from_holder: string | null;
+  to_holder: string | null;
+  relationship: SuccessorRelationship | 'third_party' | null;
+  reason: string | null;
+  effective_date: string;
+  agreement_number: string | null;
+  agreement_text: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface PublicDriverFranchise {
+  driver_id: string;
+  mtop_number: string | null;
+  body_number: string | null;
+  plate_number: string | null;
+  franchise_status: FranchiseRecordStatus;
+  current_holder_name: string | null;
+  expiry_date: string | null;
+  last_renewed_at: string | null;
+  renewal_year: number | null;
+}
 
 // Treats a missing review_status as "pending" so legacy rows behave sensibly.
 export const docReviewStatus = (doc: FranchiseDocument): DocumentReviewStatus =>

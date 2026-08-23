@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, View, StyleSheet, Animated, Dimensions, TouchableOpacity, Modal, TextInput } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useBooking } from '@/controllers/hooks/useBooking';
@@ -18,17 +31,47 @@ import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LocationService } from '@/models/services/LocationService';
-import { haversineDistance, estimateETA, formatETA } from '@/utils/locationUtils';
+import { estimateETA, formatDistance, formatETA, haversineDistance } from '@/utils/locationUtils';
 import { confirm, notify } from '@/utils/confirm';
 import { Location } from '@/models/types';
+import { FranchiseService } from '@/models/services/FranchiseService';
+import { PublicDriverFranchise, FRANCHISE_RECORD_STATUS_LABEL } from '@/models/entities/Franchise';
+import { DirectionsService } from '@/models/services/DirectionsService';
+import MapView, { AnimatedMarker, AnimatedRegion, Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 
 const { height } = Dimensions.get('window');
 const realtimeService = new RealtimeService();
 const bookingRepo = new BookingRepository();
 const userRepo = new UserRepository();
 const reportService = new ReportService();
+const franchiseService = new FranchiseService();
+const directionsService = new DirectionsService();
+
+const BOAC_CENTER = { latitude: 13.4452, longitude: 121.8401 };
+
+const RIDE_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#F1F4F2' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#6B756F' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#F1F4F2' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#E7EEE9' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#DDE5DF' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#D6E4DA' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#C8DDE4' }] },
+];
+
+const bearingBetween = (from: Location, to: Location): number => {
+  const lat1 = (from.latitude * Math.PI) / 180;
+  const lat2 = (to.latitude * Math.PI) / 180;
+  const deltaLng = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const y = Math.sin(deltaLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+  return (Math.atan2(y, x) * 180) / Math.PI;
+};
 
 export const ActiveTripScreen = () => {
+  const { height: screenHeight } = useWindowDimensions();
   const { currentBooking } = useBooking();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
@@ -37,11 +80,17 @@ export const ActiveTripScreen = () => {
   const chatUnread = useChatUnread(currentBooking?.id, me?.id);
 
   const [driver, setDriver] = useState<User | null>(null);
+  const [franchise, setFranchise] = useState<PublicDriverFranchise | null>(null);
   const [ratingVisible, setRatingVisible] = useState(false);
   const [stars, setStars] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [driverCoords, setDriverCoords] = useState<Location | null>(null);
+  const [lastDriverUpdate, setLastDriverUpdate] = useState<Date | null>(null);
+  const [roadPoints, setRoadPoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [mapReady, setMapReady] = useState(false);
+  const [followDriver, setFollowDriver] = useState(true);
+  const [driverHeading, setDriverHeading] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   // Report-driver sheet (opened from the rating modal or on its own).
   const [reportVisible, setReportVisible] = useState(false);
@@ -56,6 +105,17 @@ export const ActiveTripScreen = () => {
   const [payPhase, setPayPhase] = useState<'confirm' | 'processing' | 'success'>('confirm');
   const [payRef, setPayRef] = useState('');
   const autoPromptedPay = useRef(false);
+  const mapRef = useRef<any>(null);
+  const driverMarkerRef = useRef<any>(null);
+  const previousDriverCoords = useRef<Location | null>(null);
+  const lastMarkerAnimationAt = useRef(Date.now());
+  const animatedDriverCoordinate = useRef(
+    new AnimatedRegion({
+      ...BOAC_CENTER,
+      latitudeDelta: 0,
+      longitudeDelta: 0,
+    })
+  ).current;
 
   const status = currentBooking?.status || 'accepted';
   const driverId = currentBooking?.driver_id || null;
@@ -63,6 +123,12 @@ export const ActiveTripScreen = () => {
   const driverName = driver?.name || 'Your driver';
   const plate = vehicle.plate_number || vehicle.plate || '—';
   const vehicleDesc = [vehicle.color, vehicle.model].filter(Boolean).join(' ') || 'FEDTODAB Tricycle';
+  const bodyNumber = franchise?.body_number || vehicle.body_number || 'Unassigned';
+  const franchiseStatus = franchise?.franchise_status
+    ? franchise.franchise_status === 'active' && franchise.last_renewed_at
+      ? `Renewed ${franchise.renewal_year || new Date(franchise.last_renewed_at).getFullYear()} · Active`
+      : FRANCHISE_RECORD_STATUS_LABEL[franchise.franchise_status]
+    : 'Record unavailable';
 
   const paymentMethod = currentBooking?.payment_method || 'cash';
   const isEMoney = paymentMethod !== 'cash';
@@ -72,6 +138,21 @@ export const ActiveTripScreen = () => {
   const onlineUnpaid = isOnline && currentBooking?.payment_status !== 'completed';
   const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'online' ? 'Online' : 'cash';
   const fareText = `₱${(currentBooking?.total_fare ?? 0).toFixed(2)}`;
+  const pickupCoord = currentBooking?.pickup_location
+    ? {
+        latitude: currentBooking.pickup_location.latitude,
+        longitude: currentBooking.pickup_location.longitude,
+      }
+    : null;
+  const dropoffCoord = currentBooking?.dropoff_location
+    ? {
+        latitude: currentBooking.dropoff_location.latitude,
+        longitude: currentBooking.dropoff_location.longitude,
+      }
+    : null;
+  const trackingTarget = status === 'in-transit' || status === 'completed' ? dropoffCoord : pickupCoord;
+  const canUseNativeMap = Platform.OS !== 'web' && !!MapView;
+  const maxPanelHeight = Math.max(420, Math.min(560, screenHeight * 0.62));
 
   // Animation for the tracking card
   const slideAnim = useRef(new Animated.Value(height * 0.3)).current;
@@ -103,33 +184,166 @@ export const ActiveTripScreen = () => {
     };
   }, [driverId]);
 
+  useEffect(() => {
+    let active = true;
+    if (!driverId) {
+      setFranchise(null);
+      return;
+    }
+    franchiseService
+      .getPublicDriverFranchise(driverId)
+      .then((record) => { if (active) setFranchise(record); })
+      .catch(() => { if (active) setFranchise(null); });
+    return () => { active = false; };
+  }, [driverId]);
+
   // Subscribe to the assigned driver's live location so we can show a moving
   // position + a live ETA to the pickup point. Falls back silently if the
   // driver isn't streaming yet.
   useEffect(() => {
     if (!driverId) return;
+    let active = true;
     const realtime = new RealtimeService();
     const locationService = new LocationService();
 
     locationService.getDriverLocation(driverId).then((loc) => {
-      if (loc) setDriverCoords(loc);
-    });
+      if (active && loc) {
+        setDriverCoords(loc);
+        setLastDriverUpdate(loc.timestamp ? new Date(loc.timestamp) : new Date());
+      }
+    }).catch(() => undefined);
 
     const key = realtime.subscribeToDriverLocation(driverId, (payload) => {
       const row = payload?.new;
       if (row?.latitude != null && row?.longitude != null) {
         setDriverCoords({ latitude: row.latitude, longitude: row.longitude, address: '' });
+        setLastDriverUpdate(row.timestamp ? new Date(row.timestamp) : new Date());
       }
     });
 
-    return () => realtime.unsubscribe(key);
+    return () => {
+      active = false;
+      realtime.unsubscribe(key);
+    };
   }, [driverId]);
 
-  // Live ETA from the driver's current coords to the passenger's pickup point.
-  const liveEtaMinutes =
-    driverCoords && currentBooking?.pickup_location
-      ? estimateETA(haversineDistance(driverCoords, currentBooking.pickup_location))
+  // Draw the actual road route for the booked trip. If Directions is
+  // unavailable, the map falls back to a clean pickup-to-drop-off segment.
+  useEffect(() => {
+    let active = true;
+    if (!pickupCoord || !dropoffCoord) {
+      setRoadPoints([]);
+      return;
+    }
+    directionsService
+      .getRoute(pickupCoord, dropoffCoord)
+      .then((route) => {
+        if (active) setRoadPoints(route?.points ?? []);
+      })
+      .catch(() => {
+        if (active) setRoadPoints([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    pickupCoord?.latitude,
+    pickupCoord?.longitude,
+    dropoffCoord?.latitude,
+    dropoffCoord?.longitude,
+  ]);
+
+  const centerTrackingMap = useCallback(
+    (animated = true) => {
+      if (!mapRef.current) return;
+      const points = [driverCoords, trackingTarget].filter(Boolean).map((point: any) => ({
+        latitude: point.latitude,
+        longitude: point.longitude,
+      }));
+
+      if (points.length > 1) {
+        mapRef.current.fitToCoordinates(points, {
+          edgePadding: {
+            top: 116,
+            right: 52,
+            bottom: Math.min(380, screenHeight * 0.48),
+            left: 52,
+          },
+          animated,
+        });
+      } else if (points.length === 1) {
+        mapRef.current.animateCamera(
+          { center: points[0], zoom: 16, pitch: 20 },
+          { duration: animated ? 650 : 0 }
+        );
+      }
+    },
+    [
+      driverCoords?.latitude,
+      driverCoords?.longitude,
+      trackingTarget?.latitude,
+      trackingTarget?.longitude,
+      screenHeight,
+    ]
+  );
+
+  // Interpolate between five-second GPS pings so the tricycle glides instead
+  // of teleporting. Camera following pauses as soon as the passenger pans.
+  useEffect(() => {
+    if (!driverCoords) return;
+    const previous = previousDriverCoords.current;
+    const now = Date.now();
+    const next = {
+      latitude: driverCoords.latitude,
+      longitude: driverCoords.longitude,
+      latitudeDelta: 0,
+      longitudeDelta: 0,
+    };
+
+    if (!previous) {
+      animatedDriverCoordinate.setValue(next);
+    } else {
+      if (haversineDistance(previous, driverCoords) > 0.003) {
+        setDriverHeading(bearingBetween(previous, driverCoords));
+      }
+      const duration = Math.min(4500, Math.max(900, (now - lastMarkerAnimationAt.current) * 0.9));
+      if (Platform.OS === 'android' && driverMarkerRef.current?.animateMarkerToCoordinate) {
+        driverMarkerRef.current.animateMarkerToCoordinate(next, duration);
+      } else {
+        animatedDriverCoordinate
+          .timing({ ...next, duration, useNativeDriver: false } as any)
+          .start();
+      }
+    }
+
+    previousDriverCoords.current = driverCoords;
+    lastMarkerAnimationAt.current = now;
+    if (mapReady && followDriver) centerTrackingMap(true);
+  }, [
+    animatedDriverCoordinate,
+    centerTrackingMap,
+    driverCoords?.latitude,
+    driverCoords?.longitude,
+    followDriver,
+    mapReady,
+  ]);
+
+  useEffect(() => {
+    if (mapReady) centerTrackingMap(false);
+  }, [centerTrackingMap, mapReady]);
+
+  // ETA switches from driver→pickup to driver→destination after pickup.
+  const liveDistanceKm =
+    driverCoords && trackingTarget
+      ? haversineDistance(driverCoords, { ...trackingTarget, address: '' })
       : null;
+  const liveEtaMinutes =
+    liveDistanceKm != null
+      ? estimateETA(liveDistanceKm, status === 'in-transit' ? 24 : 22)
+      : null;
+  const driverGpsFresh = Boolean(
+    lastDriverUpdate && Date.now() - lastDriverUpdate.getTime() < 30_000
+  );
 
   // Live booking updates (driver starts trip, completes, etc.) via realtime,
   // with a polling fallback for environments where realtime isn't published.
@@ -300,11 +514,26 @@ export const ActiveTripScreen = () => {
     }
   };
 
+  if (!currentBooking) {
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIcon}>
+          <MaterialCommunityIcons name="map-marker-off-outline" size={42} color={colors.primary} />
+        </View>
+        <Text style={styles.emptyTitle}>No active ride</Text>
+        <Text style={styles.emptyText}>Your next booked trip will appear here with live driver tracking.</Text>
+        <Button variant="primary" onPress={() => navigation.navigate('PassengerDashboard')}>
+          Back to home
+        </Button>
+      </View>
+    );
+  }
+
   const StatusBadge = ({ status }: { status: string }) => {
     const map: Record<string, { bg: string; dot: string; fg: string; label: string }> = {
-      accepted: { bg: '#E7F4E0', dot: '#3B634E', fg: '#3B634E', label: 'Driver is arriving' },
-      'in-transit': { bg: '#B6E4A8', dot: '#2A4638', fg: '#2A4638', label: 'On your way' },
-      completed: { bg: '#B6E4A8', dot: '#2A4638', fg: '#2A4638', label: 'Trip completed' },
+      accepted: { bg: colors.surface, dot: colors.success, fg: colors.text, label: 'Driver is on the way' },
+      'in-transit': { bg: colors.surface, dot: colors.primary, fg: colors.text, label: 'Heading to destination' },
+      completed: { bg: colors.surface, dot: colors.success, fg: colors.text, label: "You've arrived" },
     };
     const s = map[status] || map.accepted;
     return (
@@ -318,9 +547,99 @@ export const ActiveTripScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.mapView}>
-        <View style={styles.mapPlaceholder}>
-          <MaterialCommunityIcons name="map-outline" size={80} color={colors.textLight} style={{ opacity: 0.5 }} />
-        </View>
+        {canUseNativeMap ? (
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            provider={PROVIDER_GOOGLE}
+            customMapStyle={RIDE_MAP_STYLE}
+            initialRegion={{
+              latitude: driverCoords?.latitude ?? pickupCoord?.latitude ?? BOAC_CENTER.latitude,
+              longitude: driverCoords?.longitude ?? pickupCoord?.longitude ?? BOAC_CENTER.longitude,
+              latitudeDelta: 0.025,
+              longitudeDelta: 0.025,
+            }}
+            showsCompass={false}
+            showsMyLocationButton={false}
+            toolbarEnabled={false}
+            onMapReady={() => setMapReady(true)}
+            onPanDrag={() => setFollowDriver(false)}
+          >
+            {pickupCoord && dropoffCoord && (
+              <Polyline
+                coordinates={roadPoints.length > 1 ? roadPoints : [pickupCoord, dropoffCoord]}
+                strokeColor={status === 'accepted' ? 'rgba(59,99,78,0.38)' : colors.primary}
+                strokeWidth={status === 'accepted' ? 4 : 5}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+
+            {status === 'accepted' && driverCoords && pickupCoord && (
+              <Polyline
+                coordinates={[
+                  { latitude: driverCoords.latitude, longitude: driverCoords.longitude },
+                  pickupCoord,
+                ]}
+                strokeColor={colors.primaryDark}
+                strokeWidth={4}
+                lineDashPattern={[8, 7]}
+                lineCap="round"
+              />
+            )}
+
+            {pickupCoord && (
+              <Marker coordinate={pickupCoord} title="Pickup point" accessibilityLabel="Passenger pickup point">
+                <View style={styles.pickupMapMarker}>
+                  <MaterialCommunityIcons name="account" size={18} color="#FFFFFF" />
+                </View>
+              </Marker>
+            )}
+
+            {dropoffCoord && (
+              <Marker coordinate={dropoffCoord} title="Destination" accessibilityLabel="Trip destination">
+                <View style={styles.dropoffMapMarker}>
+                  <MaterialCommunityIcons name="flag-checkered" size={18} color="#FFFFFF" />
+                </View>
+              </Marker>
+            )}
+
+            {driverCoords && (
+              <AnimatedMarker
+                ref={driverMarkerRef}
+                coordinate={animatedDriverCoordinate as any}
+                anchor={{ x: 0.5, y: 0.5 }}
+                title={driverName}
+                description="Live driver location"
+                accessibilityLabel={`${driverName}'s live location`}
+                zIndex={20}
+              >
+                <View style={styles.driverMapMarker}>
+                  <View style={styles.driverMarkerHalo} />
+                  <View style={styles.driverMarkerBubble}>
+                    <TricycleIcon size={34} color="#FFFFFF" />
+                  </View>
+                  <View
+                    style={[
+                      styles.headingBadge,
+                      { transform: [{ rotate: `${driverHeading}deg` }] },
+                    ]}
+                  >
+                    <MaterialCommunityIcons name="navigation-variant" size={11} color="#FFFFFF" />
+                  </View>
+                </View>
+              </AnimatedMarker>
+            )}
+          </MapView>
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <View style={styles.webMapIcon}>
+              <MaterialCommunityIcons name="map-marker-path" size={38} color={colors.primary} />
+            </View>
+            <Text style={styles.webMapTitle}>Live map is available on mobile</Text>
+            <Text style={styles.webMapText}>Driver updates and trip status still sync here.</Text>
+          </View>
+        )}
         
         <IconButton 
           icon="chevron-left" 
@@ -328,23 +647,55 @@ export const ActiveTripScreen = () => {
           containerColor={colors.surface}
           style={styles.backBtn}
           onPress={() => navigation.navigate('PassengerDashboard')}
+          accessibilityLabel="Back to passenger home"
         />
 
-        <View style={styles.trackingOverlay}>
-          <StatusBadge status={currentBooking?.status || 'accepted'} />
+        {canUseNativeMap && (
+          <TouchableOpacity
+            style={[styles.recenterBtn, { bottom: maxPanelHeight + spacing.md }]}
+            onPress={() => {
+              setFollowDriver(true);
+              centerTrackingMap(true);
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Recenter map on driver"
+          >
+            <MaterialCommunityIcons
+              name={followDriver ? 'navigation-variant' : 'crosshairs-gps'}
+              size={22}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.trackingOverlay} accessibilityLiveRegion="polite">
+          <StatusBadge status={status} />
           {liveEtaMinutes != null && (
             <View style={styles.liveEtaChip}>
               <View style={styles.liveDot} />
               <Text style={styles.liveEtaText}>
-                Driver {formatETA(liveEtaMinutes)} away
+                {status === 'in-transit' ? 'Arrival' : 'Pickup'} in {formatETA(liveEtaMinutes)}
+                {liveDistanceKm != null ? ` · ${formatDistance(liveDistanceKm)}` : ''}
               </Text>
+            </View>
+          )}
+          {driverId && !driverCoords && (
+            <View style={styles.liveEtaChip}>
+              <ActivityIndicator size={12} color={colors.primary} />
+              <Text style={styles.liveEtaText}>Connecting to driver's GPS…</Text>
             </View>
           )}
         </View>
       </View>
 
-      <Animated.View style={[styles.trackingCard, { transform: [{ translateY: slideAnim }] }]}>
+      <Animated.View style={[styles.trackingCard, { maxHeight: maxPanelHeight, transform: [{ translateY: slideAnim }] }]}>
         <View style={styles.handle} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          contentContainerStyle={styles.panelContent}
+        >
         
         <View style={styles.driverSection}>
           <TouchableOpacity
@@ -356,12 +707,13 @@ export const ActiveTripScreen = () => {
               })
             }
             activeOpacity={0.75}
+            accessibilityRole="button"
             accessibilityLabel="View driver profile"
           >
             <Surface style={styles.driverAvatar} elevation={2}>
               <MaterialCommunityIcons name="account-tie" size={36} color={colors.primary} />
             </Surface>
-            <View>
+            <View style={styles.driverTextBlock}>
               <Text style={styles.driverName}>{driverName}</Text>
               <View style={styles.ratingRow}>
                 <MaterialCommunityIcons name="star" size={14} color="#FBBF24" style={{ marginRight: 4 }} />
@@ -377,10 +729,10 @@ export const ActiveTripScreen = () => {
             </View>
           </TouchableOpacity>
           <View style={styles.driverActions}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleCallDriver} activeOpacity={0.76} accessibilityLabel="Call driver">
+            <TouchableOpacity style={styles.actionBtn} onPress={handleCallDriver} activeOpacity={0.76} accessibilityRole="button" accessibilityLabel="Call driver">
               <MaterialCommunityIcons name="phone" size={20} color={colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleMessageDriver} activeOpacity={0.76} accessibilityLabel="Message driver">
+            <TouchableOpacity style={styles.actionBtn} onPress={handleMessageDriver} activeOpacity={0.76} accessibilityRole="button" accessibilityLabel="Message driver">
               <MaterialCommunityIcons name="message-text" size={20} color={colors.primary} />
               {chatUnread > 0 && (
                 <View style={styles.chatBadge}>
@@ -395,6 +747,26 @@ export const ActiveTripScreen = () => {
           <View style={styles.vehicleInfo}>
             <Text style={styles.vehiclePlate}>{plate}</Text>
             <Text style={styles.vehicleDesc}>{vehicleDesc} • FEDTODAB</Text>
+            <View style={styles.gpsStatusRow}>
+              <View style={[styles.gpsStatusDot, !driverGpsFresh && styles.gpsStatusDotWaiting]} />
+              <Text style={styles.gpsStatusText}>
+                {!lastDriverUpdate
+                  ? 'Waiting for driver GPS'
+                  : driverGpsFresh
+                  ? 'Live GPS connected'
+                  : 'Location signal delayed'}
+              </Text>
+            </View>
+            <View style={styles.franchiseMetaRow}>
+              <View style={styles.bodyBadge}>
+                <Text style={styles.bodyBadgeLabel}>BODY</Text>
+                <Text style={styles.bodyBadgeValue}>{bodyNumber}</Text>
+              </View>
+              <View style={styles.franchiseBadge}>
+                <MaterialCommunityIcons name="shield-check-outline" size={14} color={colors.primaryDark} />
+                <Text style={styles.franchiseBadgeText}>{franchiseStatus}</Text>
+              </View>
+            </View>
           </View>
           <TricycleIcon size={56} color={colors.primaryDark} />
         </View>
@@ -409,7 +781,16 @@ export const ActiveTripScreen = () => {
               <View style={[styles.progressDot, step.active && styles.progressDotActive]}>
                 {step.active && <View style={styles.progressDotInner} />}
               </View>
-              {index < 2 && <View style={[styles.progressLine, index === 0 && styles.progressLineActive]} />}
+              {index < 2 && (
+                <View
+                  style={[
+                    styles.progressLine,
+                    ((index === 0 && (status === 'in-transit' || status === 'completed')) ||
+                      (index === 1 && status === 'completed')) &&
+                      styles.progressLineActive,
+                  ]}
+                />
+              )}
               <Text style={[styles.progressLabel, step.active && styles.progressLabelActive]}>{step.label}</Text>
             </View>
           ))}
@@ -431,6 +812,16 @@ export const ActiveTripScreen = () => {
               <Text style={styles.detailLabel}>Estimated Fare</Text>
               <Text style={[styles.detailValue, typography.currency]}>
                 ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '0.00'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="account-multiple-outline" size={24} color={colors.primary} style={styles.detailIcon} />
+            <View style={styles.detailTextContainer}>
+              <Text style={styles.detailLabel}>Passengers &amp; Payment</Text>
+              <Text style={styles.detailValue}>
+                {currentBooking?.passenger_count ?? 1} passenger{(currentBooking?.passenger_count ?? 1) > 1 ? 's' : ''}
+                {' • '}{paymentMethod === 'cash' ? 'Pay driver in cash' : providerLabel}
               </Text>
             </View>
           </View>
@@ -512,6 +903,7 @@ export const ActiveTripScreen = () => {
         >
           Emergency SOS
         </Button>
+        </ScrollView>
       </Animated.View>
 
       {/* ── Demo online payment sheet (collected at pickup) ─────────── */}
@@ -706,9 +1098,131 @@ export const ActiveTripScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  mapView: { flex: 1, backgroundColor: '#CBD5E1', position: 'relative' },
-  mapPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.background,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: { ...typography.h2, color: colors.text, marginBottom: spacing.sm },
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    maxWidth: 320,
+  },
+  mapView: { flex: 1, backgroundColor: '#E7EEE9', position: 'relative' },
+  map: { ...StyleSheet.absoluteFillObject },
+  mapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.surfaceAlt,
+  },
+  webMapIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    marginBottom: spacing.md,
+  },
+  webMapTitle: { ...typography.h3, color: colors.text, textAlign: 'center' },
+  webMapText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  pickupMapMarker: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    ...shadows.md,
+  },
+  dropoffMapMarker: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    ...shadows.md,
+  },
+  driverMapMarker: {
+    width: 66,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverMarkerHalo: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(59,99,78,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,99,78,0.28)',
+  },
+  driverMarkerBubble: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    ...shadows.lg,
+  },
+  headingBadge: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   backBtn: { position: 'absolute', top: layout.headerTop - 10, left: 20, zIndex: 10, ...shadows.md },
+  recenterBtn: {
+    position: 'absolute',
+    right: spacing.md,
+    zIndex: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    ...shadows.md,
+  },
   trackingOverlay: { position: 'absolute', top: layout.headerTop, alignSelf: 'center', zIndex: 5 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surface, ...shadows.md },
   liveEtaChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface, ...shadows.sm },
@@ -716,10 +1230,23 @@ const styles = StyleSheet.create({
   liveEtaText: { ...typography.label, fontSize: 12, color: colors.text },
   statusDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   statusText: { ...typography.label, fontSize: 13 },
-  trackingCard: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: 40, ...shadows.xl },
-  handle: { width: 40, height: 5, backgroundColor: colors.borderLight, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.lg },
-  driverSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
-  driverInfo: { flexDirection: 'row', alignItems: 'center' },
+  trackingCard: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 0,
+    ...shadows.xl,
+  },
+  handle: { width: 40, height: 5, backgroundColor: colors.border, borderRadius: 3, alignSelf: 'center', marginBottom: spacing.sm },
+  panelContent: { paddingBottom: 36 },
+  driverSection: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  driverInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: spacing.sm },
+  driverTextBlock: { flex: 1, minWidth: 0 },
   driverAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryLight, justifyContent: 'center', alignItems: 'center', marginRight: spacing.md },
   driverName: { ...typography.title, fontSize: 18, color: colors.text },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -741,14 +1268,24 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   chatBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  vehicleCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryLight, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.lg },
+  vehicleCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.primaryLight, padding: spacing.md, borderRadius: radius.lg, marginBottom: spacing.md },
   vehicleInfo: { flex: 1 },
   vehiclePlate: { ...typography.number, fontSize: 18, color: colors.primaryDark, letterSpacing: 0 },
   vehicleDesc: { ...typography.body, fontSize: 12, color: colors.primary, marginTop: 2 },
+  gpsStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  gpsStatusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  gpsStatusDotWaiting: { backgroundColor: colors.warning },
+  gpsStatusText: { ...typography.bodySmall, fontSize: 10, color: colors.textSecondary },
+  franchiseMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
+  bodyBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 28, borderRadius: radius.pill, backgroundColor: colors.surface, paddingHorizontal: 9 },
+  bodyBadgeLabel: { ...typography.labelSmall, fontSize: 8, color: colors.textMuted, letterSpacing: 0.8 },
+  bodyBadgeValue: { ...typography.label, fontSize: 11, color: colors.primaryDark },
+  franchiseBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28, borderRadius: radius.pill, backgroundColor: colors.surface, paddingHorizontal: 9 },
+  franchiseBadgeText: { ...typography.labelSmall, fontSize: 10, color: colors.primaryDark },
   routeProgress: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     paddingHorizontal: spacing.xs,
   },
   progressStep: {
@@ -786,7 +1323,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderLight,
   },
   progressLineActive: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primary,
   },
   progressLabel: {
     ...typography.body,
@@ -798,7 +1335,7 @@ const styles = StyleSheet.create({
   progressLabelActive: {
     color: colors.text,
   },
-  tripDetails: { marginBottom: spacing.xl },
+  tripDetails: { marginBottom: spacing.md },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
   detailIcon: { marginRight: spacing.md },
   detailTextContainer: { flex: 1 },

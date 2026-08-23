@@ -32,6 +32,18 @@ const saveCsv = async (csvContent: string, fileName: string): Promise<void> => {
 };
 
 export class ExportService {
+  static async exportRowsToCSV(
+    rows: Array<Record<string, unknown>>,
+    filePrefix: string
+  ): Promise<void> {
+    if (!rows.length) throw new Error('There is no report data to export.');
+    const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+    const csvContent = [headers, ...rows.map((row) => headers.map((header) => row[header]))]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\n');
+    await saveCsv(csvContent, `${filePrefix}_${Date.now()}.csv`);
+  }
+
   static async exportBookingsToCSV(bookings: Booking[]): Promise<void> {
     try {
       const headers = ['ID', 'Passenger', 'Driver', 'Pickup', 'Dropoff', 'Fare', 'Status', 'Date'];

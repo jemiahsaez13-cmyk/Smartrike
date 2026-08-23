@@ -105,6 +105,18 @@ export const AddressBookScreen = () => {
                 </Text>
               )}
               <Text style={styles.address}>{item.full_address}</Text>
+              <View style={[styles.pinMeta, item.latitude == null || item.longitude == null ? styles.pinMetaMissing : null]}>
+                <MaterialCommunityIcons
+                  name={item.latitude != null && item.longitude != null ? 'map-marker-check-outline' : 'map-marker-alert-outline'}
+                  size={15}
+                  color={item.latitude != null && item.longitude != null ? colors.success : colors.error}
+                />
+                <Text style={[styles.pinMetaText, item.latitude == null || item.longitude == null ? styles.pinMetaTextMissing : null]}>
+                  {item.latitude != null && item.longitude != null
+                    ? `Pinned at ${item.latitude.toFixed(6)}, ${item.longitude.toFixed(6)}`
+                    : 'Pin required — edit this address before using it'}
+                </Text>
+              </View>
               {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
 
               <View style={styles.cardActions}>
@@ -122,7 +134,9 @@ export const AddressBookScreen = () => {
                   activeOpacity={0.7}
                 >
                   <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textSecondary} />
-                  <Text style={styles.actionText}>Edit</Text>
+                  <Text style={styles.actionText}>
+                    {item.latitude == null || item.longitude == null ? 'Edit & pin' : 'Edit'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item)} activeOpacity={0.7}>
                   <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
@@ -174,6 +188,14 @@ const styles = StyleSheet.create({
   defaultBadgeText: { ...typography.labelSmall, color: '#fff', fontSize: 9, letterSpacing: 0.5, fontWeight: '800' },
   recipient: { ...typography.label, color: colors.text, fontSize: 14, marginBottom: 2 },
   address: { ...typography.body, color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
+  pinMeta: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4,
+    marginTop: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 5,
+    borderRadius: radius.pill, backgroundColor: colors.primarySoft,
+  },
+  pinMetaMissing: { backgroundColor: colors.errorLight },
+  pinMetaText: { ...typography.labelSmall, color: colors.success, fontSize: 10, fontWeight: '700' },
+  pinMetaTextMissing: { color: colors.error },
   notes: { ...typography.bodySmall, color: colors.textMuted, fontSize: 12, marginTop: 4, fontStyle: 'italic' },
   cardActions: {
     flexDirection: 'row', gap: spacing.md, marginTop: spacing.md,

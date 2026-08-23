@@ -12,6 +12,12 @@ import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
+import {
+  isValidEmail,
+  isValidPassword,
+  normalizeEmail,
+  PASSWORD_REQUIREMENTS,
+} from '@/utils/validationUtils';
 
 export const EmailRegisterScreen = () => {
   const [firstName, setFirstName] = useState('');
@@ -21,6 +27,11 @@ export const EmailRegisterScreen = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [userType, setUserType] = useState<'passenger' | 'driver'>('passenger');
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [plateNumber, setPlateNumber] = useState('');
+  const [vehicleMake, setVehicleMake] = useState('');
+  const [vehicleModel, setVehicleModel] = useState('');
+  const [todaMembership, setTodaMembership] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -44,26 +55,30 @@ export const EmailRegisterScreen = () => {
       .map((s) => s.trim())
       .filter(Boolean)
       .join(' ');
-    const cleanEmail = email.trim();
+    const cleanEmail = normalizeEmail(email);
 
     if (!firstName.trim() || !lastName.trim() || !cleanEmail || !password) {
       notify('Missing details', 'Please fill in your first name, last name, email, and password.');
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
+    if (!isValidEmail(cleanEmail)) {
       notify('Invalid email', 'Please enter a valid email address.');
       return;
     }
 
-    if (password.length < 6) {
-      notify('Weak password', 'Password must be at least 6 characters.');
+    if (!isValidPassword(password).valid) {
+      notify('Weak password', PASSWORD_REQUIREMENTS);
       return;
     }
 
     if (password !== confirmPassword) {
       notify('Passwords do not match', 'Please re-type the same password in both fields.');
+      return;
+    }
+
+    if (userType === 'driver' && (!licenseNumber.trim() || !plateNumber.trim())) {
+      notify('Driver details required', 'Enter your license number and vehicle plate number.');
       return;
     }
 
@@ -76,16 +91,23 @@ export const EmailRegisterScreen = () => {
       const result: any = await register(cleanEmail, password, {
         name: cleanName,
         user_type: userType,
+        ...(userType === 'driver'
+          ? {
+              license_number: licenseNumber.trim(),
+              toda_membership: todaMembership.trim(),
+              vehicle_details: {
+                plate_number: plateNumber.trim().toUpperCase(),
+                make: vehicleMake.trim(),
+                model: vehicleModel.trim(),
+              },
+            }
+          : {}),
       });
       if (result?.needsEmailConfirmation) {
-        notify(
-          'Confirm your email',
-          'We sent a confirmation link to your email. Tap it, then sign in to continue.'
-        );
-        navigation.navigate('EmailLogin');
+        navigation.navigate('EmailVerification', { email: cleanEmail });
         return;
       }
-      // Success: AppNavigator auto-routes into the app when isAuthenticated flips.
+      await notify('Account created', 'Your account is ready. Welcome to Smart Trike.');
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Registration failed.';
       notify('Registration error', msg);
@@ -160,6 +182,9 @@ export const EmailRegisterScreen = () => {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
               left={<TextInput.Icon icon="email-outline" color={colors.textMuted} />}
             />
 
@@ -169,6 +194,8 @@ export const EmailRegisterScreen = () => {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              autoComplete="new-password"
+              textContentType="newPassword"
               left={<TextInput.Icon icon="lock-outline" color={colors.textMuted} />}
               right={
                 <TextInput.Icon
@@ -179,12 +206,16 @@ export const EmailRegisterScreen = () => {
               }
             />
 
+            <Text style={styles.passwordHint}>{PASSWORD_REQUIREMENTS}</Text>
+
             <Input
               label="Confirm password"
               placeholder="••••••••"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}
+              autoComplete="new-password"
+              textContentType="newPassword"
               left={<TextInput.Icon icon="lock-check-outline" color={colors.textMuted} />}
               right={
                 <TextInput.Icon
@@ -216,6 +247,51 @@ export const EmailRegisterScreen = () => {
               ))}
             </View>
 
+            {userType === 'driver' && (
+              <View style={styles.driverDetails}>
+                <Text style={styles.sectionLabel}>DRIVER DETAILS</Text>
+                <Input
+                  label="License number"
+                  placeholder="D01-XX-XXXXXX"
+                  value={licenseNumber}
+                  onChangeText={setLicenseNumber}
+                  autoCapitalize="characters"
+                  left={<TextInput.Icon icon="card-account-details-outline" color={colors.textMuted} />}
+                />
+                <Input
+                  label="Vehicle plate number"
+                  placeholder="123 ABC"
+                  value={plateNumber}
+                  onChangeText={setPlateNumber}
+                  autoCapitalize="characters"
+                  left={<TextInput.Icon icon="tricycle" color={colors.textMuted} />}
+                />
+                <View style={styles.nameRow}>
+                  <Input
+                    label="Vehicle make (optional)"
+                    placeholder="Kawasaki"
+                    value={vehicleMake}
+                    onChangeText={setVehicleMake}
+                    containerStyle={styles.nameField}
+                  />
+                  <Input
+                    label="Model (optional)"
+                    placeholder="Barako"
+                    value={vehicleModel}
+                    onChangeText={setVehicleModel}
+                    containerStyle={styles.nameField}
+                  />
+                </View>
+                <Input
+                  label="TODA membership ID (optional)"
+                  placeholder="TODA-12345"
+                  value={todaMembership}
+                  onChangeText={setTodaMembership}
+                  left={<TextInput.Icon icon="badge-account-horizontal-outline" color={colors.textMuted} />}
+                />
+              </View>
+            )}
+
             <TouchableOpacity
               style={styles.termsRow}
               onPress={() => setAgreedToTerms(!agreedToTerms)}
@@ -238,7 +314,7 @@ export const EmailRegisterScreen = () => {
 
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account?  </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('EmailLogin')}>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
                 <Text style={styles.footerLink}>Sign In</Text>
               </TouchableOpacity>
             </View>
@@ -297,10 +373,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  passwordHint: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+  },
   typeSelector: {
     flexDirection: 'row',
     gap: spacing.md,
     marginBottom: spacing.lg,
+  },
+  driverDetails: {
+    marginBottom: spacing.sm,
   },
   typeOption: {
     flex: 1,

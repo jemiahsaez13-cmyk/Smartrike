@@ -48,6 +48,7 @@ export interface Driver extends User {
 
 export interface VehicleDetails {
   plate_number: string;
+  body_number?: string | null;
   make: string;
   model: string;
   year: number;

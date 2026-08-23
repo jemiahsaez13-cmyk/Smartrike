@@ -176,8 +176,24 @@ export const PassengerDashboard = () => {
             <>
               <View style={styles.activeTripHeader}>
                 <View style={styles.activeBadge}>
-                  <MaterialCommunityIcons name="radar" size={16} color={colors.success} />
-                  <Text style={styles.activeBadgeText}>ON THE WAY</Text>
+                  <MaterialCommunityIcons
+                    name={
+                      currentBooking.status === 'pending'
+                        ? 'radar'
+                        : currentBooking.status === 'in-transit'
+                        ? 'navigation-variant'
+                        : 'bike-fast'
+                    }
+                    size={16}
+                    color={colors.success}
+                  />
+                  <Text style={styles.activeBadgeText}>
+                    {currentBooking.status === 'pending'
+                      ? 'FINDING A DRIVER'
+                      : currentBooking.status === 'in-transit'
+                      ? 'TRIP IN PROGRESS'
+                      : 'DRIVER ON THE WAY'}
+                  </Text>
                 </View>
                 <Text style={[styles.activeFare, typography.currency]}>
                   ₱{(currentBooking.total_fare || 0).toFixed(2)}
@@ -198,9 +214,11 @@ export const PassengerDashboard = () => {
 
               <Button
                 variant="primary"
-                onPress={() => navigation.navigate('ActiveTrip')}
+                onPress={() =>
+                  navigation.navigate(currentBooking.status === 'pending' ? 'ConfirmBooking' : 'ActiveTrip')
+                }
               >
-                Track Active Ride
+                {currentBooking.status === 'pending' ? 'View Driver Search' : 'Track Active Ride'}
               </Button>
             </>
           ) : (

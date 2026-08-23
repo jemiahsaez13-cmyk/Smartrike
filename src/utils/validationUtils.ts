@@ -1,6 +1,14 @@
 export function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const normalized = normalizeEmail(email);
+  return normalized.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized);
 }
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export const PASSWORD_REQUIREMENTS =
+  'Use at least 8 characters with an uppercase letter, a lowercase letter, and a number.';
 
 export function isValidPhilippinePhone(phone: string): boolean {
   return /^(09|\+639)\d{9}$/.test(phone.trim());

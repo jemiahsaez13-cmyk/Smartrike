@@ -11,8 +11,10 @@ import { Button } from '@/views/components/common/Button';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BookingRepository } from '@/models/repositories/BookingRepository';
 
 const realtimeService = new RealtimeService();
+const bookingRepo = new BookingRepository();
 
 export const ConfirmBookingScreen = () => {
   const { currentBooking } = useBooking();
@@ -45,16 +47,28 @@ export const ConfirmBookingScreen = () => {
     breatheLoop.start();
 
     let channelKey: string | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
     if (currentBooking?.id) {
       channelKey = realtimeService.subscribeToBooking(currentBooking.id, (payload) => {
         if (payload?.new) dispatch(updateBookingStatus(payload.new));
       });
+      // Realtime can briefly disconnect on mobile networks. Polling keeps the
+      // matching screen from getting stuck after a driver has already accepted.
+      poll = setInterval(() => {
+        bookingRepo
+          .findById(currentBooking.id)
+          .then((fresh) => {
+            if (fresh) dispatch(updateBookingStatus(fresh));
+          })
+          .catch(() => undefined);
+      }, 6000);
     }
 
     return () => {
       radarAnimation.stop();
       breatheLoop.stop();
       if (channelKey) realtimeService.unsubscribe(channelKey);
+      if (poll) clearInterval(poll);
     };
   }, [currentBooking?.id, dispatch]);
 
@@ -170,7 +184,13 @@ export const ConfirmBookingScreen = () => {
             </View>
           </View>
           <View style={styles.fareRow}>
-            <Text style={styles.fareLabel}>Estimated fare</Text>
+            <View>
+              <Text style={styles.fareLabel}>Estimated total fare</Text>
+              <Text style={styles.fareMeta}>
+                {currentBooking?.passenger_count ?? 1} passenger{(currentBooking?.passenger_count ?? 1) > 1 ? 's' : ''}
+                {' • '}{currentBooking?.payment_method === 'cash' ? 'Pay driver in cash' : 'Online payment'}
+              </Text>
+            </View>
             <Text style={[styles.fareValue, typography.currency]}>₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '0.00'}</Text>
           </View>
         </View>
@@ -297,6 +317,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   fareLabel: { ...typography.label, fontSize: 13, color: colors.textSecondary },
+  fareMeta: { ...typography.bodySmall, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   fareValue: { ...typography.number, fontSize: 22, color: colors.primary },
 
   footer: { paddingTop: spacing.md },

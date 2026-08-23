@@ -8,23 +8,19 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { updateProfile } from '@/controllers/slices/authSlice';
-import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { notify } from '@/utils/confirm';
 import { Input } from '@/views/components/common/Input';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
-const addressRepo = new AddressRepository();
-
 // One-time onboarding shown to brand-new accounts (including Google sign-in)
 // before they can use the app. Pre-fills anything we already know so existing
-// detail (name/phone from a registration form) only needs confirming.
+// detail (such as a name from Google) only needs confirming.
 export const ProfileSetupScreen = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
 
   const [photo, setPhoto] = useState<string | null>(user?.profile_photo_url ?? null);
   const [name, setName] = useState(user?.name ?? '');
-  const [phone, setPhone] = useState(user?.phone ?? '');
   const [address, setAddress] = useState(user?.home_address ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -52,44 +48,24 @@ export const ProfileSetupScreen = () => {
 
   const handleSave = async () => {
     const cleanName = name.trim();
-    const cleanPhone = phone.trim();
     const cleanAddress = address.trim();
 
     if (!cleanName) return notify('Name required', 'Please enter your full name.');
-    if (!cleanPhone || !/^[0-9+()\-\s]{7,}$/.test(cleanPhone)) {
-      return notify('Phone required', 'Please enter a valid contact number.');
-    }
     if (!cleanAddress) return notify('Address required', 'Please enter your home address.');
 
     setSaving(true);
     try {
-      const saved: any = await dispatch(
+      await dispatch(
         updateProfile({
           name: cleanName,
-          phone: cleanPhone,
           home_address: cleanAddress,
           profile_photo_url: photo || null,
           profile_completed: true,
         } as any)
       ).unwrap();
 
-      // Seed the saved-address book with this address as the default "Home".
-      // Best-effort: the gate already passed, so never block entry on this.
-      try {
-        await addressRepo.create({
-          user_id: saved?.id ?? user!.id,
-          label: 'Home',
-          recipient_name: cleanName,
-          recipient_phone: cleanPhone,
-          full_address: cleanAddress,
-          notes: null,
-          latitude: null,
-          longitude: null,
-          is_default: true,
-        });
-      } catch {
-        // Ignore — the address book can still be filled later from Account.
-      }
+      // Do not seed My Addresses from text alone. A reusable address is added
+      // only after its exact map pin is explicitly confirmed in AddressForm.
       // No navigation needed: flipping profile_completed swaps the navigator
       // from the onboarding stack into the main app automatically.
     } catch (e: any) {
@@ -111,7 +87,7 @@ export const ProfileSetupScreen = () => {
         >
           <Text style={styles.title}>Complete your profile</Text>
           <Text style={styles.subtitle}>
-            Just a few details so drivers can reach you and we can save your addresses.
+            Add your name and home address to finish setting up your account.
           </Text>
 
           {/* Avatar */}
@@ -136,9 +112,6 @@ export const ProfileSetupScreen = () => {
           <View style={styles.card}>
             <Text style={styles.fieldLabel}>Full Name</Text>
             <Input value={name} onChangeText={setName} placeholder="Your full name" autoCapitalize="words" />
-
-            <Text style={styles.fieldLabel}>Phone Number</Text>
-            <Input value={phone} onChangeText={setPhone} placeholder="09XX XXX XXXX" keyboardType="phone-pad" />
 
             <Text style={styles.fieldLabel}>Home Address</Text>
             <Input

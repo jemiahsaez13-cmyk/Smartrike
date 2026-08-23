@@ -9,11 +9,10 @@ import * as Linking from 'expo-linking';
 import { Text, TextInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAppDispatch } from '@/controllers/store';
-import { setDemoUserReducer } from '@/controllers/slices/authSlice';
-import { supabase, isSupabaseConfigured } from '@/config/supabase';
+import { supabase } from '@/config/supabase';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
+import { isValidEmail } from '@/utils/validationUtils';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Input } from '@/views/components/common/Input';
@@ -22,7 +21,6 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 
 export const LoginScreen = () => {
   const navigation = useNavigation<any>();
-  const dispatch = useAppDispatch();
   const { login, loading, checkAuth } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -47,15 +45,19 @@ export const LoginScreen = () => {
   const handleLogin = async () => {
     Keyboard.dismiss();
     const cleanEmail = email.trim();
-    const cleanPassword = password.trim();
 
-    if (!cleanEmail || !cleanPassword) {
+    if (!cleanEmail || !password) {
       notify('Missing info', 'Please enter both email and password to continue.');
       return;
     }
 
+    if (!isValidEmail(cleanEmail)) {
+      notify('Invalid email', 'Please enter a valid email address.');
+      return;
+    }
+
     try {
-      await login(cleanEmail, cleanPassword);
+      await login(cleanEmail, password);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
       notify('Sign in failed', msg);
@@ -108,28 +110,11 @@ export const LoginScreen = () => {
         'Google Sign-In Unavailable',
         msg
           ? `Google sign-in could not be completed.\n\n${msg}`
-          : 'Google login isn’t configured yet. Please sign in with email or phone.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
+          : 'Google login isn’t configured yet. Please sign in with email.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
       );
     } finally {
       setGoogleLoading(false);
     }
-  };
-
-  const handleDemoMode = (userType: 'passenger' | 'driver' | 'admin') => {
-    const demoUser: any = {
-      id: `demo-${userType}`,
-      auth_id: 'demo-auth',
-      user_type: userType,
-      email: `demo@${userType}.com`,
-      phone: '09123456789',
-      name: `Demo ${userType.charAt(0).toUpperCase() + userType.slice(1)}`,
-      profile_photo_url: null,
-      created_at: new Date(),
-      status: 'active',
-      rating: 0,
-      total_trips: 0,
-    };
-    dispatch(setDemoUserReducer(demoUser));
   };
 
   if (loading) return <Loading message="Authenticating..." />;
@@ -217,14 +202,6 @@ export const LoginScreen = () => {
 
             <View style={styles.altRow}>
               <TouchableOpacity
-                style={styles.altBtn}
-                activeOpacity={0.75}
-                onPress={() => navigation.navigate('PhoneLogin')}
-              >
-                <MaterialCommunityIcons name="phone-outline" size={20} color={colors.text} />
-                <Text style={styles.altBtnText}>Phone</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={[styles.altBtn, googleLoading && { opacity: 0.6 }]}
                 activeOpacity={0.75}
                 onPress={handleGoogleLogin}
@@ -235,37 +212,9 @@ export const LoginScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Demo quick-login dispatches fake users that only exist in the
-                in-memory mock backend. Hide it when a real Supabase backend is
-                configured, since those accounts would fail RLS / show empty data. */}
-            {!isSupabaseConfigured && (
-              <View style={styles.demoBox}>
-                <Text style={styles.demoTitle}>QUICK ACCESS (DEMO)</Text>
-                <View style={styles.demoRow}>
-                  {(['passenger', 'driver', 'admin'] as const).map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[styles.demoChip, type === 'admin' && styles.demoChipAdmin]}
-                      onPress={() => handleDemoMode(type)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.demoChipText,
-                          type === 'admin' && styles.demoChipTextAdmin,
-                        ]}
-                      >
-                        {type.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
-
             <View style={styles.footer}>
               <Text style={styles.footerText}>New to Smart Trike?  </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <TouchableOpacity onPress={() => navigation.navigate('EmailRegister')}>
                 <Text style={styles.footerLink}>Create account</Text>
               </TouchableOpacity>
             </View>
@@ -387,48 +336,6 @@ const styles = StyleSheet.create({
   altBtnText: {
     ...typography.label,
     fontSize: 14,
-  },
-  demoBox: {
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    marginBottom: spacing.xl,
-  },
-  demoTitle: {
-    ...typography.labelSmall,
-    fontSize: 9,
-    letterSpacing: 2,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  demoRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  demoChip: {
-    flex: 1,
-    height: 34,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  demoChipAdmin: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  demoChipText: {
-    ...typography.labelSmall,
-    fontSize: 9,
-    color: colors.textSecondary,
-  },
-  demoChipTextAdmin: {
-    color: '#fff',
   },
   footer: {
     flexDirection: 'row',

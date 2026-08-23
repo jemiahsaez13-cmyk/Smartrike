@@ -21,7 +21,9 @@ export class RealtimeService {
     const key = `driver-${driverId}`;
     const channel = supabase.channel(`driver-location-${driverId}`)
       .on('postgres_changes', {
-        event: 'UPDATE',
+        // Listen for INSERT as well: a driver's very first GPS ping creates the
+        // row, and passengers should not have to wait for the second ping.
+        event: '*',
         schema: 'public',
         table: 'driver_locations',
         filter: `driver_id=eq.${driverId}`

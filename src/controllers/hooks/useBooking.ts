@@ -12,10 +12,25 @@ export const useBooking = () => {
       passengerId: string,
       pickup: Location,
       dropoff: Location,
-      options?: { notes?: string; paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online' }
+      options?: {
+        notes?: string;
+        paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online';
+        passengerCount?: number;
+        rideType?: 'standard' | 'priority';
+        distanceKm?: number;
+      }
     ) => {
       return dispatch(
-        createBooking({ passengerId, pickup, dropoff, notes: options?.notes, paymentMethod: options?.paymentMethod })
+        createBooking({
+          passengerId,
+          pickup,
+          dropoff,
+          notes: options?.notes,
+          paymentMethod: options?.paymentMethod,
+          passengerCount: options?.passengerCount,
+          rideType: options?.rideType,
+          distanceKm: options?.distanceKm,
+        })
       ).unwrap();
     },
     [dispatch]

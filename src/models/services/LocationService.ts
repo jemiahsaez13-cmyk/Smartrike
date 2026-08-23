@@ -48,14 +48,19 @@ export class LocationService {
     if (error) throw error;
   }
 
-  async getDriverLocation(driverId: string): Promise<Location | null> {
+  async getDriverLocation(driverId: string): Promise<(Location & { timestamp?: string }) | null> {
     const { data, error } = await supabase
       .from('driver_locations')
       .select('*')
       .eq('driver_id', driverId)
       .single();
     if (error) return null;
-    return { latitude: data.latitude, longitude: data.longitude, address: '' };
+    return {
+      latitude: data.latitude,
+      longitude: data.longitude,
+      address: '',
+      timestamp: data.timestamp,
+    };
   }
 
   async watchPosition(callback: (location: Location) => void): Promise<any> {

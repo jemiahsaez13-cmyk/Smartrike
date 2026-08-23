@@ -128,7 +128,7 @@ export const AdminDashboard = () => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>PLATFORM PERFORMANCE</Text>
             <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('Analytics')}>
-              <Text style={styles.seeAllText}>Reports</Text>
+              <Text style={styles.seeAllText}>Analytics</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.grid}>
@@ -184,6 +184,39 @@ export const AdminDashboard = () => {
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Popular Places</Text>
                 <Text style={styles.queueLevel}>Add, edit & upload destination photos</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('FranchiseRegistry')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Franchise Registry</Text>
+                <Text style={styles.queueLevel}>Renewals, succession, transfers &amp; termination</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('InventoryManagement')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="package-variant-closed" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Association Inventory</Text>
+                <Text style={styles.queueLevel}>Monitor total, issued &amp; remaining stock</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('ManagementReports')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="file-chart-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Management Reports</Text>
+                <Text style={styles.queueLevel}>Franchise, renewal, transfer, violation &amp; stock reports</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>

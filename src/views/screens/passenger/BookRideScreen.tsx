@@ -12,7 +12,7 @@ import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { LocationChooser } from '@/views/screens/passenger/LocationChooser';
-import { FareCalculationService } from '@/models/services/FareCalculationService';
+import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from '@/models/services/FareCalculationService';
 import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
 import { DirectionsService, RoadRoute } from '@/models/services/DirectionsService';
@@ -261,8 +261,14 @@ export const BookRideScreen = () => {
         // Prefer real road distance; fall back to straight-line (haversine).
         const distance = roadRoute?.distanceKm ?? (await fareService.calculateDistance(ep, dropoff));
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
-        const standardFare = fareService.calculateFare(distance, baseFare, perKmRate, multiplier);
-        const fare = rideType === 'priority' ? standardFare + Math.max(12, standardFare * 0.15) : standardFare;
+        const fare = fareService.calculateFareForPassengers(
+          distance,
+          baseFare,
+          perKmRate,
+          passengers,
+          multiplier,
+          rideType
+        );
         const eta = Math.max(3, Math.ceil((distance / (rideType === 'priority' ? 30 : 25)) * 60));
         if (active) setEstimate({ fare, distance, eta });
       } catch {
@@ -273,7 +279,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType, roadRoute]);
+  }, [pickup, currentLocation, dropoff, rideType, roadRoute, passengers]);
 
   useEffect(() => {
     const destination = route.params?.destination;
@@ -323,15 +329,13 @@ export const BookRideScreen = () => {
     setChooserTarget(null);
   };
 
-  // Resolve a saved address to coordinates for the chooser (geocode if it has
-  // no stored pin). Returns null when it can't be located.
+  // Saved addresses are coordinate-authoritative. Never geocode their text
+  // again: a fresh lookup could move a location the rider already confirmed.
   const resolveSavedAddress = async (addr: SavedAddress): Promise<Location | null> => {
     if (addr.latitude != null && addr.longitude != null) {
       return { latitude: addr.latitude, longitude: addr.longitude, address: addr.full_address };
     }
-    const coord = await geo.forwardGeocode(addr.full_address);
-    if (coord) return { ...coord, address: addr.full_address };
-    void notify('Location not found', 'Couldn’t locate that saved address. Set it on the map instead.');
+    void notify('Pin required', 'Edit this saved address and confirm its exact location on the map before using it.');
     return null;
   };
 
@@ -392,24 +396,13 @@ export const BookRideScreen = () => {
     }
   };
 
-  // Fill the drop-off from a saved address. Uses its stored pin when present,
-  // otherwise forward-geocodes the text so a fare can still be computed.
+  // Fill the drop-off only from its stored, user-confirmed pin.
   const selectSavedAddress = async (addr: SavedAddress) => {
     if (addr.latitude != null && addr.longitude != null) {
       selectDestination({ latitude: addr.latitude, longitude: addr.longitude, address: addr.full_address });
       return;
     }
-    setResolving(true);
-    try {
-      const coord = await geo.forwardGeocode(addr.full_address);
-      if (coord) {
-        selectDestination({ ...coord, address: addr.full_address });
-      } else {
-        void notify('Location not found', 'Couldn’t locate that saved address on the map. Set it on the map instead.');
-      }
-    } finally {
-      setResolving(false);
-    }
+    void notify('Pin required', 'Edit this saved address and confirm its exact location on the map before using it.');
   };
 
   const handleBooking = async () => {
@@ -428,7 +421,13 @@ export const BookRideScreen = () => {
 
     const proceed = async (method: 'cash' | 'online') => {
       try {
-        await bookRide(user!.id, ep, dropoff, { notes, paymentMethod: method });
+        await bookRide(user!.id, ep, dropoff, {
+          notes,
+          paymentMethod: method,
+          passengerCount: passengers,
+          rideType,
+          distanceKm: estimate?.distance,
+        });
         navigation.navigate('ConfirmBooking');
       } catch {
         await notify('Booking Failed', 'Unable to create booking. Please try again.');
@@ -787,18 +786,21 @@ export const BookRideScreen = () => {
                   style={styles.stepperBtn}
                   onPress={() => setPassengers(Math.max(1, passengers - 1))}
                   activeOpacity={0.76}
+                  accessibilityLabel="Remove one passenger"
                 >
                   <MaterialCommunityIcons name="minus" size={18} color={colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.passengerCount}>{passengers}</Text>
                 <TouchableOpacity
                   style={styles.stepperBtn}
-                  onPress={() => setPassengers(Math.min(4, passengers + 1))}
+                  onPress={() => setPassengers(Math.min(MAX_TRICYCLE_PASSENGERS, passengers + 1))}
                   activeOpacity={0.76}
+                  accessibilityLabel="Add one passenger"
                 >
                   <MaterialCommunityIcons name="plus" size={18} color={colors.text} />
                 </TouchableOpacity>
               </View>
+              <Text style={styles.capacityHint}>Maximum {MAX_TRICYCLE_PASSENGERS} passengers</Text>
             </View>
 
             <View style={styles.paymentGroup}>
@@ -817,6 +819,9 @@ export const BookRideScreen = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+              {paymentMethod === 'cash' && (
+                <Text style={styles.cashHint}>Pay the assigned driver directly after the trip.</Text>
+              )}
             </View>
           </View>
 
@@ -874,7 +879,12 @@ export const BookRideScreen = () => {
                 </Text>
               </View>
             </View>
-            <Text style={[styles.farePrice, typography.currency]}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
+            <View style={styles.farePriceWrap}>
+              <Text style={[styles.farePrice, typography.currency]}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
+              {estimate && passengers > 1 ? (
+                <Text style={styles.fareBreakdown}>Total for {passengers}</Text>
+              ) : null}
+            </View>
           </Surface>
 
           <Button
@@ -1484,6 +1494,15 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 22,
   },
+  farePriceWrap: {
+    alignItems: 'flex-end',
+  },
+  fareBreakdown: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
+  },
   optionSection: {
     marginBottom: spacing.md,
   },
@@ -1557,8 +1576,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   stepperBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -1571,13 +1590,19 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 18,
   },
+  capacityHint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: spacing.xs,
+  },
   paymentRow: {
     flexDirection: 'row',
     gap: spacing.xs,
   },
   paymentPill: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -1596,6 +1621,12 @@ const styles = StyleSheet.create({
   },
   paymentTextActive: {
     color: '#FFFFFF',
+  },
+  cashHint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: spacing.xs,
   },
   noteBox: {
     minHeight: 48,

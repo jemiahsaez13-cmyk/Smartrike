@@ -15,6 +15,7 @@ import {
   FranchiseDocument,
   docReviewStatus,
   anyDocumentRejected,
+  FRANCHISE_RECORD_STATUS_LABEL,
 } from '@/models/entities/Franchise';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { colors, spacing, shadows, typography, radius, layout } from '@/views/styles/theme';
@@ -167,6 +168,8 @@ export const FranchiseScreen = () => {
   if (loading && !myApplication) return <Loading message="Loading franchise records..." />;
 
   const isActive = myApplication?.status === 'issued';
+  const recordStatus = myApplication?.franchise_status || 'active';
+  const recordStatusLabel = FRANCHISE_RECORD_STATUS_LABEL[recordStatus];
   const inProgress =
     myApplication &&
     myApplication.status !== 'issued' &&
@@ -183,7 +186,7 @@ export const FranchiseScreen = () => {
   if (isActive) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header subtitle="Your franchise is active" />
+        <Header subtitle={`Operational status: ${recordStatusLabel}`} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Surface style={styles.mtopCard} elevation={0}>
             <View style={styles.mtopHeader}>
@@ -193,8 +196,8 @@ export const FranchiseScreen = () => {
                 </View>
                 <Text style={styles.mtopBrandText}>FEDTODAB MTOP</Text>
               </View>
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>ACTIVE</Text>
+              <View style={[styles.activeBadge, recordStatus !== 'active' && { backgroundColor: recordStatus === 'expired' || recordStatus === 'terminated' ? colors.error : colors.warning }]}>
+                <Text style={styles.activeBadgeText}>{recordStatusLabel.toUpperCase()}</Text>
               </View>
             </View>
 
@@ -205,7 +208,7 @@ export const FranchiseScreen = () => {
               <View style={styles.mtopGrid}>
                 <View style={styles.mtopItem}>
                   <Text style={styles.mtopLabel}>OPERATOR</Text>
-                  <Text style={styles.mtopValue}>{myApplication?.driver_name}</Text>
+                  <Text style={styles.mtopValue}>{myApplication?.current_holder_name || myApplication?.driver_name}</Text>
                 </View>
                 <View style={styles.mtopItem}>
                   <Text style={styles.mtopLabel}>PLATE</Text>
@@ -220,19 +223,25 @@ export const FranchiseScreen = () => {
                   <Text style={styles.mtopLabel}>TODA</Text>
                   <Text style={styles.mtopValue}>{myApplication?.toda}</Text>
                 </View>
+                <View>
+                  <Text style={styles.mtopLabel}>BODY NO.</Text>
+                  <Text style={styles.mtopValue}>{myApplication?.body_number || 'Unassigned'}</Text>
+                </View>
                 <MaterialCommunityIcons name="shield-check" size={24} color={colors.secondary} />
               </View>
             </View>
           </Surface>
 
-          <Button 
-            variant="outline" 
-            onPress={handleRenew}
-            style={styles.renewBtn}
-          >
-            <MaterialCommunityIcons name="autorenew" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-            Renew Franchise
-          </Button>
+          {recordStatus !== 'terminated' && recordStatus !== 'transferred' ? (
+            <Button
+              variant="outline"
+              onPress={handleRenew}
+              style={styles.renewBtn}
+            >
+              <MaterialCommunityIcons name="autorenew" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+              Renew Franchise
+            </Button>
+          ) : null}
 
           <Text style={styles.note}>
             Keep your OR/CR and TODA membership updated. Renew before expiry to avoid penalties.

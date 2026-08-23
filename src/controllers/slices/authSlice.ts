@@ -23,23 +23,6 @@ const initialState: AuthState = {
   error: null
 };
 
-export const setDemoUser = (userType: 'passenger' | 'driver' | 'admin') => ({
-  type: 'auth/setDemoUser',
-  payload: {
-    id: `demo-${userType}`,
-    auth_id: 'demo-auth',
-    user_type: userType,
-    email: `demo@${userType}.com`,
-    phone: '09123456789',
-    name: `Demo ${userType.charAt(0).toUpperCase() + userType.slice(1)}`,
-    profile_photo_url: null,
-    created_at: new Date(),
-    status: 'active' as const,
-    rating: 4.5,
-    total_trips: 10
-  }
-});
-
 export const signUp = createAsyncThunk(
   'auth/signUp',
   async (payload: { email: string; password: string; userData: any }, { rejectWithValue }) => {
@@ -90,28 +73,6 @@ export const checkSession = createAsyncThunk('auth/checkSession', async (_, { re
   }
 });
 
-export const signInWithPhone = createAsyncThunk(
-  'auth/signInWithPhone',
-  async (payload: { phone: string }, { rejectWithValue }) => {
-    try {
-      return await authService.signInWithPhone(payload.phone);
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
-export const verifyOtp = createAsyncThunk(
-  'auth/verifyOtp',
-  async (payload: { phone: string; token: string }, { rejectWithValue }) => {
-    try {
-      return await authService.verifyOtp(payload.phone, payload.token);
-    } catch (error: any) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
-
 // Persists profile edits (name, phone, photo, vehicle, bank account, etc.).
 // Demo sessions have no DB row, so they update locally only.
 export const updateProfile = createAsyncThunk(
@@ -152,11 +113,6 @@ const authSlice = createSlice({
       state.user = action.payload;
       state.isAuthenticated = true;
     },
-    setDemoUserReducer: (state, action: PayloadAction<User>) => {
-      state.user = action.payload;
-      state.isAuthenticated = true;
-      state.session = { demo: true };
-    }
   },
   extraReducers: (builder) => {
     builder
@@ -192,31 +148,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload as string;
       })
-      .addCase(signInWithPhone.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(signInWithPhone.fulfilled, (state) => {
-        state.loading = false;
-      })
-      .addCase(signInWithPhone.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
-      .addCase(verifyOtp.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(verifyOtp.fulfilled, (state, action) => {
-        state.loading = false;
-        state.user = action.payload.user;
-        state.session = action.payload.session;
-        state.isAuthenticated = true;
-      })
-      .addCase(verifyOtp.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string;
-      })
       .addCase(updateProfile.fulfilled, (state, action) => {
         state.loading = false;
         state.user = action.payload as User;
@@ -246,5 +177,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { clearError, setUser, setDemoUserReducer } = authSlice.actions;
+export const { clearError, setUser } = authSlice.actions;
 export default authSlice.reducer;

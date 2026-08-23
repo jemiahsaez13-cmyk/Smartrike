@@ -17,6 +17,8 @@ export interface Booking {
   per_km_rate: number;
   total_fare: number;
   peak_hour_multiplier: number;
+  passenger_count: number;
+  ride_type: 'standard' | 'priority';
   payment_method: 'cash' | 'gcash' | 'paymaya' | 'online';
   payment_status: 'pending' | 'completed';
   passenger_rating: Rating | null;

@@ -17,7 +17,7 @@ interface Props {
   popularPlaces: PopularPlace[];
   onClose: () => void;
   onConfirm: (loc: Location) => void;
-  // Resolve a saved address to coordinates (parent geocodes if it has no pin).
+  // Resolve a saved address strictly from its stored, confirmed coordinates.
   resolveSaved: (addr: SavedAddress) => Promise<Location | null>;
   onSetOnMap: () => void;
 }

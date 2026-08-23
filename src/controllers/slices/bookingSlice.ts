@@ -48,6 +48,9 @@ export const createBooking = createAsyncThunk(
       scheduledTime?: Date;
       notes?: string;
       paymentMethod?: 'cash' | 'gcash' | 'paymaya' | 'online';
+      passengerCount?: number;
+      rideType?: 'standard' | 'priority';
+      distanceKm?: number;
     },
     { rejectWithValue }
   ) => {
@@ -56,6 +59,9 @@ export const createBooking = createAsyncThunk(
         scheduledTime: payload.scheduledTime,
         notes: payload.notes,
         paymentMethod: payload.paymentMethod,
+        passengerCount: payload.passengerCount,
+        rideType: payload.rideType,
+        distanceKm: payload.distanceKm,
       });
       void ActivityLogService.logActivity({
         user_id: payload.passengerId,

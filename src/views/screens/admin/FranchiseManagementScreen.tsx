@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { fetchAllApplications, advanceApplication, patchApplication } from '@/controllers/slices/franchiseSlice';
 import {
@@ -65,6 +66,7 @@ const FilterChip = ({ label, active, onPress }: { label: string; active: boolean
 );
 
 export const FranchiseManagementScreen = () => {
+  const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
   const { applications, loading } = useAppSelector((state) => state.franchise);
   const currentUser = useAppSelector((state) => state.auth.user);
@@ -169,6 +171,10 @@ export const FranchiseManagementScreen = () => {
     const patch = { ...next.patch };
     if (next.status === 'issued') {
       patch.mtop_number = `MTOP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      patch.franchise_status = 'active';
+      patch.original_holder_name = app.driver_name;
+      patch.current_holder_name = app.driver_name;
+      patch.issued_at = new Date().toISOString().slice(0, 10);
     }
     setActionBusy(app.id);
     try {
@@ -213,8 +219,19 @@ export const FranchiseManagementScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Franchise / MTOP</Text>
-        <Text style={styles.headerSub}>{applications.length} active requests</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Franchise / MTOP</Text>
+          <Text style={styles.headerSub}>{applications.length} application records</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.registryBtn}
+          onPress={() => navigation.navigate('FranchiseRegistry')}
+          accessibilityLabel="Open issued franchise registry"
+          activeOpacity={0.78}
+        >
+          <MaterialCommunityIcons name="book-open-variant" size={20} color="#fff" />
+          <Text style={styles.registryBtnText}>Registry</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterContainer}>
@@ -360,7 +377,7 @@ export const FranchiseManagementScreen = () => {
                 <View style={styles.terminalContainer}>
                   <View style={styles.divider} />
                   <Text style={styles.terminalNote}>
-                    {app.status === 'issued' ? 'Franchise issued and active.' : 'Application closed.'}
+                    {app.status === 'issued' ? 'MTOP issued. Manage its operational status in the Registry.' : 'Application closed.'}
                   </Text>
                 </View>
               )}
@@ -632,6 +649,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
     backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   headerTitle: { 
     ...typography.h1,
@@ -643,6 +663,17 @@ const styles = StyleSheet.create({
     color: colors.textSecondary, 
     marginTop: 2,
   },
+  registryBtn: {
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  registryBtnText: { ...typography.label, color: '#fff', fontSize: 13 },
   filterContainer: {
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,

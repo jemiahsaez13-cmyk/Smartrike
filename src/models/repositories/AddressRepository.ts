@@ -1,6 +1,21 @@
 import { supabase } from '@/config/supabase';
 import { SavedAddress } from '@/models/types';
 
+type ConfirmedCoordinates = { latitude: number; longitude: number };
+type SavedAddressCreate = Omit<SavedAddress, 'id' | 'created_at' | 'latitude' | 'longitude'> & ConfirmedCoordinates;
+type SavedAddressUpdate = Partial<Omit<SavedAddress, 'id' | 'created_at' | 'latitude' | 'longitude'>> & ConfirmedCoordinates;
+
+const assertConfirmedCoordinates = ({ latitude, longitude }: ConfirmedCoordinates) => {
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
+    throw new Error('A valid, confirmed map pin is required for this address.');
+  }
+};
+
 // CRUD for the passenger's saved-address book. A single default per user is
 // enforced server-side by the `enforce_single_default_address` trigger
 // (migration 029), so callers only need to flag the row they want as default.
@@ -16,7 +31,8 @@ export class AddressRepository {
     return data ?? [];
   }
 
-  async create(address: Omit<SavedAddress, 'id' | 'created_at'>): Promise<SavedAddress> {
+  async create(address: SavedAddressCreate): Promise<SavedAddress> {
+    assertConfirmedCoordinates(address);
     const { data, error } = await supabase
       .from('user_addresses')
       .insert(address)
@@ -26,7 +42,8 @@ export class AddressRepository {
     return data;
   }
 
-  async update(id: string, updates: Partial<SavedAddress>): Promise<SavedAddress> {
+  async update(id: string, updates: SavedAddressUpdate): Promise<SavedAddress> {
+    assertConfirmedCoordinates(updates);
     const { data, error } = await supabase
       .from('user_addresses')
       .update(updates)
