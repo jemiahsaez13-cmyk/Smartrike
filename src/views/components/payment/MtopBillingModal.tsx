@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -277,23 +278,28 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
                 ) : null}
                 {hasPin && pinCoord ? (
                   <View style={styles.mapContainer}>
-                    <MapView
-                      style={styles.map}
-                      initialRegion={{
-                        ...pinCoord,
-                        latitudeDelta: 0.015,
-                        longitudeDelta: 0.015,
-                      }}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      pitchEnabled={false}
-                      rotateEnabled={false}
-                    >
-                      <Marker coordinate={pinCoord} title="Payment location" />
-                    </MapView>
-                    <Text style={styles.mapCaption}>
-                      {pinCoord.latitude.toFixed(6)}, {pinCoord.longitude.toFixed(6)}
-                    </Text>
+                    {Platform.OS !== 'web' ? (
+                      <MapView
+                        style={styles.map}
+                        initialRegion={{
+                          ...pinCoord,
+                          latitudeDelta: 0.015,
+                          longitudeDelta: 0.015,
+                        }}
+                        scrollEnabled={false}
+                        zoomEnabled={false}
+                        pitchEnabled={false}
+                        rotateEnabled={false}
+                      >
+                        <Marker coordinate={pinCoord} title="Payment location" />
+                      </MapView>
+                    ) : null}
+                    <View style={styles.coordRow}>
+                      <MaterialCommunityIcons name="crosshairs-gps" size={15} color={colors.primary} />
+                      <Text style={styles.coordText} selectable>
+                        {pinCoord.latitude.toFixed(6)},{'  '}{pinCoord.longitude.toFixed(6)}
+                      </Text>
+                    </View>
                   </View>
                 ) : (
                   <View style={styles.noPinNote}>
@@ -512,11 +518,17 @@ const styles = StyleSheet.create({
   addressDetailText: { ...typography.body, color: colors.text, flex: 1 },
   mapContainer: { overflow: 'hidden', borderRadius: radius.md },
   map: { width: '100%', height: 200, borderRadius: radius.md },
-  mapCaption: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xs,
+  coordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  coordText: {
+    ...typography.labelSmall,
+    color: colors.textSecondary,
+    fontVariant: ['tabular-nums'],
   },
   noPinNote: {
     flexDirection: 'row',

@@ -223,7 +223,7 @@ export const AddressFormScreen = () => {
           </Text>
 
           <View style={styles.mapCard}>
-            <MapPinPicker value={selectedPin} initialCenter={mapStart} onChange={(coordinate) => placePendingPin(coordinate, 'manual')} height={260} />
+            <MapPinPicker value={selectedPin} initialCenter={mapStart} onChange={(coordinate) => { if (coordinate) placePendingPin(coordinate, 'manual'); else { setSelectedPin(null); setPinConfirmed(false); } }} height={260} />
           </View>
 
           <View style={[styles.pinStatus, pinConfirmed && styles.pinStatusConfirmed]}>
