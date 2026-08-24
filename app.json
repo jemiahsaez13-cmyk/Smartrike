@@ -50,8 +50,10 @@
       ]
     ],
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "42488411-c12e-483c-a40b-313a335e10ce"
+      }
     },
-    "owner": "YOUR_EXPO_USERNAME"
+    "owner": "elpieee"
   }
 }
