@@ -8,6 +8,8 @@ SQL migrations for the Smart Trike backend. Apply them **in numeric order**
 ## ✅ Target project initialized
 
 Migrations through `036` were applied to `tvvfauetrcnxmtgvvshr` on 2026-08-23.
+Migrations `037` through `043` were applied to `tvvfauetrcnxmtgvvshr` on 2026-08-24
+via the Node.js pg client (`scripts/run-migrations.mjs`).
 The Supabase CLI reports matching local and remote versions.
 
 ---

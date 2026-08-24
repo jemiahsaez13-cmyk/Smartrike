@@ -406,14 +406,22 @@ export const FranchiseManagementScreen = () => {
                   {app.payment_review_status === 'pending_review' ? <View style={styles.paymentActions}><TouchableOpacity style={styles.paymentReject} onPress={() => reviewPayment(app, 'rejected')} disabled={actionBusy === app.id}><Text style={styles.paymentRejectText}>Reject Proof</Text></TouchableOpacity><TouchableOpacity style={styles.paymentVerify} onPress={() => reviewPayment(app, 'verified')} disabled={actionBusy === app.id}>{actionBusy === app.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentVerifyText}>Verify Payment</Text>}</TouchableOpacity></View> : null}
                   {/* Send Billing button — shown when the applicant hasn't submitted proof yet */}
                   {(app.payment_review_status === 'awaiting_submission' || !app.payment_review_status || app.payment_review_status === 'rejected') ? (
-                    <TouchableOpacity
-                      style={styles.sendBillingBtn}
-                      onPress={() => setBillingApp(app)}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons name="send-outline" size={18} color={colors.primary} />
-                      <Text style={styles.sendBillingText}>Send Billing</Text>
-                    </TouchableOpacity>
+                    <View>
+                      <View style={styles.billingIssueNote}>
+                        <MaterialCommunityIcons name="information-outline" size={15} color={colors.primary} />
+                        <Text style={styles.billingIssueText}>
+                          Sending billing will notify the applicant which payment method to use. Make sure at least one billing method is configured under Account → MTOP Billing Methods.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.sendBillingBtn}
+                        onPress={() => setBillingApp(app)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="send-outline" size={18} color={colors.primary} />
+                        <Text style={styles.sendBillingText}>Send Billing</Text>
+                      </TouchableOpacity>
+                    </View>
                   ) : null}
                 </View>
               ) : null}
@@ -970,6 +978,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
   },
   sendBillingText: { ...typography.label, color: colors.primary },
+  billingIssueNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
+  },
+  billingIssueText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
   paymentPreviewImage: { width: '100%', height: '82%' },
   paymentPreviewClose: { position: 'absolute', top: spacing.xl, right: spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   empty: {
