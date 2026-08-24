@@ -23,7 +23,7 @@ import {
 import { RealtimeService } from '@/models/services/RealtimeService';
 import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
-import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { NOTIFICATION_TYPES } from '@/config/constants';
 
@@ -189,7 +189,7 @@ export const NotificationsScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingTop: 52,
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.screen,
     paddingBottom: spacing.xl,
   },

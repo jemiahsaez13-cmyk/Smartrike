@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   header: {
     height: 300,
-    paddingTop: 60,
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.screen,
   },
   headerTop: {

@@ -321,7 +321,15 @@ export const FranchiseManagementScreen = () => {
                 </View>
                 <View style={styles.metaItem}>
                   <MaterialCommunityIcons name="clipboard-check-outline" size={16} color={colors.textLight} />
-                  <Text style={styles.metaText}>{app.inspection_result || 'pending'}</Text>
+                  <Text style={styles.metaText}>
+                    {app.status === 'issued' || app.status === 'approved'
+                      ? 'docs verified'
+                      : app.status === 'payment'
+                      ? 'docs verified'
+                      : app.inspection_result && app.inspection_result !== 'pending'
+                      ? app.inspection_result
+                      : 'pending'}
+                  </Text>
                 </View>
                 <View style={styles.metaItem}>
                   <MaterialCommunityIcons name="cash" size={16} color={colors.textLight} />

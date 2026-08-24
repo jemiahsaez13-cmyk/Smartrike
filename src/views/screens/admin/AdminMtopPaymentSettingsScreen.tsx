@@ -374,7 +374,7 @@ export const AdminMtopPaymentSettingsScreen = () => {
                     Tap the map or drag the marker to pin the exact payment location.
                   </Text>
                   <MapPinPicker
-                    value={pin ?? undefined}
+                    value={pin}
                     onChange={(coord) => setPin(coord)}
                     height={240}
                   />

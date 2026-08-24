@@ -15,7 +15,7 @@ import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
 import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
-import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatDate, formatTime, getWeekRange, getMonthRange, isTodayPHT } from '@/utils/dateUtils';
 import { DRIVER_GOAL_DAILY } from '@/config/constants';
 
@@ -200,7 +200,7 @@ export const EarningsScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingTop: 52,
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.screen,
     paddingBottom: 80,
   },

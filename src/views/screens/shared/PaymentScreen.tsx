@@ -9,7 +9,7 @@ import { TransactionRepository } from '@/models/repositories/TransactionReposito
 import { Transaction } from '@/models/types';
 import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
-import { colors, gradients, radius, shadows, spacing, typography } from '@/views/styles/theme';
+import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatDate, formatTime } from '@/utils/dateUtils';
 
 const METHOD_META: Record<string, { icon: string; label: string; color: string }> = {
@@ -148,7 +148,7 @@ export const PaymentScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingTop: 52, paddingHorizontal: spacing.screen, paddingBottom: 80 },
+  header: { paddingTop: layout.headerTop, paddingHorizontal: spacing.screen, paddingBottom: 80 },
   backBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginBottom: spacing.md },
   headerTitle: { ...typography.h1, color: '#fff', fontSize: 28, marginBottom: spacing.lg },
   totalCard: { marginBottom: -48, ...shadows.xl },

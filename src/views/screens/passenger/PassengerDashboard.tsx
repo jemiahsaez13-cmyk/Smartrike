@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   header: {
     height: 280,
-    paddingTop: 60,
+    paddingTop: layout.headerTop,
     paddingHorizontal: spacing.screen,
   },
   headerTop: {
