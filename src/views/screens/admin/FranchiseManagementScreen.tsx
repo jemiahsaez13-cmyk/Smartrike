@@ -21,6 +21,8 @@ import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 import { confirm, notify } from '@/utils/confirm';
+import { MtopBillingModal } from '@/views/components/payment/MtopBillingModal';
+import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 
 const REVIEW_COLOR: Record<DocumentReviewStatus, string> = {
   pending: colors.warning,
@@ -77,6 +79,8 @@ export const FranchiseManagementScreen = () => {
   const [docBusy, setDocBusy] = useState<string | null>(null); // doc name or '*all*'
   const [actionBusy, setActionBusy] = useState<string | null>(null); // app id
   const [paymentPreview, setPaymentPreview] = useState<string | null>(null);
+  // Billing modal
+  const [billingApp, setBillingApp] = useState<FranchiseApplication | null>(null);
 
   useEffect(() => {
     dispatch(fetchAllApplications());
@@ -230,6 +234,21 @@ export const FranchiseManagementScreen = () => {
     } finally { setActionBusy(null); }
   };
 
+  const handleSendBilling = async (
+    app: FranchiseApplication,
+    method: AdminMtopPaymentMethod
+  ) => {
+    setBillingApp(null);
+    const methodLabel =
+      method.method_type === 'face_to_face'
+        ? `Face-to-Face at ${method.address || method.display_name}`
+        : `${method.display_name} (${method.account_number})`;
+    await notify(
+      'Billing Sent',
+      `Billing for ₱${Number(app.fees).toFixed(2)} sent to ${app.driver_name} via ${methodLabel}.`
+    );
+  };
+
   const filtered = applications.filter((a) => {
     if (filter === 'pending') return a.status !== 'issued' && a.status !== 'rejected';
     if (filter === 'issued') return a.status === 'issued';
@@ -377,6 +396,17 @@ export const FranchiseManagementScreen = () => {
                   {app.payment_reference ? <View style={styles.paymentReferenceRow}><Text style={styles.paymentReferenceLabel}>REFERENCE</Text><Text selectable style={styles.paymentReference}>{app.payment_reference}</Text></View> : null}
                   {app.payment_proof_url ? <TouchableOpacity style={styles.viewPaymentProof} onPress={() => setPaymentPreview(app.payment_proof_url!)}><MaterialCommunityIcons name="image-search-outline" size={18} color={colors.primary} /><Text style={styles.viewPaymentProofText}>View payment screenshot</Text></TouchableOpacity> : null}
                   {app.payment_review_status === 'pending_review' ? <View style={styles.paymentActions}><TouchableOpacity style={styles.paymentReject} onPress={() => reviewPayment(app, 'rejected')} disabled={actionBusy === app.id}><Text style={styles.paymentRejectText}>Reject Proof</Text></TouchableOpacity><TouchableOpacity style={styles.paymentVerify} onPress={() => reviewPayment(app, 'verified')} disabled={actionBusy === app.id}>{actionBusy === app.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentVerifyText}>Verify Payment</Text>}</TouchableOpacity></View> : null}
+                  {/* Send Billing button — shown when the applicant hasn't submitted proof yet */}
+                  {(app.payment_review_status === 'awaiting_submission' || !app.payment_review_status || app.payment_review_status === 'rejected') ? (
+                    <TouchableOpacity
+                      style={styles.sendBillingBtn}
+                      onPress={() => setBillingApp(app)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="send-outline" size={18} color={colors.primary} />
+                      <Text style={styles.sendBillingText}>Send Billing</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -432,6 +462,12 @@ export const FranchiseManagementScreen = () => {
         onClose={() => setReviewAppId(null)}
         onSetReview={setDocReview}
         onApproveAll={approveAllDocs}
+      />
+      <MtopBillingModal
+        visible={!!billingApp}
+        application={billingApp}
+        onConfirm={handleSendBilling}
+        onClose={() => setBillingApp(null)}
       />
       <Modal visible={!!paymentPreview} transparent animationType="fade" onRequestClose={() => setPaymentPreview(null)}><TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={() => setPaymentPreview(null)}>{paymentPreview ? <Image source={{ uri: paymentPreview }} style={styles.paymentPreviewImage} resizeMode="contain" /> : null}<TouchableOpacity style={styles.paymentPreviewClose} onPress={() => setPaymentPreview(null)}><MaterialCommunityIcons name="close" size={26} color="#fff" /></TouchableOpacity></TouchableOpacity></Modal>
     </View>
@@ -913,6 +949,19 @@ const styles = StyleSheet.create({
   paymentRejectText: { ...typography.label, color: colors.error },
   paymentVerify: { flex: 2, minHeight: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.md },
   paymentVerifyText: { ...typography.label, color: '#fff' },
+  sendBillingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    minHeight: 46,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  sendBillingText: { ...typography.label, color: colors.primary },
   paymentPreviewImage: { width: '100%', height: '82%' },
   paymentPreviewClose: { position: 'absolute', top: spacing.xl, right: spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   empty: {

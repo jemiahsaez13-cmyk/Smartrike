@@ -169,6 +169,15 @@ export const ProfileScreen = () => {
             onPress={() => navigation.navigate('EditProfile')}
             last={user?.user_type === 'admin'}
           />
+          {user?.user_type === 'admin' && (
+            <MenuItem
+              icon="cash-register"
+              label="MTOP Billing Methods"
+              value="Payment options for MTOP applicants"
+              onPress={() => navigation.navigate('AdminMtopPaymentSettings')}
+              last
+            />
+          )}
           {user?.user_type === 'driver' && (
             <>
               <MenuItem icon="qrcode" label="Online Payment" value="Passenger payment details" onPress={() => navigation.navigate('OnlinePaymentSettings')} />
