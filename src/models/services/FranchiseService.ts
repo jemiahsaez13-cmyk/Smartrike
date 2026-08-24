@@ -285,6 +285,31 @@ export class FranchiseService {
     return row as FranchiseApplication;
   }
 
+  /**
+   * Records a face-to-face payment appointment chosen by the driver.
+   * Patches `appointment_date` (ISO string) on the application so the admin
+   * can see it on the payment card.
+   */
+  async submitFaceToFaceAppointment(
+    id: string,
+    appointmentDate: string
+  ): Promise<FranchiseApplication> {
+    // Expect a full ISO datetime or at minimum YYYY-MM-DD
+    if (!appointmentDate || appointmentDate.trim().length < 10) {
+      throw new Error('Please select a valid appointment date.');
+    }
+    const dt = new Date(appointmentDate);
+    if (isNaN(dt.getTime())) throw new Error('Invalid appointment date.');
+    if (dt.getTime() < Date.now() - 60_000) {
+      throw new Error('Appointment must be a future date and time.');
+    }
+    return this.patch(id, {
+      appointment_date: appointmentDate,
+      // Mark payment as awaiting so the admin knows a visit is scheduled
+      payment_review_status: 'pending_review',
+    });
+  }
+
   async reviewPayment(id: string, decision: 'verified' | 'rejected', reason?: string): Promise<FranchiseApplication> {
     const { data, error } = await supabase.rpc('review_mtop_payment', {
       p_application_id: id, p_decision: decision, p_reason: reason?.trim() || null,

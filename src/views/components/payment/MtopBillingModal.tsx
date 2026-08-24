@@ -3,9 +3,9 @@
  *
  * Confirmation popup the admin opens when they want to send a billing
  * notification to an MTOP applicant. Shows all enabled payment methods so the
- * admin can choose which option to include in the billing, then confirms.
+ * admin can pick ONE OR MORE options to include in the billing, then confirms.
  *
- * Face-to-face methods display the venue address and a read-only map pin.
+ * Face-to-face methods display the venue address.
  * GCash / Bank methods display account details and an optional QR code.
  */
 
@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   Image,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -22,7 +21,6 @@ import {
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import MapView, { Marker } from '@/config/maps';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { AdminMtopPaymentService } from '@/models/services/AdminMtopPaymentService';
 import { FranchiseApplication } from '@/models/entities/Franchise';
@@ -34,8 +32,8 @@ const service = new AdminMtopPaymentService();
 interface Props {
   visible: boolean;
   application: FranchiseApplication | null;
-  /** Called with the selected payment method once the admin confirms. */
-  onConfirm: (app: FranchiseApplication, method: AdminMtopPaymentMethod) => Promise<void>;
+  /** Called with ALL selected payment methods once the admin confirms. */
+  onConfirm: (app: FranchiseApplication, methods: AdminMtopPaymentMethod[]) => Promise<void>;
   onClose: () => void;
 }
 
@@ -51,16 +49,22 @@ const METHOD_LABEL: Record<string, string> = {
   face_to_face: 'Face-to-Face',
 };
 
+const METHOD_COLOR: Record<string, string> = {
+  gcash: '#0066FF',
+  bank: '#2E7D32',
+  face_to_face: '#E65100',
+};
+
 export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: Props) => {
   const [methods, setMethods] = useState<AdminMtopPaymentMethod[]>([]);
   const [loadingMethods, setLoadingMethods] = useState(false);
-  const [selected, setSelected] = useState<AdminMtopPaymentMethod | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
 
   // Fetch enabled payment methods whenever the modal opens.
   useEffect(() => {
     if (!visible) return;
-    setSelected(null);
+    setSelectedIds(new Set());
     setLoadingMethods(true);
     service
       .listEnabledMethods()
@@ -71,26 +75,35 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
       .finally(() => setLoadingMethods(false));
   }, [visible]);
 
+  const toggleMethod = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(methods.map((m) => m.id)));
+  };
+
+  const clearAll = () => {
+    setSelectedIds(new Set());
+  };
+
   const handleConfirm = async () => {
-    if (!application || !selected) return;
+    if (!application || selectedIds.size === 0) return;
+    const chosen = methods.filter((m) => selectedIds.has(m.id));
     setConfirming(true);
     try {
-      await onConfirm(application, selected);
+      await onConfirm(application, chosen);
     } finally {
       setConfirming(false);
     }
   };
 
-  const isFaceToFace = selected?.method_type === 'face_to_face';
-  const hasPin =
-    isFaceToFace &&
-    selected?.location_lat != null &&
-    selected?.location_lng != null;
-
-  const pinCoord =
-    hasPin
-      ? { latitude: selected!.location_lat!, longitude: selected!.location_lng! }
-      : null;
+  const selectedMethods = methods.filter((m) => selectedIds.has(m.id));
 
   return (
     <Modal
@@ -153,10 +166,24 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
             ) : null}
 
             {/* Payment method picker */}
-            <Text style={styles.sectionLabel}>SELECT PAYMENT METHOD</Text>
-            <Text style={styles.sectionHint}>
-              Choose how the applicant should pay the MTOP fee.
-            </Text>
+            <View style={styles.sectionRow}>
+              <View style={styles.sectionLeft}>
+                <Text style={styles.sectionLabel}>PAYMENT METHODS</Text>
+                <Text style={styles.sectionHint}>
+                  Select one or more methods the applicant can use to pay.
+                </Text>
+              </View>
+              {methods.length > 0 && !loadingMethods && (
+                <View style={styles.selectAllRow}>
+                  <TouchableOpacity onPress={selectAll} style={styles.selectAllBtn} activeOpacity={0.7}>
+                    <Text style={styles.selectAllText}>All</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={clearAll} style={styles.selectAllBtn} activeOpacity={0.7}>
+                    <Text style={styles.selectAllText}>None</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
 
             {loadingMethods ? (
               <View style={styles.loadingBox}>
@@ -173,33 +200,34 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
               </View>
             ) : (
               methods.map((method) => {
-                const active = selected?.id === method.id;
+                const active = selectedIds.has(method.id);
+                const methodColor = METHOD_COLOR[method.method_type] || colors.primary;
                 return (
                   <TouchableOpacity
                     key={method.id}
                     style={[styles.methodCard, active && styles.methodCardActive]}
-                    onPress={() => setSelected(method)}
+                    onPress={() => toggleMethod(method.id)}
                     activeOpacity={0.8}
                   >
-                    {/* Selection indicator */}
-                    <View style={[styles.radio, active && styles.radioActive]}>
+                    {/* Checkbox */}
+                    <View style={[styles.checkbox, active && styles.checkboxActive, { borderColor: active ? methodColor : colors.border }]}>
                       {active && (
-                        <View style={styles.radioDot} />
+                        <MaterialCommunityIcons name="check" size={14} color="#fff" />
                       )}
                     </View>
 
-                    {/* QR / icon */}
+                    {/* QR thumb / icon */}
                     {method.qr_code_url ? (
                       <Image
                         source={{ uri: method.qr_code_url }}
                         style={styles.qrThumb}
                       />
                     ) : (
-                      <View style={styles.iconBox}>
+                      <View style={[styles.iconBox, { backgroundColor: active ? methodColor + '22' : colors.primaryLight }]}>
                         <MaterialCommunityIcons
                           name={METHOD_ICON[method.method_type] as any}
                           size={24}
-                          color={active ? '#fff' : colors.primary}
+                          color={active ? methodColor : colors.primary}
                         />
                       </View>
                     )}
@@ -207,27 +235,27 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
                     {/* Details */}
                     <View style={styles.methodDetails}>
                       <View style={styles.methodTitleRow}>
-                        <Text style={[styles.methodName, active && styles.methodNameActive]}>
+                        <Text style={[styles.methodName, active && { color: colors.text }]}>
                           {method.display_name}
                         </Text>
                         <View
                           style={[
                             styles.typeBadge,
-                            active && styles.typeBadgeActive,
+                            active && { backgroundColor: methodColor + '18' },
                           ]}
                         >
-                          <Text style={[styles.typeBadgeText, active && styles.typeBadgeTextActive]}>
+                          <Text style={[styles.typeBadgeText, active && { color: methodColor }]}>
                             {METHOD_LABEL[method.method_type]}
                           </Text>
                         </View>
                       </View>
 
-                      <Text style={[styles.methodHolder, active && styles.methodHolderActive]}>
+                      <Text style={styles.methodHolder}>
                         {method.account_name}
                       </Text>
 
                       {method.method_type !== 'face_to_face' && method.account_number ? (
-                        <Text style={[styles.methodNumber, active && styles.methodNumberActive]}>
+                        <Text style={[styles.methodNumber, active && { color: methodColor }]}>
                           {method.account_number}
                         </Text>
                       ) : null}
@@ -237,22 +265,16 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
                           <MaterialCommunityIcons
                             name="map-marker"
                             size={14}
-                            color={active ? 'rgba(255,255,255,0.8)' : colors.textMuted}
+                            color={active ? methodColor : colors.textMuted}
                           />
-                          <Text
-                            style={[styles.methodAddress, active && styles.methodAddressActive]}
-                            numberOfLines={2}
-                          >
+                          <Text style={styles.methodAddress} numberOfLines={2}>
                             {method.address}
                           </Text>
                         </View>
                       ) : null}
 
                       {method.instructions ? (
-                        <Text
-                          style={[styles.methodNote, active && styles.methodNoteActive]}
-                          numberOfLines={2}
-                        >
+                        <Text style={styles.methodNote} numberOfLines={2}>
                           {method.instructions}
                         </Text>
                       ) : null}
@@ -262,68 +284,16 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
               })
             )}
 
-            {/* Selected method detail: map pin (face_to_face) or full QR */}
-            {selected && isFaceToFace && (
-              <View style={styles.detailCard}>
-                <Text style={styles.detailTitle}>Payment Location</Text>
-                {selected.address ? (
-                  <View style={styles.addressDetail}>
-                    <MaterialCommunityIcons
-                      name="map-marker-outline"
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.addressDetailText}>{selected.address}</Text>
-                  </View>
-                ) : null}
-                {hasPin && pinCoord ? (
-                  <View style={styles.mapContainer}>
-                    {Platform.OS !== 'web' ? (
-                      <MapView
-                        style={styles.map}
-                        initialRegion={{
-                          ...pinCoord,
-                          latitudeDelta: 0.015,
-                          longitudeDelta: 0.015,
-                        }}
-                        scrollEnabled={false}
-                        zoomEnabled={false}
-                        pitchEnabled={false}
-                        rotateEnabled={false}
-                      >
-                        <Marker coordinate={pinCoord} title="Payment location" />
-                      </MapView>
-                    ) : null}
-                    <View style={styles.coordRow}>
-                      <MaterialCommunityIcons name="crosshairs-gps" size={15} color={colors.primary} />
-                      <Text style={styles.coordText} selectable>
-                        {pinCoord.latitude.toFixed(6)},{'  '}{pinCoord.longitude.toFixed(6)}
-                      </Text>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={styles.noPinNote}>
-                    <MaterialCommunityIcons
-                      name="map-marker-off-outline"
-                      size={18}
-                      color={colors.textMuted}
-                    />
-                    <Text style={styles.noPinText}>No map pin set for this location.</Text>
-                  </View>
-                )}
+            {/* Selected count summary */}
+            {selectedIds.size > 0 && (
+              <View style={styles.selectedSummary}>
+                <MaterialCommunityIcons name="check-circle" size={16} color={colors.success} />
+                <Text style={styles.selectedSummaryText}>
+                  {selectedIds.size} method{selectedIds.size !== 1 ? 's' : ''} selected:{' '}
+                  {selectedMethods.map((m) => m.display_name).join(', ')}
+                </Text>
               </View>
             )}
-
-            {selected && !isFaceToFace && selected.qr_code_url ? (
-              <View style={styles.detailCard}>
-                <Text style={styles.detailTitle}>QR Code</Text>
-                <Image
-                  source={{ uri: selected.qr_code_url }}
-                  style={styles.qrFull}
-                  resizeMode="contain"
-                />
-              </View>
-            ) : null}
 
             {/* Confirm / cancel */}
             <View style={styles.actions}>
@@ -337,17 +307,19 @@ export const MtopBillingModal = ({ visible, application, onConfirm, onClose }: P
               <TouchableOpacity
                 style={[
                   styles.confirmBtn,
-                  (!selected || confirming) && styles.disabled,
+                  (selectedIds.size === 0 || confirming) && styles.disabled,
                 ]}
                 onPress={handleConfirm}
-                disabled={!selected || confirming}
+                disabled={selectedIds.size === 0 || confirming}
               >
                 {confirming ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <>
                     <MaterialCommunityIcons name="send-outline" size={18} color="#fff" />
-                    <Text style={styles.confirmText}>Send Billing</Text>
+                    <Text style={styles.confirmText}>
+                      Send Billing{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -391,18 +363,42 @@ const styles = StyleSheet.create({
   summaryLabel: { ...typography.bodySmall, color: colors.textSecondary, width: 90 },
   summaryValue: { ...typography.label, color: colors.text, flex: 1 },
   summaryFee: { ...typography.h3, color: colors.primary, flex: 1 },
-  // Section labels
+  // Section header
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  sectionLeft: { flex: 1 },
   sectionLabel: {
     ...typography.labelSmall,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   sectionHint: {
     ...typography.bodySmall,
     color: colors.textMuted,
-    marginBottom: spacing.md,
+  },
+  selectAllRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingTop: 2,
+  },
+  selectAllBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  selectAllText: {
+    ...typography.labelSmall,
+    color: colors.textSecondary,
+    fontSize: 11,
   },
   // Loading / empty states
   loadingBox: {
@@ -437,37 +433,33 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   methodCardActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
     borderColor: colors.primary,
   },
-  radio: {
+  // Checkbox
+  checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 6,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    flexShrink: 0,
   },
-  radioActive: {
-    borderColor: '#fff',
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#fff',
+  checkboxActive: {
+    backgroundColor: colors.primary,
   },
   iconBox: {
     width: 48,
     height: 48,
     borderRadius: radius.sm,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  qrThumb: { width: 48, height: 48, borderRadius: radius.sm },
+  qrThumb: { width: 48, height: 48, borderRadius: radius.sm, flexShrink: 0 },
   methodDetails: { flex: 1, minWidth: 0 },
   methodTitleRow: {
     flexDirection: 'row',
@@ -477,67 +469,39 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   methodName: { ...typography.label, fontSize: 15, color: colors.text },
-  methodNameActive: { color: '#fff' },
   typeBadge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: radius.pill,
     backgroundColor: colors.primaryLight,
   },
-  typeBadgeActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
   typeBadgeText: { ...typography.labelSmall, color: colors.primary, fontSize: 10 },
-  typeBadgeTextActive: { color: '#fff' },
   methodHolder: { ...typography.bodySmall, color: colors.textSecondary },
-  methodHolderActive: { color: 'rgba(255,255,255,0.85)' },
   methodNumber: { ...typography.label, color: colors.primary, marginTop: 3 },
-  methodNumberActive: { color: '#fff' },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 3 },
   methodAddress: { ...typography.bodySmall, color: colors.textMuted, flex: 1 },
-  methodAddressActive: { color: 'rgba(255,255,255,0.8)' },
   methodNote: {
     ...typography.bodySmall,
     color: colors.textMuted,
     marginTop: 4,
     fontStyle: 'italic',
   },
-  methodNoteActive: { color: 'rgba(255,255,255,0.7)' },
-  // Detail cards (map / full QR)
-  detailCard: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  detailTitle: { ...typography.label, color: colors.text, marginBottom: spacing.sm },
-  addressDetail: {
+  // Selected summary pill
+  selectedSummary: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    backgroundColor: colors.successLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
-  addressDetailText: { ...typography.body, color: colors.text, flex: 1 },
-  mapContainer: { overflow: 'hidden', borderRadius: radius.md },
-  map: { width: '100%', height: 200, borderRadius: radius.md },
-  coordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs,
+  selectedSummaryText: {
+    ...typography.bodySmall,
+    color: colors.success,
+    flex: 1,
+    lineHeight: 18,
   },
-  coordText: {
-    ...typography.labelSmall,
-    color: colors.textSecondary,
-    fontVariant: ['tabular-nums'],
-  },
-  noPinNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  noPinText: { ...typography.bodySmall, color: colors.textMuted },
-  qrFull: { width: '100%', height: 220, borderRadius: radius.md },
   // Actions row
   actions: {
     flexDirection: 'row',
@@ -565,5 +529,5 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   confirmText: { ...typography.button, color: '#fff' },
-  disabled: { opacity: 0.5 },
+  disabled: { opacity: 0.45 },
 });

@@ -104,9 +104,34 @@ export const patchApplication = createAsyncThunk(
   }
 );
 
+export const submitFaceToFaceAppointment = createAsyncThunk(
+  'franchise/submitFaceToFaceAppointment',
+  async (
+    payload: { id: string; appointmentDate: string; driverName: string; plate: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const updated = await service.submitFaceToFaceAppointment(
+        payload.id,
+        payload.appointmentDate
+      );
+      void ActivityLogService.logActivity({
+        action_type: 'user_action',
+        entity_type: 'driver',
+        entity_id: payload.id,
+        description: `${payload.driverName} scheduled a face-to-face MTOP payment visit (${payload.plate}) on ${new Date(payload.appointmentDate).toLocaleString()}.`,
+        severity: 'info',
+      });
+      return updated;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 export const submitFranchisePayment = createAsyncThunk(
   'franchise/submitPayment',
-  async (payload: { id: string; method: 'in_person'; reference: string; proofUrl: string }, { rejectWithValue }) => {
+  async (payload: { id: string; method: 'in_person'; method_id?: string; reference: string; proofUrl: string }, { rejectWithValue }) => {
     try { return await service.submitPayment(payload.id, payload.method, payload.reference, payload.proofUrl); }
     catch (error: any) { return rejectWithValue(error.message); }
   }
@@ -167,6 +192,10 @@ const franchiseSlice = createSlice({
         }
       })
       .addCase(submitFranchisePayment.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(submitFaceToFaceAppointment.fulfilled, (state, action) => {
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })

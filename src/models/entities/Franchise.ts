@@ -64,6 +64,18 @@ export interface FranchiseApplication {
   inspection_result: 'pending' | 'passed' | 'failed' | null;
   payment_status: 'pending' | 'paid';
   payment_method?: 'in_person' | null;
+  /**
+   * Serialised JSON array of the AdminMtopPaymentMethod objects the admin
+   * selected when they clicked "Send Billing". Stored as JSONB in Supabase.
+   * Undefined / null means the admin hasn't sent a billing notification yet.
+   */
+  selected_payment_methods?: import('./AdminMtopPaymentMethod').AdminMtopPaymentMethod[] | null;
+  /**
+   * Snapshot of the single AdminMtopPaymentMethod the driver picked when they
+   * submitted their payment proof. Set by a patch call right after the driver
+   * taps "Submit Payment for Verification". Null until then.
+   */
+  chosen_payment_method_snapshot?: import('./AdminMtopPaymentMethod').AdminMtopPaymentMethod | null;
   payment_proof_url?: string | null;
   payment_reference?: string | null;
   payment_review_status?: 'awaiting_submission' | 'pending_review' | 'verified' | 'rejected';
@@ -71,6 +83,11 @@ export interface FranchiseApplication {
   payment_verified_at?: string | null;
   payment_verified_by?: string | null;
   payment_rejection_reason?: string | null;
+  /**
+   * ISO date-time string set when the driver books a face-to-face payment
+   * appointment.  Null until the driver submits the appointment form.
+   */
+  appointment_date?: string | null;
   fees: number;
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */

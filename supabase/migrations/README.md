@@ -11,6 +11,8 @@ Migrations through `036` were applied to `tvvfauetrcnxmtgvvshr` on 2026-08-23.
 Migrations `037` through `043` were applied to `tvvfauetrcnxmtgvvshr` on 2026-08-24
 via the Node.js pg client (`scripts/run-migrations.mjs`).
 The Supabase CLI reports matching local and remote versions.
+Migration `043` adds `selected_payment_methods` (JSONB) and `appointment_date`
+(timestamptz) to `franchise_applications`.
 
 ---
 

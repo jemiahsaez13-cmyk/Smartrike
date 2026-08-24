@@ -30,6 +30,22 @@ const REVIEW_COLOR: Record<DocumentReviewStatus, string> = {
   rejected: colors.error,
 };
 
+const METHOD_ICON: Record<string, string> = {
+  gcash: 'cellphone',
+  bank: 'bank-outline',
+  face_to_face: 'map-marker-outline',
+};
+const METHOD_LABEL: Record<string, string> = {
+  gcash: 'GCash',
+  bank: 'Bank Transfer',
+  face_to_face: 'Pay in Person',
+};
+const METHOD_COLOR: Record<string, string> = {
+  gcash: '#0066FF',
+  bank: '#2E7D32',
+  face_to_face: '#E65100',
+};
+
 const formatDate = (iso?: string | null) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -236,16 +252,27 @@ export const FranchiseManagementScreen = () => {
 
   const handleSendBilling = async (
     app: FranchiseApplication,
-    method: AdminMtopPaymentMethod
+    methods: AdminMtopPaymentMethod[]
   ) => {
     setBillingApp(null);
-    const methodLabel =
-      method.method_type === 'face_to_face'
-        ? `Face-to-Face at ${method.address || method.display_name}`
-        : `${method.display_name} (${method.account_number})`;
+    try {
+      // Persist the selected payment methods on the application so the driver
+      // sees actual method details (not hardcoded text) on their FranchiseScreen.
+      await dispatch(
+        patchApplication({
+          id: app.id,
+          patch: { selected_payment_methods: methods } as any,
+        })
+      ).unwrap();
+    } catch {
+      // Non-fatal: notify the admin but consider the billing "sent" — the
+      // notification still reaches the driver via the status change.
+      void notify('Warning', 'Billing sent but payment method details could not be saved. The driver may see default instructions.');
+    }
+    const names = methods.map((m) => m.display_name).join(', ');
     await notify(
       'Billing Sent',
-      `Billing for ₱${Number(app.fees).toFixed(2)} sent to ${app.driver_name} via ${methodLabel}.`
+      `Billing for ₱${Number(app.fees).toFixed(2)} sent to ${app.driver_name}.\n\nPayment method${methods.length !== 1 ? 's' : ''}: ${names}`
     );
   };
 
@@ -400,7 +427,62 @@ export const FranchiseManagementScreen = () => {
 
               {app.status === 'payment' ? (
                 <View style={styles.paymentReviewCard}>
-                  <View style={styles.paymentReviewHead}><MaterialCommunityIcons name="receipt-text-check-outline" size={20} color={colors.primary} /><View style={{ flex: 1 }}><Text style={styles.paymentReviewTitle}>MTOP Payment</Text><Text style={styles.paymentReviewSub}>{app.payment_review_status === 'pending_review' ? 'Proof submitted for review' : app.payment_review_status === 'rejected' ? 'Waiting for corrected proof' : 'Waiting for registrant payment'}</Text></View></View>
+                  <View style={styles.paymentReviewHead}><MaterialCommunityIcons name="receipt-text-check-outline" size={20} color={colors.primary} /><View style={{ flex: 1 }}><Text style={styles.paymentReviewTitle}>MTOP Payment</Text><Text style={styles.paymentReviewSub}>{app.payment_review_status === 'pending_review' ? 'Proof submitted for review' : app.payment_review_status === 'rejected' ? 'Proof rejected — awaiting re-submission' : 'Waiting for registrant payment'}</Text></View></View>
+                  {/* Chosen payment method snapshot — shown when driver has submitted proof */}
+                  {app.payment_review_status === 'pending_review' && app.chosen_payment_method_snapshot ? (() => {
+                    const cm = app.chosen_payment_method_snapshot!;
+                    const mColor = METHOD_COLOR[cm.method_type] || colors.primary;
+                    return (
+                      <View style={styles.chosenMethodBox}>
+                        <Text style={styles.chosenMethodLabel}>PAID VIA</Text>
+                        <View style={styles.chosenMethodRow}>
+                          <View style={[styles.chosenMethodIcon, { backgroundColor: mColor + '18' }]}>
+                            <MaterialCommunityIcons name={METHOD_ICON[cm.method_type] as any} size={18} color={mColor} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.chosenMethodName}>{cm.display_name}</Text>
+                            {cm.method_type !== 'face_to_face' && cm.account_number ? (
+                              <Text style={[styles.chosenMethodDetail, { color: mColor }]}>
+                                {cm.account_name} · {cm.account_number}
+                              </Text>
+                            ) : cm.address ? (
+                              <Text style={styles.chosenMethodDetail}>{cm.address}</Text>
+                            ) : null}
+                          </View>
+                          <View style={[styles.chosenMethodBadge, { backgroundColor: mColor + '15' }]}>
+                            <Text style={[styles.chosenMethodBadgeText, { color: mColor }]}>
+                              {METHOD_LABEL[cm.method_type]}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })() : null}
+                  {/* Rejection reason — shown prominently when proof was rejected */}
+                  {app.payment_review_status === 'rejected' && app.payment_rejection_reason ? (
+                    <View style={styles.rejectionReasonBox}>
+                      <MaterialCommunityIcons name="alert-circle-outline" size={16} color={colors.error} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rejectionReasonLabel}>REJECTION REASON</Text>
+                        <Text style={styles.rejectionReasonText}>{app.payment_rejection_reason}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  {/* Appointment date — shown when driver scheduled a face-to-face visit */}
+                  {(app as any).appointment_date ? (
+                    <View style={styles.appointmentRow}>
+                      <MaterialCommunityIcons name="calendar-clock" size={16} color={colors.primary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.appointmentLabel}>SCHEDULED VISIT</Text>
+                        <Text style={styles.appointmentValue}>
+                          {new Date((app as any).appointment_date).toLocaleString(undefined, {
+                            weekday: 'short', year: 'numeric', month: 'short',
+                            day: 'numeric', hour: '2-digit', minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
                   {app.payment_reference ? <View style={styles.paymentReferenceRow}><Text style={styles.paymentReferenceLabel}>REFERENCE</Text><Text selectable style={styles.paymentReference}>{app.payment_reference}</Text></View> : null}
                   {app.payment_proof_url ? <TouchableOpacity style={styles.viewPaymentProof} onPress={() => setPaymentPreview(app.payment_proof_url!)}><MaterialCommunityIcons name="image-search-outline" size={18} color={colors.primary} /><Text style={styles.viewPaymentProofText}>View payment screenshot</Text></TouchableOpacity> : null}
                   {app.payment_review_status === 'pending_review' ? <View style={styles.paymentActions}><TouchableOpacity style={styles.paymentReject} onPress={() => reviewPayment(app, 'rejected')} disabled={actionBusy === app.id}><Text style={styles.paymentRejectText}>Reject Proof</Text></TouchableOpacity><TouchableOpacity style={styles.paymentVerify} onPress={() => reviewPayment(app, 'verified')} disabled={actionBusy === app.id}>{actionBusy === app.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.paymentVerifyText}>Verify Payment</Text>}</TouchableOpacity></View> : null}
@@ -992,6 +1074,105 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
     lineHeight: 18,
+  },
+  // ── Chosen payment method snapshot (admin payment review card) ──
+  chosenMethodBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  chosenMethodLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    fontSize: 9,
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  chosenMethodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  chosenMethodIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  chosenMethodName: {
+    ...typography.label,
+    color: colors.text,
+    fontSize: 14,
+  },
+  chosenMethodDetail: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  chosenMethodBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    flexShrink: 0,
+  },
+  chosenMethodBadgeText: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  // ── Rejection reason box ──
+  rejectionReasonBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.errorLight,
+    borderWidth: 1,
+    borderColor: colors.error + '30',
+  },
+  rejectionReasonLabel: {
+    ...typography.labelSmall,
+    color: colors.error,
+    fontSize: 9,
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+  rejectionReasonText: {
+    ...typography.bodySmall,
+    color: colors.error,
+    lineHeight: 18,
+  },
+  // ── Scheduled appointment row ──
+  appointmentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.primary + '25',
+  },
+  appointmentLabel: {
+    ...typography.labelSmall,
+    color: colors.primary,
+    fontSize: 9,
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+  appointmentValue: {
+    ...typography.label,
+    color: colors.text,
+    fontSize: 13,
   },
   paymentPreviewImage: { width: '100%', height: '82%' },
   paymentPreviewClose: { position: 'absolute', top: spacing.xl, right: spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
