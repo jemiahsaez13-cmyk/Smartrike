@@ -99,6 +99,9 @@ export class TodaService {
       to_barangay: to,
       fare,
       notes: input.notes?.trim() || null,
+      senior_discount:  input.senior_discount  ?? 20,
+      pwd_discount:     input.pwd_discount     ?? 20,
+      student_discount: input.student_discount ?? 0,
       updated_at: new Date().toISOString(),
     };
 

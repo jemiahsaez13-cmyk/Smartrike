@@ -248,6 +248,24 @@ export const DriverDashboard = () => {
           <Text style={styles.goalSubtitle}>{goalMessage}</Text>
         </Card>
 
+        {/* TODA Card */}
+        {(user as any)?.toda_membership ? (
+          <TouchableOpacity
+            style={styles.todaCard}
+            onPress={() => navigation.navigate('DriverToda')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.todaCardIcon}>
+              <MaterialCommunityIcons name="account-group" size={22} color={colors.primary} />
+            </View>
+            <View style={styles.todaCardText}>
+              <Text style={styles.todaCardLabel}>MY TODA</Text>
+              <Text style={styles.todaCardName}>{(user as any).toda_membership}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+          </TouchableOpacity>
+        ) : null}
+
         {incomingRequests.length > 0 && (
           <TouchableOpacity onPress={() => navigation.navigate('BookingRequests')} activeOpacity={0.9}>
             <LinearGradient colors={gradients.accent} style={styles.requestAlert} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -519,6 +537,41 @@ const styles = StyleSheet.create({
   goalSubtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
+  },
+  todaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+    ...shadows.sm,
+  },
+  todaCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  todaCardText: { flex: 1, minWidth: 0 },
+  todaCardLabel: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    letterSpacing: 1.5,
+    color: colors.textMuted,
+    fontWeight: '700',
+  },
+  todaCardName: {
+    ...typography.label,
+    fontSize: 15,
+    color: colors.text,
+    marginTop: 1,
   },
   requestAlert: {
     flexDirection: 'row',

@@ -21,6 +21,7 @@ import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen'
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { PaymentScreen } from '@/views/screens/shared/PaymentScreen';
 import { DriverProfileScreen } from '@/views/screens/passenger/DriverProfileScreen';
+import { PassengerTodaRatesScreen } from '@/views/screens/passenger/PassengerTodaRatesScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -37,6 +38,11 @@ const PassengerTabs = () => (
       name="History"
       component={TripHistoryScreen}
       options={{ tabBarLabel: 'Activity', tabBarIcon: tabIcon('clock-time-four', 'clock-time-four-outline') }}
+    />
+    <Tab.Screen
+      name="Rates"
+      component={PassengerTodaRatesScreen}
+      options={{ tabBarLabel: 'Rates', tabBarIcon: tabIcon('map-marker-path', 'map-marker-path') }}
     />
     <Tab.Screen
       name="Profile"

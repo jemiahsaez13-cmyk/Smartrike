@@ -25,6 +25,7 @@ import { Driver } from '@/models/types';
 import { TodaAssociation, TodaRoute } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
 import { confirm, notify } from '@/utils/confirm';
+import { NotificationService } from '@/models/services/NotificationService';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
@@ -146,15 +147,19 @@ export const TodaAssignmentScreen = () => {
   );
 
   // ── Fetch routes (cached) ─────────────────────────────────────────────────
+  const routeCacheRef = React.useRef<Record<string, TodaRoute[]>>({});
+
   const fetchRoutes = useCallback(async (toda: TodaAssociation) => {
-    if (routeCache[toda.id] !== undefined) return;
+    if (routeCacheRef.current[toda.id] !== undefined) return;
     try {
       const routes = await todaService.listRoutes(toda.id);
+      routeCacheRef.current = { ...routeCacheRef.current, [toda.id]: routes };
       setRouteCache((prev) => ({ ...prev, [toda.id]: routes }));
     } catch {
+      routeCacheRef.current = { ...routeCacheRef.current, [toda.id]: [] };
       setRouteCache((prev) => ({ ...prev, [toda.id]: [] }));
     }
-  }, [routeCache]);
+  }, []);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const unassignedCount = drivers.filter((d) => !d.toda_membership).length;
@@ -204,6 +209,13 @@ export const TodaAssignmentScreen = () => {
     setSavingTodaId(toda.id);
     try {
       await saveTodaMembership(sheetDriver.id, toda.name);
+
+      // Notify the driver — fire and forget, non-blocking
+      void new NotificationService().notifyPassenger(
+        sheetDriver.id,
+        'TODA Assignment',
+        `You have been assigned to ${toda.name}.${toda.area_barangays?.length ? ` Service area: ${toda.area_barangays.slice(0, 3).join(', ')}${toda.area_barangays.length > 3 ? ` +${toda.area_barangays.length - 3} more` : ''}.` : ''}`
+      ).catch(() => {/* non-critical */});
 
       setDrivers((prev) =>
         prev.map((d) =>

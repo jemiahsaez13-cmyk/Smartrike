@@ -11,13 +11,16 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -48,9 +51,148 @@ const service = new TodaService();
 type View = 'list' | 'detail';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+type PassengerType = 'regular' | 'senior' | 'pwd' | 'student';
+
+const PASSENGER_TYPES: { key: PassengerType; label: string; icon: string }[] = [
+  { key: 'regular', label: 'Regular', icon: 'account-outline' },
+  { key: 'senior',  label: 'Senior',  icon: 'account-heart-outline' },
+  { key: 'pwd',     label: 'PWD',     icon: 'wheelchair-accessibility' },
+  { key: 'student', label: 'Student', icon: 'school-outline' },
+];
+
+function getDiscountPct(route: TodaRoute, type: PassengerType): number {
+  if (type === 'senior')  return route.senior_discount  ?? 0;
+  if (type === 'pwd')     return route.pwd_discount     ?? 0;
+  if (type === 'student') return route.student_discount ?? 0;
+  return 0;
+}
+
+const RoutesDetailTab = ({
+  routes,
+  onAdd,
+  onDelete,
+}: {
+  routes: TodaRoute[];
+  onAdd: () => void;
+  onDelete: (r: TodaRoute) => void;
+}) => {
+  const [passengerType, setPassengerType] = React.useState<PassengerType>('regular');
+
+  return (
+    <>
+      {/* Header row: label + Add button */}
+      <View style={styles.routesHeader}>
+        <Text style={styles.detailSectionLabel}>POINT-TO-POINT FARES</Text>
+        <TouchableOpacity style={styles.addRouteBtn} onPress={onAdd} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="plus" size={16} color="#fff" />
+          <Text style={styles.addRouteBtnText}>Add Route</Text>
+        </TouchableOpacity>
+      </View>
+
+      {routes.length === 0 ? (
+        <View style={styles.empty}>
+          <MaterialCommunityIcons name="map-marker-off-outline" size={40} color={colors.textLight} />
+          <Text style={styles.emptyTitle}>No routes yet</Text>
+          <Text style={styles.emptyText}>
+            Tap "Add Route" to set point-to-point fares between barangays.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* Passenger type — single scrollable row of pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.ptRow}
+            style={styles.ptScroll}
+          >
+            {PASSENGER_TYPES.map(({ key, label, icon }) => {
+              const active = passengerType === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.ptPill, active && styles.ptPillActive]}
+                  onPress={() => setPassengerType(key)}
+                  activeOpacity={0.75}
+                >
+                  <MaterialCommunityIcons
+                    name={icon as any}
+                    size={14}
+                    color={active ? '#fff' : colors.primary}
+                  />
+                  <Text style={[styles.ptPillText, active && styles.ptPillTextActive]}>
+                    {label}
+                  </Text>
+                  {key !== 'regular' && (() => {
+                    const pct = routes[0] ? getDiscountPct(routes[0], key) : 0;
+                    return pct > 0 ? (
+                      <View style={[styles.ptPct, active && styles.ptPctActive]}>
+                        <Text style={[styles.ptPctText, active && styles.ptPctTextActive]}>
+                          -{pct}%
+                        </Text>
+                      </View>
+                    ) : null;
+                  })()}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Route list */}
+          <Card variant="elevated" padding="none" style={styles.listCard}>
+            {routes.map((route, index) => {
+              const discPct   = getDiscountPct(route, passengerType);
+              const discounted = route.fare * (1 - discPct / 100);
+              const hasDiscount = discPct > 0;
+              return (
+                <View key={route.id}>
+                  <View style={styles.routeRow}>
+                    {/* Icon */}
+                    <View style={styles.routeIcon}>
+                      <MaterialCommunityIcons name="map-marker-path" size={16} color={colors.primary} />
+                    </View>
+
+                    {/* From → To (single line, truncated) */}
+                    <Text style={styles.routeLabel} numberOfLines={1} ellipsizeMode="tail">
+                      {route.from_barangay}
+                      <Text style={styles.routeArrow}> → </Text>
+                      {route.to_barangay}
+                    </Text>
+
+                    {/* Fare — strikethrough + discounted, or plain */}
+                    <View style={styles.routeFareCol}>
+                      {hasDiscount && (
+                        <Text style={styles.routeFareOriginal}>{peso(route.fare)}</Text>
+                      )}
+                      <Text style={[styles.routeFare, hasDiscount && styles.routeFareGreen]}>
+                        {peso(discounted)}
+                      </Text>
+                    </View>
+
+                    {/* Delete */}
+                    <TouchableOpacity
+                      style={styles.routeDelete}
+                      onPress={() => onDelete(route)}
+                      activeOpacity={0.75}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={17} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                  {index < routes.length - 1 && <View style={styles.divider} />}
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      )}
+    </>
+  );
+};
+
 export const TodaManagementScreen = () => {
   const navigation = useNavigation<any>();
   const actor = useAppSelector((state) => state.auth.user);
+  const insets = useSafeAreaInsets();
 
   // List state
   const [todas, setTodas] = useState<TodaAssociation[]>([]);
@@ -82,6 +224,9 @@ export const TodaManagementScreen = () => {
   const [routeTo, setRouteTo] = useState('');
   const [routeFare, setRouteFare] = useState('');
   const [routeNotes, setRouteNotes] = useState('');
+  const [routeSeniorDiscount, setRouteSeniorDiscount] = useState('20');
+  const [routePwdDiscount, setRoutePwdDiscount] = useState('20');
+  const [routeStudentDiscount, setRouteStudentDiscount] = useState('0');
   const [routeSaving, setRouteSaving] = useState(false);
   const [barangayPicker, setBarangayPicker] = useState<'from' | 'to' | null>(null);
 
@@ -151,14 +296,14 @@ export const TodaManagementScreen = () => {
         setTodas((prev) => [...prev, saved]);
       }
       setTodaModal(false);
-      await notify(
+      setTodaSaving(false);
+      void notify(
         editingToda ? 'TODA updated' : 'TODA created',
         `${saved.name} has been ${editingToda ? 'updated' : 'registered'}.`
       );
     } catch (e: any) {
-      await notify('Save failed', e?.message || 'Could not save the TODA.');
-    } finally {
       setTodaSaving(false);
+      void notify('Save failed', e?.message || 'Could not save the TODA.');
     }
   };
 
@@ -189,6 +334,9 @@ export const TodaManagementScreen = () => {
     setRouteTo('');
     setRouteFare('');
     setRouteNotes('');
+    setRouteSeniorDiscount('20');
+    setRoutePwdDiscount('20');
+    setRouteStudentDiscount('0');
     setRouteModal(true);
   };
 
@@ -199,6 +347,9 @@ export const TodaManagementScreen = () => {
     if (routeFrom === routeTo) { await notify('Invalid route', 'From and To barangay must be different.'); return; }
     const fare = parseFloat(routeFare);
     if (!routeFare || isNaN(fare) || fare <= 0) { await notify('Invalid fare', 'Please enter a valid fare amount.'); return; }
+    const seniorDiscount  = Math.min(100, Math.max(0, parseFloat(routeSeniorDiscount)  || 0));
+    const pwdDiscount     = Math.min(100, Math.max(0, parseFloat(routePwdDiscount)     || 0));
+    const studentDiscount = Math.min(100, Math.max(0, parseFloat(routeStudentDiscount) || 0));
     setRouteSaving(true);
     try {
       const saved = await service.saveRoute({
@@ -207,14 +358,18 @@ export const TodaManagementScreen = () => {
         to_barangay: routeTo,
         fare,
         notes: routeNotes,
+        senior_discount:  seniorDiscount,
+        pwd_discount:     pwdDiscount,
+        student_discount: studentDiscount,
       });
       setRoutes((prev) => [...prev, saved]);
       setRouteModal(false);
-      await notify('Route added', `${saved.from_barangay} → ${saved.to_barangay} at ${peso(saved.fare)}`);
-    } catch (e: any) {
-      await notify('Save failed', e?.message || 'Could not save the route.');
-    } finally {
       setRouteSaving(false);
+      // fire-and-forget — don't block on the user tapping OK
+      void notify('Route added', `${saved.from_barangay} → ${saved.to_barangay} at ${peso(saved.fare)}`);
+    } catch (e: any) {
+      setRouteSaving(false);
+      void notify('Save failed', e?.message || 'Could not save the route.');
     }
   };
 
@@ -237,7 +392,7 @@ export const TodaManagementScreen = () => {
   return (
     <View style={styles.container}>
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <TouchableOpacity
           style={styles.back}
           onPress={() => {
@@ -387,10 +542,21 @@ export const TodaManagementScreen = () => {
                 </>
               ) : null}
             </View>
-            <TouchableOpacity onPress={() => toggleActive(selected)} activeOpacity={0.75}>
-              <Text style={[styles.toggleText, { color: selected.is_active ? colors.error : colors.success }]}>
-                {selected.is_active ? 'Deactivate' : 'Activate'}
+            <TouchableOpacity
+              style={styles.toggleRow}
+              onPress={() => toggleActive(selected)}
+              activeOpacity={0.75}
+            >
+              <Text style={[styles.toggleLabel, { color: selected.is_active ? colors.success : colors.textMuted }]}>
+                {selected.is_active ? 'Active' : 'Inactive'}
               </Text>
+              <Switch
+                value={selected.is_active}
+                onValueChange={() => toggleActive(selected)}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={selected.is_active ? '#fff' : colors.textMuted}
+                ios_backgroundColor={colors.border}
+              />
             </TouchableOpacity>
           </View>
 
@@ -493,55 +659,11 @@ export const TodaManagementScreen = () => {
 
               {/* ── Routes tab ── */}
               {detailTab === 'routes' && (
-                <>
-                  <View style={styles.routesHeader}>
-                    <Text style={styles.detailSectionLabel}>POINT-TO-POINT FARES</Text>
-                    <TouchableOpacity style={styles.addRouteBtn} onPress={openRouteModal} activeOpacity={0.8}>
-                      <MaterialCommunityIcons name="plus" size={16} color="#fff" />
-                      <Text style={styles.addRouteBtnText}>Add Route</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {routes.length === 0 ? (
-                    <View style={styles.empty}>
-                      <MaterialCommunityIcons name="map-marker-off-outline" size={40} color={colors.textLight} />
-                      <Text style={styles.emptyTitle}>No routes yet</Text>
-                      <Text style={styles.emptyText}>
-                        Tap "Add Route" to set point-to-point fares between barangays.
-                      </Text>
-                    </View>
-                  ) : (
-                    <Card variant="elevated" padding="none" style={styles.listCard}>
-                      {routes.map((route, index) => (
-                        <View key={route.id}>
-                          <View style={styles.routeRow}>
-                            <View style={styles.routeIcon}>
-                              <MaterialCommunityIcons name="map-marker-path" size={18} color={colors.primary} />
-                            </View>
-                            <View style={styles.routeInfo}>
-                              <Text style={styles.routeLabel}>
-                                {route.from_barangay}
-                                <Text style={styles.routeArrow}> → </Text>
-                                {route.to_barangay}
-                              </Text>
-                              {route.notes ? (
-                                <Text style={styles.routeNotes} numberOfLines={1}>{route.notes}</Text>
-                              ) : null}
-                            </View>
-                            <Text style={styles.routeFare}>{peso(route.fare)}</Text>
-                            <TouchableOpacity
-                              style={styles.routeDelete}
-                              onPress={() => deleteRoute(route)}
-                              activeOpacity={0.75}
-                            >
-                              <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
-                            </TouchableOpacity>
-                          </View>
-                          {index < routes.length - 1 && <View style={styles.divider} />}
-                        </View>
-                      ))}
-                    </Card>
-                  )}
-                </>
+                <RoutesDetailTab
+                  routes={routes}
+                  onAdd={openRouteModal}
+                  onDelete={deleteRoute}
+                />
               )}
             </ScrollView>
           )}
@@ -614,7 +736,7 @@ export const TodaManagementScreen = () => {
               <Field label="NOTES" value={todaNotes} onChangeText={setTodaNotes} placeholder="Additional information…" multiline />
             </ScrollView>
 
-            <View style={styles.sheetFooter}>
+            <View style={[styles.sheetFooter, { paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.md }]}>
               <TouchableOpacity
                 style={[styles.saveBtn, todaSaving && { opacity: 0.65 }]}
                 onPress={saveToda}
@@ -775,7 +897,7 @@ export const TodaManagementScreen = () => {
                 <TextInput
                   style={styles.fareInput}
                   value={routeFare}
-                  onChangeText={setRouteFare}
+                  onChangeText={(v) => setRouteFare(v.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1'))}
                   placeholder="0.00"
                   placeholderTextColor={colors.textMuted}
                   keyboardType="decimal-pad"
@@ -790,9 +912,57 @@ export const TodaManagementScreen = () => {
                 placeholder="e.g. Terminal to Laylay"
                 multiline
               />
+
+              {/* Discounts */}
+              <Text style={[styles.fieldLabel, { marginTop: spacing.md }]}>DISCOUNTS (%)</Text>
+              <View style={styles.discountRow}>
+                {[
+                  { label: 'Senior',  icon: 'account-heart-outline',     value: routeSeniorDiscount,  onChange: setRouteSeniorDiscount,  placeholder: '20' },
+                  { label: 'PWD',     icon: 'wheelchair-accessibility',   value: routePwdDiscount,     onChange: setRoutePwdDiscount,     placeholder: '20' },
+                  { label: 'Student', icon: 'school-outline',             value: routeStudentDiscount, onChange: setRouteStudentDiscount, placeholder: '0'  },
+                ].map(({ label, icon, value, onChange, placeholder }) => (
+                  <View key={label} style={styles.discountField}>
+                    <View style={styles.discountLabelRow}>
+                      <MaterialCommunityIcons name={icon as any} size={13} color={colors.primary} />
+                      <Text style={styles.discountLabel}>{label}</Text>
+                    </View>
+                    <View style={styles.discountInputWrap}>
+                      <TextInput
+                        style={styles.discountInput}
+                        value={value}
+                        onChangeText={onChange}
+                        placeholder={placeholder}
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.discountPct}>%</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              {/* Live preview of discounted fares */}
+              {routeFare && !isNaN(parseFloat(routeFare)) && parseFloat(routeFare) > 0 && (
+                <View style={styles.discountPreview}>
+                  {[
+                    { label: 'Senior',  pct: parseFloat(routeSeniorDiscount)  || 0, icon: 'account-heart-outline' },
+                    { label: 'PWD',     pct: parseFloat(routePwdDiscount)     || 0, icon: 'wheelchair-accessibility' },
+                    { label: 'Student', pct: parseFloat(routeStudentDiscount) || 0, icon: 'school-outline' },
+                  ].map(({ label, pct, icon }) => {
+                    const base = parseFloat(routeFare);
+                    const discounted = base * (1 - Math.min(100, Math.max(0, pct)) / 100);
+                    return (
+                      <View key={label} style={styles.discountPreviewRow}>
+                        <MaterialCommunityIcons name={icon as any} size={14} color={colors.textMuted} />
+                        <Text style={styles.discountPreviewLabel}>{label} ({pct}% off)</Text>
+                        <Text style={styles.discountPreviewFare}>{peso(discounted)}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </ScrollView>
 
-            <View style={styles.sheetFooter}>
+            <View style={[styles.sheetFooter, { paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.md }]}>
               <TouchableOpacity
                 style={[styles.saveBtn, routeSaving && { opacity: 0.65 }]}
                 onPress={saveRoute}
@@ -916,7 +1086,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center',
-    paddingTop: layout.headerTop, paddingBottom: spacing.md,
+    paddingBottom: spacing.md,
     paddingRight: spacing.screen,
     backgroundColor: colors.surface,
     borderBottomWidth: 1, borderBottomColor: colors.borderLight,
@@ -986,7 +1156,8 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary },
   statusSep: { color: colors.textMuted, fontSize: 11 },
-  toggleText: { ...typography.label, fontSize: 12, fontWeight: '700' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  toggleLabel: { ...typography.label, fontSize: 12, fontWeight: '700' },
 
   tabRow: {
     flexDirection: 'row',
@@ -1040,6 +1211,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, height: 34, borderRadius: radius.md,
   },
   addRouteBtnText: { ...typography.label, color: '#fff', fontSize: 12 },
+
+  // Passenger type selector — horizontal pill slider
+  ptScroll: { marginBottom: spacing.sm },
+  ptRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 2,
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  ptPill: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1.5, borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  ptPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  ptPillText: {
+    ...typography.labelSmall,
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  ptPillTextActive: {
+    color: '#fff',
+  },
+  ptPct: {
+    paddingHorizontal: 5, paddingVertical: 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.successLight,
+  },
+  ptPctActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  ptPctText: {
+    ...typography.labelSmall,
+    fontSize: 10,
+    color: colors.success,
+    fontWeight: '700',
+  },
+  ptPctTextActive: {
+    color: '#fff',
+  },
+  discountBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: colors.successLight,
+    borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 6,
+    marginBottom: spacing.sm,
+  },
+  discountBannerText: { ...typography.bodySmall, fontSize: 12, color: colors.success, fontWeight: '600' },
   routeRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 56,
@@ -1047,15 +1272,29 @@ const styles = StyleSheet.create({
   routeIcon: {
     width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
   },
   routeInfo: { flex: 1, minWidth: 0 },
-  routeLabel: { ...typography.label, fontSize: 13, color: colors.text },
+  routeLabel: { ...typography.label, fontSize: 13, color: colors.text, flex: 1, minWidth: 0 },
   routeArrow: { color: colors.primary },
   routeNotes: { ...typography.bodySmall, fontSize: 11, color: colors.textMuted, marginTop: 2 },
   routeFare: { ...typography.label, fontSize: 15, color: colors.primary, fontWeight: '700' },
+  routeFareGreen: { color: colors.success },
+  routeFareCol: { alignItems: 'flex-end', flexShrink: 0, minWidth: 56 },
+  routeFareOriginal: {
+    ...typography.bodySmall, fontSize: 10, color: colors.textMuted,
+    textDecorationLine: 'line-through',
+  },
+  routeDiscountChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 3 },
+  routeDiscountChip: {
+    paddingHorizontal: 5, paddingVertical: 1,
+    backgroundColor: colors.successLight, borderRadius: radius.pill,
+  },
+  routeDiscountChipText: { ...typography.labelSmall, fontSize: 9, color: colors.success, fontWeight: '700' },
   routeDelete: {
     width: 36, height: 36, borderRadius: radius.md,
     backgroundColor: colors.errorLight, alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
   },
 
   // States
@@ -1114,6 +1353,32 @@ const styles = StyleSheet.create({
   },
   pesoSign: { ...typography.label, fontSize: 16, color: colors.primary, marginRight: 4 },
   fareInput: { flex: 1, ...typography.label, fontSize: 16, color: colors.text, paddingVertical: 0 },
+
+  // Discount fields — responsive 3-column, min 72px each so nothing clips
+  discountRow: { flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.xs },
+  discountField: { flex: 1, minWidth: 72 },
+  discountLabelRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: spacing.xs,
+  },
+  discountLabel: { ...typography.labelSmall, fontSize: 10, color: colors.textMuted, fontWeight: '700', letterSpacing: 0.3, flexShrink: 1 },
+  discountInputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md,
+    paddingHorizontal: spacing.xs, backgroundColor: colors.surface, height: 44,
+  },
+  discountInput: { flex: 1, ...typography.label, fontSize: 14, color: colors.text, paddingVertical: 0, textAlign: 'center' },
+  discountPct: { ...typography.label, fontSize: 13, color: colors.primary, marginLeft: 2 },
+  discountPreview: {
+    marginTop: spacing.sm, borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    gap: 4,
+  },
+  discountPreviewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  discountPreviewLabel: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, flex: 1 },
+  discountPreviewFare: { ...typography.label, fontSize: 13, color: colors.primary, fontWeight: '700' },
 
   // Barangay picker
   barangayList: { paddingHorizontal: spacing.screen, paddingBottom: spacing.lg },

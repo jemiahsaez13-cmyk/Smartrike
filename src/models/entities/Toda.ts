@@ -26,6 +26,12 @@ export interface TodaRoute {
   to_barangay: string;
   fare: number;
   notes: string | null;
+  /** Senior citizen discount percentage (0–100). Default 20. */
+  senior_discount: number;
+  /** PWD discount percentage (0–100). Default 20. */
+  pwd_discount: number;
+  /** Student discount percentage (0–100). Default 0. */
+  student_discount: number;
   created_at: string;
   updated_at: string;
 }
@@ -48,4 +54,7 @@ export type SaveRouteInput = {
   to_barangay: string;
   fare: number;
   notes?: string;
+  senior_discount?: number;
+  pwd_discount?: number;
+  student_discount?: number;
 };
