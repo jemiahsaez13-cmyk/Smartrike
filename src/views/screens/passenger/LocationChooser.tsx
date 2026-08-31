@@ -141,14 +141,14 @@ export const LocationChooser: React.FC<Props> = ({
             </TouchableOpacity>
 
             <Text style={styles.sectionTitle}>Choose by address</Text>
-            {MARINDUQUE_TOWNS.map((t, i) => (
-              <TouchableOpacity key={t.name} style={styles.row} onPress={() => { setTownIdx(i); setQuery(''); }} activeOpacity={0.7}>
+            {MARINDUQUE_TOWNS.filter((t) => t.name === 'Boac').map((t, i) => (
+              <TouchableOpacity key={t.name} style={styles.row} onPress={() => { setTownIdx(MARINDUQUE_TOWNS.indexOf(t)); setQuery(''); }} activeOpacity={0.7}>
                 <View style={styles.rowIcon}>
                   <MaterialCommunityIcons name="city-variant-outline" size={20} color={colors.text} />
                 </View>
                 <View style={styles.rowCopy}>
                   <Text style={styles.rowLabel}>{t.name}</Text>
-                  <Text style={styles.rowSub}>{t.barangays.length} barangays</Text>
+                  <Text style={styles.rowSub}>{t.barangays.length} barangays · Service area</Text>
                 </View>
                 <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
               </TouchableOpacity>

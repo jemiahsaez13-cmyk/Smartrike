@@ -895,6 +895,14 @@ export const BookRideScreen = () => {
           >
             {dropoff ? `Confirm ${rideType === 'priority' ? 'Priority' : 'Standard'} Trip` : 'Choose a destination'}
           </Button>
+
+          {/* Service area notice */}
+          <View style={styles.serviceNotice}>
+            <MaterialCommunityIcons name="map-marker-radius-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.serviceNoticeText}>
+              Service area: <Text style={{ fontWeight: '600' }}>Boac, Marinduque</Text> only. Requests outside this area may be declined by drivers.
+            </Text>
+          </View>
         </ScrollView>
       </Animated.View>
 
@@ -1644,5 +1652,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: spacing.sm,
     minHeight: 44,
+  },
+  serviceNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  serviceNoticeText: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    flex: 1,
+    lineHeight: 17,
+    fontSize: 12,
   },
 });
