@@ -148,15 +148,18 @@ export const reviewFranchisePayment = createAsyncThunk(
 export const submitChangeOfUnit = createAsyncThunk(
   'franchise/submitChangeOfUnit',
   async (
-    payload: { id: string; newPlate: string; newBody: string; orNumber: string; crNumber: string; orImage?: string | null; crImage?: string | null; unitImage?: string | null },
+    payload: { id: string; unitType: 'sidecar' | 'motor' | 'both'; newPlate: string; newBody: string; orNumber: string; crNumber: string; vehicleMake: string; vehicleModel: string; orImage?: string | null; crImage?: string | null; unitImage?: string | null },
     { rejectWithValue }
   ) => {
     try {
       return await service.submitChangeOfUnitRequest(payload.id, {
+        unitType: payload.unitType,
         newPlate: payload.newPlate,
         newBody: payload.newBody,
         orNumber: payload.orNumber,
         crNumber: payload.crNumber,
+        vehicleMake: payload.vehicleMake,
+        vehicleModel: payload.vehicleModel,
         orImage: payload.orImage,
         crImage: payload.crImage,
         unitImage: payload.unitImage,

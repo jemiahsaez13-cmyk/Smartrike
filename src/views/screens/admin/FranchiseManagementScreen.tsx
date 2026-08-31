@@ -61,6 +61,7 @@ const isHttp = (url?: string | null) => !!url && (/^https?:\/\//i.test(url) || /
 // Maps the current status to the next admin action.
 const NEXT: Record<string, { label: string; status: FranchiseStatus; patch?: Partial<FranchiseApplication> }> = {
   submitted: { label: 'Start Verification', status: 'document_verification' },
+  approved: { label: 'Issue MTOP', status: 'issued' },
 };
 
 const STATUS_COLOR: Record<FranchiseStatus, string> = {
@@ -201,7 +202,23 @@ export const FranchiseManagementScreen = () => {
   const advance = async (app: FranchiseApplication) => {
     const next = NEXT[app.status];
     if (!next) return;
-    const patch = { ...next.patch };
+    if (next.status === 'issued') {
+      const okay = await confirm(
+        'Issue MTOP',
+        `Issue the MTOP permit to ${app.driver_name}? Confirm only when the permit is ready for release.`,
+        { confirmText: 'Issue MTOP' }
+      );
+      if (!okay) return;
+    }
+    const patch: Partial<FranchiseApplication> = { ...next.patch };
+    if (next.status === 'issued') {
+      const year = new Date().getFullYear();
+      patch.mtop_number = app.mtop_number || `MTOP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
+      patch.franchise_status = 'active';
+      patch.issued_at = new Date().toISOString().slice(0, 10);
+      patch.original_holder_name = app.original_holder_name || app.driver_name;
+      patch.current_holder_name = app.driver_name;
+    }
     setActionBusy(app.id);
     try {
       await dispatch(advanceApplication({ id: app.id, status: next.status, patch })).unwrap();
@@ -254,7 +271,7 @@ export const FranchiseManagementScreen = () => {
         decision,
         reason: decision === 'rejected' ? 'Payment screenshot or reference could not be validated.' : undefined,
       })).unwrap();
-      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'MTOP has been issued to the driver.' : 'The registrant can submit corrected proof.');
+      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'The application is approved. Use the Issue MTOP button when the permit is ready.' : 'The registrant can submit corrected proof.');
     } catch (error: any) {
       await notify('Review failed', typeof error === 'string' ? error : error?.message || 'Please refresh and try again.');
     } finally { setActionBusy(null); }
@@ -410,7 +427,18 @@ export const FranchiseManagementScreen = () => {
                   </View>
                 </View>
 
-                <View style={styles.couFieldGrid}>
+                <View style={styles.couTypeBanner}>
+                  <MaterialCommunityIcons name={app.cou_unit_type === 'motor' ? 'motorbike' : app.cou_unit_type === 'both' ? 'swap-horizontal-bold' : 'rickshaw'} size={18} color={colors.primary} />
+                  <Text style={styles.couTypeText}>{app.cou_unit_type === 'motor' ? 'MOTOR REPLACEMENT' : app.cou_unit_type === 'both' ? 'MOTOR & SIDECAR REPLACEMENT' : 'SIDECAR REPLACEMENT'}</Text>
+                </View>
+                {app.cou_unit_type !== 'sidecar' ? (
+                  <View style={styles.couOrCrRow}>
+                    <View style={styles.couField}><Text style={styles.couFieldLabel}>MANUFACTURER / MAKE</Text><Text style={styles.couFieldValue}>{app.cou_vehicle_make}</Text></View>
+                    <View style={styles.couField}><Text style={styles.couFieldLabel}>MODEL</Text><Text style={styles.couFieldValue}>{app.cou_vehicle_model}</Text></View>
+                  </View>
+                ) : null}
+
+                {app.cou_unit_type !== 'sidecar' ? <View style={styles.couFieldGrid}>
                   <View style={styles.couField}>
                     <Text style={styles.couFieldLabel}>CURRENT PLATE</Text>
                     <Text style={styles.couFieldValue}>{app.plate_number}</Text>
@@ -420,7 +448,7 @@ export const FranchiseManagementScreen = () => {
                     <Text style={styles.couFieldLabel}>NEW PLATE</Text>
                     <Text style={[styles.couFieldValue, { color: colors.primary }]}>{app.cou_new_plate}</Text>
                   </View>
-                </View>
+                </View> : null}
 
                 <View style={styles.couFieldGrid}>
                   <View style={styles.couField}>
@@ -434,7 +462,7 @@ export const FranchiseManagementScreen = () => {
                   </View>
                 </View>
 
-                <View style={styles.couOrCrRow}>
+                {app.cou_unit_type !== 'sidecar' ? <View style={styles.couOrCrRow}>
                   <View style={styles.couField}>
                     <Text style={styles.couFieldLabel}>OR NUMBER</Text>
                     <Text style={styles.couFieldValue}>{app.cou_or_number}</Text>
@@ -443,7 +471,7 @@ export const FranchiseManagementScreen = () => {
                     <Text style={styles.couFieldLabel}>CR NUMBER</Text>
                     <Text style={styles.couFieldValue}>{app.cou_cr_number}</Text>
                   </View>
-                </View>
+                </View> : null}
 
                 {(app.cou_or_image || app.cou_cr_image || app.cou_unit_image) ? (
                   <View style={styles.couImagesRow}>
@@ -525,6 +553,21 @@ export const FranchiseManagementScreen = () => {
                   <Text style={[styles.statusText, { color: STATUS_COLOR[app.status] }]}>
                     {FRANCHISE_STATUS_LABEL[app.status]}
                   </Text>
+                </View>
+              </View>
+
+              <View style={styles.applicationUnitRow}>
+                <View style={styles.applicationUnitItem}>
+                  <Text style={styles.applicationUnitLabel}>LICENSE NUMBER</Text>
+                  <Text style={styles.applicationUnitValue}>{app.license_number || 'Not provided'}</Text>
+                </View>
+                <View style={styles.applicationUnitItem}>
+                  <Text style={styles.applicationUnitLabel}>PLATE NUMBER</Text>
+                  <Text style={styles.applicationUnitValue}>{app.plate_number || 'Not provided'}</Text>
+                </View>
+                <View style={styles.applicationUnitItem}>
+                  <Text style={styles.applicationUnitLabel}>TRICYCLE BODY NUMBER</Text>
+                  <Text style={styles.applicationUnitValue}>{app.body_number || 'Not provided'}</Text>
                 </View>
               </View>
 
@@ -1206,6 +1249,30 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm, 
     flexWrap: 'wrap' 
   },
+  applicationUnitRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  applicationUnitItem: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  applicationUnitLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    fontSize: 9,
+    letterSpacing: 0.5,
+    marginBottom: 3,
+  },
+  applicationUnitValue: {
+    ...typography.label,
+    color: colors.text,
+    fontSize: 13,
+  },
   metaItem: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -1841,6 +1908,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginBottom: spacing.xs,
+  },
+  couTypeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  couTypeText: {
+    ...typography.labelSmall,
+    color: colors.primary,
+    fontWeight: '800',
   },
   couOrCrRow: {
     flexDirection: 'row',

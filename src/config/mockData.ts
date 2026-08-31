@@ -571,6 +571,22 @@ export const seedDriverLocations = () => [
   { driver_id: 'drv-2', latitude: 13.4477, longitude: 121.8389, timestamp: iso(5 * MIN) },
 ];
 
+export const seedTodaAssociations = () => [
+  {
+    id: 'toda-fedtodab',
+    name: 'FEDTODAB',
+    area: 'Boac, Marinduque',
+    area_barangays: [],
+    contact_name: null,
+    contact_phone: null,
+    notes: 'Default registered TODA for demo mode.',
+    is_active: true,
+    created_by: 'demo-admin',
+    created_at: iso(365 * DAY),
+    updated_at: iso(30 * DAY),
+  },
+];
+
 /** Builds a fresh in-memory database snapshot. */
 export const buildSeedDatabase = (): Record<string, any[]> => ({
   users: seedUsers(),
@@ -581,6 +597,7 @@ export const buildSeedDatabase = (): Record<string, any[]> => ({
   driver_locations: seedDriverLocations(),
   franchise_applications: seedFranchiseApplications(),
   franchise_events: seedFranchiseEvents(),
+  toda_associations: seedTodaAssociations(),
   association_inventory: seedAssociationInventory(),
   driver_violations: seedDriverViolations(),
 });

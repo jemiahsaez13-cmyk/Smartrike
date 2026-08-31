@@ -29,6 +29,10 @@ import { Card } from '@/views/components/common/Card';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { SUPPORT } from '@/config/constants';
+import { TodaAssociation } from '@/models/entities/Toda';
+import { TodaService } from '@/models/services/TodaService';
+
+const todaService = new TodaService();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline date picker — renders a modal with a scrollable 30-day calendar strip
@@ -668,6 +672,7 @@ export const FranchiseScreen = () => {
   const { user } = useAppSelector((state) => state.auth);
   const { myApplication, loading } = useAppSelector((state) => state.franchise);
   const driver = user as any;
+  const accountLicenseNumber = String(driver?.license_number || '').trim().toUpperCase();
 
   const [docs, setDocs] = useState<FranchiseDocument[]>(
     REQUIRED_DOCUMENTS.map((name) => ({
@@ -679,7 +684,12 @@ export const FranchiseScreen = () => {
       review_remarks: null,
     }))
   );
-  const [plate, setPlate] = useState<string>(driver?.vehicle_details?.plate_number || 'ABC-1234');
+  const accountPlate = String(driver?.vehicle_details?.plate_number || myApplication?.plate_number || '').trim().toUpperCase();
+  const [bodyNumber, setBodyNumber] = useState<string>(driver?.vehicle_details?.body_number || '');
+  const [registeredTodas, setRegisteredTodas] = useState<TodaAssociation[]>([]);
+  const [selectedToda, setSelectedToda] = useState('');
+  const [showTodaPicker, setShowTodaPicker] = useState(false);
+  const [loadingTodas, setLoadingTodas] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [renewalMode, setRenewalMode] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
@@ -687,12 +697,38 @@ export const FranchiseScreen = () => {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [showPayNow, setShowPayNow] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    setLoadingTodas(true);
+    todaService.listAll()
+      .then((rows) => {
+        if (!active) return;
+        // The application dropdown mirrors every TODA registered through
+        // TODA Management. Status remains visible so the driver can identify
+        // the exact association recorded on the submitted certificate.
+        const available = rows;
+        setRegisteredTodas(available);
+        const preferred = myApplication?.toda || driver?.toda_membership || '';
+        setSelectedToda((current) => current || (available.some((row) => row.name === preferred) ? preferred : ''));
+      })
+      .catch(() => {
+        if (active) setRegisteredTodas([]);
+      })
+      .finally(() => {
+        if (active) setLoadingTodas(false);
+      });
+    return () => { active = false; };
+  }, [driver?.toda_membership, myApplication?.toda]);
+
   // Change of Unit modal state
   const [showCouModal, setShowCouModal]     = useState(false);
+  const [couUnitType, setCouUnitType]       = useState<'sidecar' | 'motor' | 'both'>('sidecar');
   const [couNewPlate, setCouNewPlate]       = useState('');
   const [couNewBody, setCouNewBody]         = useState('');
   const [couOrNumber, setCouOrNumber]       = useState('');
   const [couCrNumber, setCouCrNumber]       = useState('');
+  const [couVehicleMake, setCouVehicleMake] = useState('');
+  const [couVehicleModel, setCouVehicleModel] = useState('');
   const [couOrImage, setCouOrImage]         = useState('');
   const [couCrImage, setCouCrImage]         = useState('');
   const [couUnitImage, setCouUnitImage]     = useState('');
@@ -852,6 +888,12 @@ export const FranchiseScreen = () => {
   };
 
   const handleSubmit = async (type: FranchiseType) => {
+    const normalizedPlate = accountPlate;
+    const normalizedBodyNumber = bodyNumber.trim().toUpperCase();
+    if (!accountLicenseNumber || !normalizedPlate || !normalizedBodyNumber || !selectedToda) {
+      void notify('Incomplete application', 'License Number, Plate Number, Tricycle Body Number, and TODA are required.');
+      return;
+    }
     if (!allUploaded) {
       void notify('Incomplete', 'Please upload all required documents first.');
       return;
@@ -862,8 +904,10 @@ export const FranchiseScreen = () => {
         submitApplication({
           driver_id: user!.id,
           driver_name: user!.name,
-          toda: driver?.toda_membership || 'FEDTODAB',
-          plate_number: plate,
+          license_number: accountLicenseNumber,
+          toda: selectedToda,
+          plate_number: normalizedPlate,
+          body_number: normalizedBodyNumber,
           type,
           documents: docs,
           fees: type === 'renewal' ? 1000 : 1500,
@@ -898,7 +942,7 @@ export const FranchiseScreen = () => {
         review_status: 'pending' as const,
         review_remarks: null,
       })));
-      setPlate(myApplication?.plate_number || driver?.vehicle_details?.plate_number || '');
+      setBodyNumber(myApplication?.body_number || driver?.vehicle_details?.body_number || '');
       setRenewalMode(true);
     }
   };
@@ -910,10 +954,13 @@ export const FranchiseScreen = () => {
       await dispatch(
         submitChangeOfUnit({
           id: myApplication.id,
+          unitType: couUnitType,
           newPlate: couNewPlate,
           newBody: couNewBody,
           orNumber: couOrNumber,
           crNumber: couCrNumber,
+          vehicleMake: couVehicleMake,
+          vehicleModel: couVehicleModel,
           orImage: couOrImage || null,
           crImage: couCrImage || null,
           unitImage: couUnitImage || null,
@@ -924,12 +971,14 @@ export const FranchiseScreen = () => {
       setCouNewBody('');
       setCouOrNumber('');
       setCouCrNumber('');
+      setCouVehicleMake('');
+      setCouVehicleModel('');
       setCouOrImage('');
       setCouCrImage('');
       setCouUnitImage('');
       await notify('Request Submitted', 'Your Change of Unit request has been submitted for admin review.');
     } catch (err: any) {
-      await notify('Submission Failed', err?.message || 'Could not submit the Change of Unit request.');
+      await notify('Submission Failed', typeof err === 'string' ? err : err?.message || 'Could not submit the Change of Unit request.');
     } finally {
       setCouSubmitting(false);
     }
@@ -1079,6 +1128,27 @@ export const FranchiseScreen = () => {
                     Submit details of your replacement tricycle unit. The admin will verify and update your franchise records.
                   </Text>
 
+                  <Text style={couModalStyles.label}>WHAT ARE YOU REPLACING?</Text>
+                  <View style={couModalStyles.typeRow}>
+                    {(['sidecar', 'motor', 'both'] as const).map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[couModalStyles.typeOption, couUnitType === type && couModalStyles.typeOptionActive]}
+                        onPress={() => setCouUnitType(type)}
+                      >
+                        <MaterialCommunityIcons name={type === 'motor' ? 'motorbike' : type === 'both' ? 'swap-horizontal-bold' : 'rickshaw'} size={20} color={couUnitType === type ? '#fff' : colors.primary} />
+                        <Text style={[couModalStyles.typeOptionText, couUnitType === type && { color: '#fff' }]}>{type === 'motor' ? 'Motor' : type === 'both' ? 'Both' : 'Sidecar'}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {couUnitType !== 'sidecar' ? <>
+                  <Text style={couModalStyles.label}>MOTOR MANUFACTURER / MAKE</Text>
+                  <TextInput style={couModalStyles.input} value={couVehicleMake} onChangeText={setCouVehicleMake} placeholder="e.g. Honda" placeholderTextColor={colors.textMuted} maxLength={100} />
+
+                  <Text style={couModalStyles.label}>MOTOR MODEL</Text>
+                  <TextInput style={couModalStyles.input} value={couVehicleModel} onChangeText={setCouVehicleModel} placeholder="e.g. TMX 125 Alpha" placeholderTextColor={colors.textMuted} maxLength={100} />
+
                   <Text style={couModalStyles.label}>NEW PLATE NUMBER</Text>
                   <TextInput
                     style={couModalStyles.input}
@@ -1089,8 +1159,9 @@ export const FranchiseScreen = () => {
                     autoCapitalize="characters"
                     maxLength={20}
                   />
+                  </> : null}
 
-                  <Text style={couModalStyles.label}>NEW BODY / CHASSIS NUMBER</Text>
+                  <Text style={couModalStyles.label}>{couUnitType === 'motor' ? 'NEW BODY / CHASSIS NUMBER' : 'NEW SIDECAR / BODY NUMBER'}</Text>
                   <TextInput
                     style={couModalStyles.input}
                     value={couNewBody}
@@ -1101,6 +1172,7 @@ export const FranchiseScreen = () => {
                     maxLength={30}
                   />
 
+                  {couUnitType !== 'sidecar' ? <>
                   <Text style={couModalStyles.label}>OR NUMBER (LTO Official Receipt)</Text>
                   <TextInput
                     style={couModalStyles.input}
@@ -1176,6 +1248,7 @@ export const FranchiseScreen = () => {
                       <Text style={couModalStyles.removeImageText}>Remove photo</Text>
                     </TouchableOpacity>
                   ) : null}
+                  </> : null}
 
                   <Text style={couModalStyles.label}>UNIT PHOTO <Text style={couModalStyles.labelOptional}>(optional)</Text></Text>
                   <TouchableOpacity
@@ -1208,7 +1281,7 @@ export const FranchiseScreen = () => {
                     variant="primary"
                     onPress={handleCouSubmit}
                     loading={couSubmitting}
-                    disabled={!couNewPlate.trim() || !couNewBody.trim() || !couOrNumber.trim() || !couCrNumber.trim()}
+                    disabled={!couNewBody.trim() || (couUnitType !== 'sidecar' && (!couNewPlate.trim() || !couOrNumber.trim() || !couCrNumber.trim() || !couVehicleMake.trim() || !couVehicleModel.trim()))}
                     style={couModalStyles.submitBtn}
                   >
                     Submit Request
@@ -1534,13 +1607,90 @@ export const FranchiseScreen = () => {
         )}
 
         <Text style={styles.sectionTitle}>Unit Details</Text>
-        <Card variant="elevated" padding="md" style={styles.infoCard}>
-          <MaterialCommunityIcons name="rickshaw" size={24} color={colors.primary} />
-          <View>
-            <Text style={styles.infoLabel}>PLATE NUMBER</Text>
-            <Text style={styles.infoValue}>{plate}</Text>
+        <Card variant="elevated" padding="md">
+          <Text style={styles.unitInputLabel}>DRIVER'S LICENSE NUMBER</Text>
+          <View style={styles.readOnlyUnitField}>
+            <MaterialCommunityIcons name="card-account-details-outline" size={17} color={colors.textMuted} />
+            <Text style={[styles.readOnlyUnitValue, !accountLicenseNumber && { color: colors.error }]}>
+              {accountLicenseNumber || 'No license number in driver account'}
+            </Text>
           </View>
+          <Text style={styles.accountPlateHint}>Automatically taken from your driver signup information. Upload the Driver's License image below for verification.</Text>
+          <Text style={styles.unitInputLabel}>PLATE NUMBER</Text>
+          <View style={styles.readOnlyUnitField}>
+            <MaterialCommunityIcons name="lock-outline" size={17} color={colors.textMuted} />
+            <Text style={[styles.readOnlyUnitValue, !accountPlate && { color: colors.error }]}>
+              {accountPlate || 'No plate number in driver account'}
+            </Text>
+          </View>
+          <Text style={styles.accountPlateHint}>Automatically taken from your driver account vehicle details.</Text>
+          <Text style={styles.unitInputLabel}>TRICYCLE BODY NUMBER</Text>
+          <TextInput
+            style={styles.unitInput}
+            value={bodyNumber}
+            onChangeText={(value) => setBodyNumber(value.toUpperCase())}
+            placeholder="Enter TODA/LGU body number"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="characters"
+            maxLength={30}
+          />
+          <Text style={styles.unitInputHint}>
+            Enter the body number manually as shown in your TODA/LGU records. It is verified separately from the uploaded documents.
+          </Text>
         </Card>
+
+        <Text style={styles.sectionTitle}>Select TODA (Required)</Text>
+        <TouchableOpacity
+          style={styles.todaSelect}
+          onPress={() => setShowTodaPicker(true)}
+          disabled={loadingTodas || registeredTodas.length === 0}
+          activeOpacity={0.75}
+        >
+          <MaterialCommunityIcons name="account-group-outline" size={20} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.unitInputLabel}>TODA FOR THIS MTOP</Text>
+            <Text style={[styles.todaSelectValue, !selectedToda && { color: colors.textMuted }]}>
+              {loadingTodas
+                ? 'Loading registered TODAs...'
+                : selectedToda || (registeredTodas.length ? 'Tap to select a registered TODA' : 'No TODA registered in the app')}
+            </Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-down" size={22} color={colors.textMuted} />
+        </TouchableOpacity>
+        <Text style={styles.todaHint}>Select the TODA shown on your TODA Membership Certificate.</Text>
+
+        <Modal visible={showTodaPicker} transparent animationType="slide" onRequestClose={() => setShowTodaPicker(false)}>
+          <View style={styles.todaModalOverlay}>
+            <View style={styles.todaModalSheet}>
+              <View style={styles.todaModalHeader}>
+                <Text style={styles.todaModalTitle}>Select Registered TODA</Text>
+                <TouchableOpacity onPress={() => setShowTodaPicker(false)}>
+                  <MaterialCommunityIcons name="close" size={23} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {registeredTodas.map((toda) => (
+                  <TouchableOpacity
+                    key={toda.id}
+                    style={[styles.todaOption, selectedToda === toda.name && styles.todaOptionSelected]}
+                    onPress={() => {
+                      setSelectedToda(toda.name);
+                      setShowTodaPicker(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.todaOptionName}>{toda.name}</Text>
+                      <Text style={styles.todaOptionArea}>
+                        {[toda.area, toda.is_active ? 'Active' : 'Inactive'].filter(Boolean).join(' • ')}
+                      </Text>
+                    </View>
+                    {selectedToda === toda.name ? <MaterialCommunityIcons name="check-circle" size={21} color={colors.primary} /> : null}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         <Text style={styles.sectionTitle}>Required Documents</Text>
         <Card variant="outlined" padding="none" style={styles.docCard}>
@@ -1578,7 +1728,7 @@ export const FranchiseScreen = () => {
         <Button
           variant="primary"
           onPress={() => handleSubmit(formType)}
-          disabled={!allUploaded || submitting}
+          disabled={!allUploaded || !accountLicenseNumber || !accountPlate || !bodyNumber.trim() || !selectedToda || submitting}
           loading={submitting}
         >
           {formType === 'renewal'
@@ -1877,6 +2027,116 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     fontSize: 16,
     color: colors.text 
+  },
+  unitInputLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  unitInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    marginBottom: spacing.md,
+  },
+  readOnlyUnitField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    backgroundColor: colors.surfaceAlt,
+  },
+  readOnlyUnitValue: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
+  },
+  accountPlateHint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    marginTop: 5,
+    marginBottom: spacing.md,
+  },
+  unitInputHint: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  todaSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    padding: spacing.md,
+  },
+  todaSelectValue: {
+    ...typography.body,
+    color: colors.text,
+    marginTop: 3,
+  },
+  todaHint: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  todaModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  todaModalSheet: {
+    maxHeight: '70%',
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingBottom: spacing.xl,
+  },
+  todaModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  todaModalTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  todaOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  todaOptionSelected: {
+    backgroundColor: colors.primaryLight,
+  },
+  todaOptionName: {
+    ...typography.label,
+    color: colors.text,
+  },
+  todaOptionArea: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   docCard: { 
     overflow: 'hidden',
@@ -2511,6 +2771,29 @@ const couModalStyles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.lg,
     lineHeight: 18,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  typeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+  },
+  typeOptionActive: {
+    backgroundColor: colors.primary,
+  },
+  typeOptionText: {
+    ...typography.label,
+    color: colors.primary,
   },
   label: {
     ...typography.labelSmall,

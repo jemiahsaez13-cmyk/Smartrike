@@ -102,7 +102,7 @@ const run = async () => {
   const repeatedReview = await db.rpc('review_ride_payment', { p_payment_id: submitted.data[0].id, p_decision: 'verified', p_reason: null });
   expect(!!repeatedReview.error, 'verified payment cannot be reviewed twice');
 
-  const requiredDocs = ['Barangay Clearance', 'Community Tax Certificate (Cedula)', 'OR/CR of Tricycle Unit', 'Proof of Ownership', 'TODA Membership Certificate']
+  const requiredDocs = ["Driver's License", 'Barangay Clearance', 'Community Tax Certificate (Cedula)', 'OR/CR of Tricycle Unit', 'Proof of Ownership', 'TODA Membership Certificate']
     .map((name) => ({ name, uploaded: true, file_url: image, review_status: 'approved' }));
   const mtopId = `test-mtop-${Date.now()}`;
   await db.from('franchise_applications').insert({

@@ -207,6 +207,18 @@ export class FranchiseService {
   }
 
   async submit(application: Partial<FranchiseApplication>): Promise<FranchiseApplication> {
+    if (!application.license_number?.trim()) {
+      throw new Error('A driver account license number is required for an MTOP application.');
+    }
+    const selectedToda = application.toda?.trim();
+    if (!selectedToda) throw new Error('Select a registered TODA for the MTOP application.');
+    const { data: toda, error: todaError } = await supabase
+      .from('toda_associations')
+      .select('id')
+      .eq('name', selectedToda)
+      .maybeSingle();
+    if (todaError) throw todaError;
+    if (!toda) throw new Error('The selected TODA is not registered in the app.');
     const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('franchise_applications')
@@ -239,7 +251,8 @@ export class FranchiseService {
       submitted: ['document_verification', 'rejected'],
       document_verification: ['payment', 'rejected'],
       inspection: ['payment'],
-      payment: ['issued'],
+      payment: ['approved'],
+      approved: ['issued'],
     };
     if (status !== current.status && !allowed[current.status]?.includes(status)) {
       throw new Error(`Invalid MTOP transition from ${current.status} to ${status}.`);
@@ -342,10 +355,13 @@ export class FranchiseService {
   async submitChangeOfUnitRequest(
     id: string,
     input: {
+      unitType: 'sidecar' | 'motor' | 'both';
       newPlate: string;
       newBody: string;
       orNumber: string;
       crNumber: string;
+      vehicleMake: string;
+      vehicleModel: string;
       orImage?: string | null;
       crImage?: string | null;
       unitImage?: string | null;
@@ -361,33 +377,34 @@ export class FranchiseService {
     const or    = input.orNumber.trim();
     const cr    = input.crNumber.trim();
 
-    if (!plate) throw new Error('New plate number is required.');
     if (!body)  throw new Error('New body/chassis number is required.');
-    if (!or)    throw new Error('OR number of the new unit is required.');
-    if (!cr)    throw new Error('CR number of the new unit is required.');
+    const make = input.vehicleMake.trim();
+    const model = input.vehicleModel.trim();
+    if (input.unitType === 'motor' || input.unitType === 'both') {
+      if (!plate) throw new Error('New plate number is required for a motor change.');
+      if (!or) throw new Error('OR number of the new motor is required.');
+      if (!cr) throw new Error('CR number of the new motor is required.');
+      if (!make) throw new Error('Motor manufacturer/make is required.');
+      if (!model) throw new Error('Motor model is required.');
+    }
 
-    const { data, error } = await supabase
-      .from('franchise_applications')
-      .update({
-        cou_status: 'pending',
-        cou_new_plate: plate,
-        cou_new_body: body,
-        cou_or_number: or,
-        cou_cr_number: cr,
-        cou_or_image: input.orImage ?? null,
-        cou_cr_image: input.crImage ?? null,
-        cou_unit_image: input.unitImage ?? null,
-        cou_requested_at: new Date().toISOString(),
-        cou_reviewed_at: null,
-        cou_reviewed_by: null,
-        cou_rejection_reason: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('submit_change_of_unit_request', {
+      p_application_id: id,
+      p_unit_type: input.unitType,
+      p_new_plate: input.unitType !== 'sidecar' ? plate : current.plate_number,
+      p_new_body: body,
+      p_or_number: input.unitType !== 'sidecar' ? or : null,
+      p_cr_number: input.unitType !== 'sidecar' ? cr : null,
+      p_vehicle_make: input.unitType !== 'sidecar' ? make : null,
+      p_vehicle_model: input.unitType !== 'sidecar' ? model : null,
+      p_or_image: input.orImage ?? null,
+      p_cr_image: input.crImage ?? null,
+      p_unit_image: input.unitImage ?? null,
+    });
     if (error) throw error;
-    return data as FranchiseApplication;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The Change of Unit request could not be submitted.');
+    return row as FranchiseApplication;
   }
 
   /**
@@ -417,8 +434,12 @@ export class FranchiseService {
     };
 
     if (decision === 'approved') {
-      patch.plate_number = current.cou_new_plate;
       patch.body_number  = current.cou_new_body;
+      if (current.cou_unit_type === 'motor' || current.cou_unit_type === 'both') {
+        patch.plate_number = current.cou_new_plate;
+        patch.vehicle_make = current.cou_vehicle_make;
+        patch.vehicle_model = current.cou_vehicle_model;
+      }
     }
 
     const { data, error } = await supabase

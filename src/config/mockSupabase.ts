@@ -20,7 +20,7 @@ const db: Record<string, Row[]> = buildSeedDatabase();
 
 const genId = (table: string) => `${table}-${Math.random().toString(36).slice(2, 10)}`;
 const clone = <T>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)));
-const REQUIRED_MTOP_DOCS = ['Barangay Clearance', 'Community Tax Certificate (Cedula)', 'OR/CR of Tricycle Unit', 'Proof of Ownership', 'TODA Membership Certificate'];
+const REQUIRED_MTOP_DOCS = ["Driver's License", 'Barangay Clearance', 'Community Tax Certificate (Cedula)', 'OR/CR of Tricycle Unit', 'Proof of Ownership', 'TODA Membership Certificate'];
 const mtopDocsApproved = (documents: any) => Array.isArray(documents) && REQUIRED_MTOP_DOCS.every((name) =>
   documents.some((doc: any) => doc.name === name && doc.uploaded && doc.file_url && doc.review_status === 'approved')
 );
@@ -513,6 +513,24 @@ export const mockSupabase: any = {
         return { data: null, error: { message: 'Valid payment proof and reference are required.' } };
       }
       Object.assign(app, { payment_method: params.p_method, payment_reference: params.p_reference, payment_proof_url: params.p_proof_url, payment_review_status: 'pending_review', payment_submitted_at: new Date().toISOString(), payment_rejection_reason: null });
+      return { data: [clone(app)], error: null };
+    }
+    if (fn === 'submit_change_of_unit_request') {
+      const app = (db.franchise_applications ?? []).find((row) => row.id === params?.p_application_id);
+      const me = currentProfile();
+      if (!app || !me || app.driver_id !== me.id || app.status !== 'issued' || app.cou_status === 'pending') {
+        return { data: null, error: { message: 'Issued MTOP not found or a Change of Unit request is already pending.' } };
+      }
+      Object.assign(app, {
+        cou_status: 'pending', cou_unit_type: params.p_unit_type,
+        cou_new_plate: params.p_new_plate, cou_new_body: params.p_new_body,
+        cou_or_number: params.p_or_number, cou_cr_number: params.p_cr_number,
+        cou_vehicle_make: params.p_vehicle_make, cou_vehicle_model: params.p_vehicle_model,
+        cou_or_image: params.p_or_image, cou_cr_image: params.p_cr_image,
+        cou_unit_image: params.p_unit_image, cou_requested_at: new Date().toISOString(),
+        cou_reviewed_at: null, cou_reviewed_by: null, cou_rejection_reason: null,
+        updated_at: new Date().toISOString(),
+      });
       return { data: [clone(app)], error: null };
     }
     if (fn === 'review_mtop_payment') {

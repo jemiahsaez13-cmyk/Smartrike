@@ -59,6 +59,8 @@ export interface FranchiseApplication {
   id: string;
   driver_id: string;
   driver_name: string;
+  /** Driver account license number captured when the application is submitted. */
+  license_number?: string | null;
   toda: string;
   plate_number: string;
   type: FranchiseType;
@@ -112,6 +114,9 @@ export interface FranchiseApplication {
   updated_at: string;
   /** Change of Unit request fields — driver-initiated, admin-reviewed */
   cou_status?: ChangeOfUnitStatus | null;
+  cou_unit_type?: 'sidecar' | 'motor' | 'both' | null;
+  cou_vehicle_make?: string | null;
+  cou_vehicle_model?: string | null;
   cou_new_plate?: string | null;
   cou_new_body?: string | null;
   cou_or_number?: string | null;
@@ -123,10 +128,13 @@ export interface FranchiseApplication {
   cou_or_image?: string | null;
   cou_cr_image?: string | null;
   cou_unit_image?: string | null;
+  vehicle_make?: string | null;
+  vehicle_model?: string | null;
 }
 
 // Documents required by the LGU for an MTOP application.
 export const REQUIRED_DOCUMENTS = [
+  "Driver's License",
   'Barangay Clearance',
   'Community Tax Certificate (Cedula)',
   'OR/CR of Tricycle Unit',
@@ -139,6 +147,7 @@ export const FRANCHISE_FLOW: FranchiseStatus[] = [
   'submitted',
   'document_verification',
   'payment',
+  'approved',
   'issued',
 ];
 
