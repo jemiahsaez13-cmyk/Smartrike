@@ -8,6 +8,8 @@ import { AdminService, AdminStats, Analytics, FareMatrix } from '@/models/servic
 import { ReportService } from '@/models/services/ReportService';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
+import { FranchiseService } from '@/models/services/FranchiseService';
+import { FranchiseApplication } from '@/models/entities/Franchise';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
@@ -15,6 +17,7 @@ const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 16) / 2;
 
 const adminService = new AdminService();
 const reportService = new ReportService();
+const franchiseService = new FranchiseService();
 
 const peso = (n: number) =>
   `₱${Math.round(n).toLocaleString('en-PH')}`;
@@ -39,6 +42,11 @@ export const AdminDashboard = () => {
   const [fare, setFare] = useState<FareMatrix | null>(null);
   const [openReports, setOpenReports] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // Franchise alert state
+  const [expiringFranchises, setExpiringFranchises] = useState<FranchiseApplication[]>([]);
+  const [franchiseSummary, setFranchiseSummary] = useState<{
+    active: number; expiring: number; expired: number; pending_renewal: number;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +62,32 @@ export const AdminDashboard = () => {
       setLogs(l);
       setFare(f);
       setOpenReports(r);
+
+      // Franchise alerts — load registry and compute summary + expiring soon
+      try {
+        const registry = await franchiseService.getRegistry();
+        const today = new Date();
+        const in30 = new Date(today);
+        in30.setDate(today.getDate() + 30);
+        const todayStr = today.toISOString().slice(0, 10);
+        const in30Str = in30.toISOString().slice(0, 10);
+
+        const expiring = registry.filter(
+          (fr) =>
+            fr.expiry_date &&
+            fr.expiry_date >= todayStr &&
+            fr.expiry_date <= in30Str &&
+            fr.franchise_status !== 'terminated'
+        );
+        setExpiringFranchises(expiring);
+
+        const active         = registry.filter((fr) => fr.franchise_status === 'active').length;
+        const expired        = registry.filter((fr) => fr.franchise_status === 'expired' || (fr.expiry_date && fr.expiry_date < todayStr)).length;
+        const pending_renewal= registry.filter((fr) => fr.franchise_status === 'pending_renewal').length;
+        setFranchiseSummary({ active, expiring: expiring.length, expired, pending_renewal });
+      } catch {
+        // Non-fatal — dashboard still loads without franchise alerts
+      }
     } catch (e) {
       console.error('Dashboard load failed:', e);
     } finally {
@@ -234,6 +268,17 @@ export const AdminDashboard = () => {
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
             <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('ViolationManagement')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={20} color={colors.error} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Violations</Text>
+                <Text style={styles.queueLevel}>Record & track driver violation status</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('Reports')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="flag-outline" size={20} color={colors.primary} />
@@ -252,6 +297,28 @@ export const AdminDashboard = () => {
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Message Supervision</Text>
                 <Text style={styles.queueLevel}>Moderate trip conversations (read-only)</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('Announcements')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="bullhorn-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Announcements</Text>
+                <Text style={styles.queueLevel}>Broadcast messages to drivers & passengers</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('BookingMonitoring')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="car-search-outline" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>Booking Monitor</Text>
+                <Text style={styles.queueLevel}>View & filter all passenger trips</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
@@ -326,6 +393,94 @@ export const AdminDashboard = () => {
               ))
             )}
           </Card>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionLabel}>FRANCHISE ALERTS</Text>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('FranchiseRegistry')}>
+              <Text style={styles.seeAllText}>Registry</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Franchise summary chips */}
+          {franchiseSummary && (
+            <View style={styles.franchiseSummaryRow}>
+              <View style={[styles.franchiseChip, { backgroundColor: colors.successLight }]}>
+                <MaterialCommunityIcons name="check-circle-outline" size={14} color={colors.success} />
+                <Text style={[styles.franchiseChipLabel, { color: colors.success }]}>
+                  {franchiseSummary.active} Active
+                </Text>
+              </View>
+              <View style={[styles.franchiseChip, { backgroundColor: colors.warningLight }]}>
+                <MaterialCommunityIcons name="clock-alert-outline" size={14} color={colors.warning} />
+                <Text style={[styles.franchiseChipLabel, { color: colors.warning }]}>
+                  {franchiseSummary.expiring} Expiring
+                </Text>
+              </View>
+              <View style={[styles.franchiseChip, { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={14} color={colors.error} />
+                <Text style={[styles.franchiseChipLabel, { color: colors.error }]}>
+                  {franchiseSummary.expired} Expired
+                </Text>
+              </View>
+              {franchiseSummary.pending_renewal > 0 && (
+                <View style={[styles.franchiseChip, { backgroundColor: colors.infoLight }]}>
+                  <MaterialCommunityIcons name="autorenew" size={14} color={colors.info} />
+                  <Text style={[styles.franchiseChipLabel, { color: colors.info }]}>
+                    {franchiseSummary.pending_renewal} Renewal
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+          {/* Expiring-soon list */}
+          {expiringFranchises.length === 0 ? (
+            <Card variant="elevated" padding="md" style={styles.alertsCard}>
+              <View style={styles.alertsEmpty}>
+                <MaterialCommunityIcons name="shield-check-outline" size={28} color={colors.textLight} />
+                <Text style={styles.alertsEmptyText}>No franchises expiring in the next 30 days</Text>
+              </View>
+            </Card>
+          ) : (
+            <Card variant="elevated" padding="none" style={styles.alertsCard}>
+              {expiringFranchises.map((fr, index) => {
+                const daysLeft = Math.ceil(
+                  (new Date(fr.expiry_date!).getTime() - Date.now()) / 86_400_000
+                );
+                const urgent = daysLeft <= 7;
+                return (
+                  <View key={fr.id}>
+                    <TouchableOpacity
+                      style={styles.alertItem}
+                      activeOpacity={0.76}
+                      onPress={() => navigation.navigate('FranchiseRegistry')}
+                    >
+                      <View style={[styles.alertIcon, { backgroundColor: urgent ? colors.errorLight : colors.warningLight }]}>
+                        <MaterialCommunityIcons
+                          name={urgent ? 'alert' : 'clock-alert-outline'}
+                          size={18}
+                          color={urgent ? colors.error : colors.warning}
+                        />
+                      </View>
+                      <View style={styles.alertCopy}>
+                        <Text style={styles.alertName} numberOfLines={1}>
+                          {fr.current_holder_name || fr.driver_name}
+                        </Text>
+                        <Text style={styles.alertMeta}>
+                          {fr.body_number ? `Body #${fr.body_number} · ` : ''}
+                          Expires {fr.expiry_date}
+                        </Text>
+                      </View>
+                      <View style={[styles.daysLeftBadge, { backgroundColor: urgent ? colors.errorLight : colors.warningLight }]}>
+                        <Text style={[styles.daysLeftText, { color: urgent ? colors.error : colors.warning }]}>
+                          {daysLeft}d
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                    {index < expiringFranchises.length - 1 && <View style={styles.divider} />}
+                  </View>
+                );
+              })}
+            </Card>
+          )}
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionLabel}>RECENT SYSTEM ACTIVITY</Text>
@@ -679,5 +834,80 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.borderLight,
+  },
+  // ── Franchise Alerts ──
+  franchiseSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  franchiseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  franchiseChipLabel: {
+    ...typography.labelSmall,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  alertsCard: {
+    marginBottom: spacing.sm,
+  },
+  alertsEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  alertsEmptyText: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 13,
+    flex: 1,
+  },
+  alertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 64,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  alertIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertCopy: { flex: 1, minWidth: 0 },
+  alertName: {
+    ...typography.label,
+    fontSize: 14,
+    color: colors.text,
+  },
+  alertMeta: {
+    ...typography.bodySmall,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  daysLeftBadge: {
+    minWidth: 36,
+    height: 28,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  daysLeftText: {
+    ...typography.label,
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

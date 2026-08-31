@@ -60,10 +60,20 @@ export class InventoryService {
 
 export class ViolationService {
   async list(): Promise<DriverViolation[]> {
-    const { data, error } = await supabase
+    return this._fetchViolations();
+  }
+
+  async listByDriver(driverId: string): Promise<DriverViolation[]> {
+    return this._fetchViolations(driverId);
+  }
+
+  private async _fetchViolations(driverId?: string): Promise<DriverViolation[]> {
+    let query = supabase
       .from('driver_violations')
       .select('*')
       .order('incident_date', { ascending: false });
+    if (driverId) query = query.eq('driver_id', driverId);
+    const { data, error } = await query;
     if (error) throw error;
     const rows = (data ?? []) as DriverViolation[];
     const ids = Array.from(new Set(rows.map((row) => row.driver_id).filter(Boolean)));

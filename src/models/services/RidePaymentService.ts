@@ -129,11 +129,26 @@ export class RidePaymentService {
     const { data, error } = await query;
     if (error) throw error;
     const rows = (data ?? []) as RidePaymentSubmission[];
-    const passengerIds = [...new Set(rows.map((row) => row.passenger_id))];
-    if (passengerIds.length) {
-      const { data: users } = await supabase.from('users').select('id,name').in('id', passengerIds);
-      const names = new Map<string, string>((users ?? []).map((user: any) => [user.id, user.name]));
-      rows.forEach((row) => { row.passenger_name = names.get(row.passenger_id) ?? 'Passenger'; });
+
+    // Collect all unique user IDs (passengers + drivers) then resolve names
+    // in a single query to avoid N+1 fetches.
+    const allUserIds = [...new Set([
+      ...rows.map((row) => row.passenger_id),
+      ...rows.map((row) => row.driver_id),
+    ].filter(Boolean))];
+
+    if (allUserIds.length) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id,name')
+        .in('id', allUserIds);
+      const names = new Map<string, string>(
+        (users ?? []).map((user: any) => [user.id, user.name])
+      );
+      rows.forEach((row) => {
+        row.passenger_name = names.get(row.passenger_id) ?? 'Passenger';
+        row.driver_name = names.get(row.driver_id) ?? 'Driver';
+      });
     }
     return rows;
   }

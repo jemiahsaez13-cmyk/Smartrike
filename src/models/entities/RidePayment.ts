@@ -33,4 +33,5 @@ export interface RidePaymentSubmission {
   reviewed_by: string | null;
   reviewed_by_role: 'driver' | 'admin' | null;
   passenger_name?: string;
+  driver_name?: string;
 }
