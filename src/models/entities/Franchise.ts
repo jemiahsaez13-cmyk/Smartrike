@@ -29,9 +29,12 @@ export type FranchiseEventType =
   | 'renewal'
   | 'succession_transfer'
   | 'third_party_transfer'
-  | 'termination';
+  | 'termination'
+  | 'change_of_unit';
 
 export type SuccessorRelationship = 'spouse' | 'unmarried_eldest_child';
+
+export type ChangeOfUnitStatus = 'pending' | 'approved' | 'rejected';
 
 // Per-document verdict the admin records while reviewing an application.
 export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected';
@@ -107,6 +110,19 @@ export interface FranchiseApplication {
   reviewed_by?: string | null;
   created_at: string;
   updated_at: string;
+  /** Change of Unit request fields — driver-initiated, admin-reviewed */
+  cou_status?: ChangeOfUnitStatus | null;
+  cou_new_plate?: string | null;
+  cou_new_body?: string | null;
+  cou_or_number?: string | null;
+  cou_cr_number?: string | null;
+  cou_requested_at?: string | null;
+  cou_reviewed_at?: string | null;
+  cou_reviewed_by?: string | null;
+  cou_rejection_reason?: string | null;
+  cou_or_image?: string | null;
+  cou_cr_image?: string | null;
+  cou_unit_image?: string | null;
 }
 
 // Documents required by the LGU for an MTOP application.
@@ -123,7 +139,6 @@ export const FRANCHISE_FLOW: FranchiseStatus[] = [
   'submitted',
   'document_verification',
   'payment',
-  'approved',
   'issued',
 ];
 
@@ -162,6 +177,14 @@ export interface FranchiseEvent {
   effective_date: string;
   agreement_number: string | null;
   agreement_text: string | null;
+  /** New plate number recorded on a change_of_unit event. */
+  new_plate_number?: string | null;
+  /** New body number recorded on a change_of_unit event. */
+  new_body_number?: string | null;
+  /** OR number of the new unit (from LTO). */
+  or_number?: string | null;
+  /** CR number of the new unit (from LTO). */
+  cr_number?: string | null;
   created_by: string | null;
   created_at: string;
 }

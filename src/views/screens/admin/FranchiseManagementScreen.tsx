@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, Modal, Image } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, ScrollView, TouchableOpacity, Modal, Image, TextInput } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment } from '@/controllers/slices/franchiseSlice';
+import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment, reviewChangeOfUnit } from '@/controllers/slices/franchiseSlice';
 import {
   FranchiseApplication,
   FranchiseDocument,
@@ -23,6 +23,7 @@ import { Card } from '@/views/components/common/Card';
 import { confirm, notify } from '@/utils/confirm';
 import { MtopBillingModal } from '@/views/components/payment/MtopBillingModal';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
+import { supabase, isSupabaseConfigured } from '@/config/supabase';
 
 const REVIEW_COLOR: Record<DocumentReviewStatus, string> = {
   pending: colors.warning,
@@ -60,7 +61,6 @@ const isHttp = (url?: string | null) => !!url && (/^https?:\/\//i.test(url) || /
 // Maps the current status to the next admin action.
 const NEXT: Record<string, { label: string; status: FranchiseStatus; patch?: Partial<FranchiseApplication> }> = {
   submitted: { label: 'Start Verification', status: 'document_verification' },
-  approved: { label: 'Issue MTOP', status: 'issued' },
 };
 
 const STATUS_COLOR: Record<FranchiseStatus, string> = {
@@ -85,7 +85,7 @@ export const FranchiseManagementScreen = () => {
   const dispatch = useAppDispatch();
   const { applications, loading } = useAppSelector((state) => state.franchise);
   const currentUser = useAppSelector((state) => state.auth.user);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'issued'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'issued'>('all');
   // Derive the document-review modal target from the store so it auto-updates.
   const [reviewAppId, setReviewAppId] = useState<string | null>(null);
   const reviewApp = applications.find((a) => a.id === reviewAppId) ?? null;
@@ -95,12 +95,35 @@ export const FranchiseManagementScreen = () => {
   const [docBusy, setDocBusy] = useState<string | null>(null); // doc name or '*all*'
   const [actionBusy, setActionBusy] = useState<string | null>(null); // app id
   const [paymentPreview, setPaymentPreview] = useState<string | null>(null);
+  const [couImagePreview, setCouImagePreview] = useState<string | null>(null);
   // Billing modal
   const [billingApp, setBillingApp] = useState<FranchiseApplication | null>(null);
 
+  // Change of Unit review state
+  const [couActionBusy, setCouActionBusy] = useState<string | null>(null); // app id
+  const [couRejectApp, setCouRejectApp]   = useState<FranchiseApplication | null>(null);
+  const [couRejectReason, setCouRejectReason] = useState('');
+
   useEffect(() => {
     dispatch(fetchAllApplications());
-  }, []);
+  }, [dispatch]);
+
+  // Keep the admin queue current while this screen is open. New renewal
+  // submissions appear without requiring the administrator to refresh.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const channel = supabase
+      .channel('admin_franchise_applications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'franchise_applications' },
+        () => dispatch(fetchAllApplications())
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [dispatch]);
 
   // Records an admin verdict for a single document and persists the documents
   // array. Awaited + serialized so verdicts can't clobber one another; the
@@ -178,20 +201,7 @@ export const FranchiseManagementScreen = () => {
   const advance = async (app: FranchiseApplication) => {
     const next = NEXT[app.status];
     if (!next) return;
-    if (next.status === 'issued') {
-      const ok = await confirm('Issue MTOP', `Issue franchise certificate to ${app.driver_name}?`, {
-        confirmText: 'Issue',
-      });
-      if (!ok) return;
-    }
     const patch = { ...next.patch };
-    if (next.status === 'issued') {
-      patch.mtop_number = `MTOP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      patch.franchise_status = 'active';
-      patch.original_holder_name = app.driver_name;
-      patch.current_holder_name = app.driver_name;
-      patch.issued_at = new Date().toISOString().slice(0, 10);
-    }
     setActionBusy(app.id);
     try {
       await dispatch(advanceApplication({ id: app.id, status: next.status, patch })).unwrap();
@@ -203,7 +213,7 @@ export const FranchiseManagementScreen = () => {
   };
 
   const reject = async (app: FranchiseApplication) => {
-    if (app.documents_verified_at || allDocumentsApproved(app.documents) || ['payment', 'approved', 'issued'].includes(app.status)) {
+    if (app.documents_verified_at || allDocumentsApproved(app.documents) || ['payment', 'issued'].includes(app.status)) {
       await notify('Decline unavailable', 'Required files were already confirmed. This application is locked against decline.');
       return;
     }
@@ -244,7 +254,7 @@ export const FranchiseManagementScreen = () => {
         decision,
         reason: decision === 'rejected' ? 'Payment screenshot or reference could not be validated.' : undefined,
       })).unwrap();
-      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'The application is now approved and ready for MTOP issuance.' : 'The registrant can submit corrected proof.');
+      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'MTOP has been issued to the driver.' : 'The registrant can submit corrected proof.');
     } catch (error: any) {
       await notify('Review failed', typeof error === 'string' ? error : error?.message || 'Please refresh and try again.');
     } finally { setActionBusy(null); }
@@ -276,8 +286,69 @@ export const FranchiseManagementScreen = () => {
     );
   };
 
+  const handleCouReview = async (app: FranchiseApplication, decision: 'approved' | 'rejected') => {
+    if (decision === 'rejected') {
+      // Open the rejection-reason modal; submission handled by confirmCouReject.
+      setCouRejectApp(app);
+      setCouRejectReason('');
+      return;
+    }
+    const ok = await confirm(
+      'Approve Change of Unit',
+      `Approve the unit change for ${app.driver_name}?\n\nNew plate: ${app.cou_new_plate}\nNew body: ${app.cou_new_body}`,
+      { confirmText: 'Approve' }
+    );
+    if (!ok) return;
+    setCouActionBusy(app.id);
+    try {
+      await dispatch(
+        reviewChangeOfUnit({
+          id: app.id,
+          decision: 'approved',
+          reviewedBy: currentUser?.id ?? '',
+        })
+      ).unwrap();
+      await notify('Approved', `Change of Unit for ${app.driver_name} approved. Plate and body numbers updated.`);
+    } catch (err: any) {
+      await notify('Error', err?.message || 'Could not approve the request.');
+    } finally {
+      setCouActionBusy(null);
+    }
+  };
+
+  const confirmCouReject = async () => {
+    if (!couRejectApp) return;
+    if (!couRejectReason.trim()) {
+      await notify('Reason required', 'Please enter a rejection reason before confirming.');
+      return;
+    }
+    setCouActionBusy(couRejectApp.id);
+    const app = couRejectApp;
+    setCouRejectApp(null);
+    try {
+      await dispatch(
+        reviewChangeOfUnit({
+          id: app.id,
+          decision: 'rejected',
+          reviewedBy: currentUser?.id ?? '',
+          rejectionReason: couRejectReason.trim(),
+        })
+      ).unwrap();
+      await notify('Rejected', `Change of Unit for ${app.driver_name} rejected.`);
+    } catch (err: any) {
+      await notify('Error', err?.message || 'Could not reject the request.');
+    } finally {
+      setCouActionBusy(null);
+      setCouRejectReason('');
+    }
+  };
+
+  // All issued franchises that have a pending COU request.
+  const pendingCouApps = applications.filter((a) => a.cou_status === 'pending');
+
   const filtered = applications.filter((a) => {
     if (filter === 'pending') return a.status !== 'issued' && a.status !== 'rejected';
+    if (filter === 'renewals') return a.type === 'renewal';
     if (filter === 'issued') return a.status === 'issued';
     return true;
   });
@@ -307,12 +378,130 @@ export const FranchiseManagementScreen = () => {
           <View style={styles.filters}>
             <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
             <FilterChip label="Pending" active={filter === 'pending'} onPress={() => setFilter('pending')} />
+            <FilterChip label="Renewals" active={filter === 'renewals'} onPress={() => setFilter('renewals')} />
             <FilterChip label="Issued" active={filter === 'issued'} onPress={() => setFilter('issued')} />
           </View>
         </ScrollView>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* ── Change of Unit Pending Requests ── */}
+        {pendingCouApps.length > 0 ? (
+          <View style={styles.couSection}>
+            <View style={styles.couSectionHeader}>
+              <MaterialCommunityIcons name="swap-horizontal-circle" size={20} color={colors.warning} />
+              <Text style={styles.couSectionTitle}>Change of Unit Requests</Text>
+              <View style={styles.couBadge}>
+                <Text style={styles.couBadgeText}>{pendingCouApps.length}</Text>
+              </View>
+            </View>
+            {pendingCouApps.map((app) => (
+              <View key={app.id} style={styles.couCard}>
+                <View style={styles.couCardHeader}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{app.driver_name.charAt(0)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.driverName}>{app.driver_name}</Text>
+                    <Text style={styles.driverMeta}>{app.mtop_number} • {app.toda}</Text>
+                  </View>
+                  <View style={styles.couPendingBadge}>
+                    <Text style={styles.couPendingBadgeText}>PENDING</Text>
+                  </View>
+                </View>
+
+                <View style={styles.couFieldGrid}>
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>CURRENT PLATE</Text>
+                    <Text style={styles.couFieldValue}>{app.plate_number}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textMuted} style={{ marginTop: 14 }} />
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>NEW PLATE</Text>
+                    <Text style={[styles.couFieldValue, { color: colors.primary }]}>{app.cou_new_plate}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.couFieldGrid}>
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>CURRENT BODY</Text>
+                    <Text style={styles.couFieldValue}>{app.body_number || '—'}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="arrow-right" size={16} color={colors.textMuted} style={{ marginTop: 14 }} />
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>NEW BODY</Text>
+                    <Text style={[styles.couFieldValue, { color: colors.primary }]}>{app.cou_new_body}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.couOrCrRow}>
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>OR NUMBER</Text>
+                    <Text style={styles.couFieldValue}>{app.cou_or_number}</Text>
+                  </View>
+                  <View style={styles.couField}>
+                    <Text style={styles.couFieldLabel}>CR NUMBER</Text>
+                    <Text style={styles.couFieldValue}>{app.cou_cr_number}</Text>
+                  </View>
+                </View>
+
+                {(app.cou_or_image || app.cou_cr_image || app.cou_unit_image) ? (
+                  <View style={styles.couImagesRow}>
+                    {([
+                      { uri: app.cou_or_image, label: 'OR Photo' },
+                      { uri: app.cou_cr_image, label: 'CR Photo' },
+                      { uri: app.cou_unit_image, label: 'Unit Photo' },
+                    ] as { uri?: string | null; label: string }[]).filter((i) => !!i.uri).map((item) => (
+                      <TouchableOpacity
+                        key={item.label}
+                        style={styles.couImageThumb}
+                        onPress={() => setCouImagePreview(item.uri!)}
+                        activeOpacity={0.8}
+                      >
+                        <Image source={{ uri: item.uri! }} style={styles.couImageThumbImg} resizeMode="cover" />
+                        <Text style={styles.couImageThumbLabel}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+
+                {app.cou_requested_at ? (
+                  <Text style={styles.couRequestedAt}>
+                    Requested {formatDate(app.cou_requested_at)}
+                  </Text>
+                ) : null}
+
+                <View style={styles.couActions}>
+                  <TouchableOpacity
+                    style={[styles.couRejectBtn, couActionBusy === app.id && { opacity: 0.5 }]}
+                    onPress={() => handleCouReview(app, 'rejected')}
+                    disabled={couActionBusy === app.id}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="close" size={16} color={colors.error} />
+                    <Text style={styles.couRejectText}>Reject</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.couApproveBtn, couActionBusy === app.id && { opacity: 0.7 }]}
+                    onPress={() => handleCouReview(app, 'approved')}
+                    disabled={couActionBusy === app.id}
+                    activeOpacity={0.8}
+                  >
+                    {couActionBusy === app.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="check" size={16} color="#fff" />
+                        <Text style={styles.couApproveText}>Approve</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <Text style={styles.resultCount}>SHOWING {filtered.length} APPLICATIONS</Text>
         {filtered.map((app) => {
           const next = NEXT[app.status];
@@ -568,6 +757,71 @@ export const FranchiseManagementScreen = () => {
         onClose={() => setBillingApp(null)}
       />
       <Modal visible={!!paymentPreview} transparent animationType="fade" onRequestClose={() => setPaymentPreview(null)}><TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={() => setPaymentPreview(null)}>{paymentPreview ? <Image source={{ uri: paymentPreview }} style={styles.paymentPreviewImage} resizeMode="contain" /> : null}<TouchableOpacity style={styles.paymentPreviewClose} onPress={() => setPaymentPreview(null)}><MaterialCommunityIcons name="close" size={26} color="#fff" /></TouchableOpacity></TouchableOpacity></Modal>
+
+      {/* COU Image Preview */}
+      <Modal visible={!!couImagePreview} transparent animationType="fade" onRequestClose={() => setCouImagePreview(null)}>
+        <TouchableOpacity style={styles.previewOverlay} activeOpacity={1} onPress={() => setCouImagePreview(null)}>
+          {couImagePreview ? <Image source={{ uri: couImagePreview }} style={styles.paymentPreviewImage} resizeMode="contain" /> : null}
+          <TouchableOpacity style={styles.paymentPreviewClose} onPress={() => setCouImagePreview(null)}>
+            <MaterialCommunityIcons name="close" size={26} color="#fff" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* COU Rejection Reason Modal */}
+      <Modal
+        visible={!!couRejectApp}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCouRejectApp(null)}
+      >
+        <View style={styles.couModalOverlay}>
+          <View style={styles.couModalSheet}>
+            <View style={styles.couModalHeader}>
+              <Text style={styles.couModalTitle}>Reject Change of Unit</Text>
+              <TouchableOpacity onPress={() => setCouRejectApp(null)} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={22} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            {couRejectApp ? (
+              <View style={styles.couModalBody}>
+                <Text style={styles.couModalDriver}>{couRejectApp.driver_name}</Text>
+                <Text style={styles.couModalPlate}>
+                  {couRejectApp.plate_number} → {couRejectApp.cou_new_plate}
+                </Text>
+                <Text style={styles.couModalLabel}>REJECTION REASON</Text>
+                <TextInput
+                  style={styles.couModalInput}
+                  value={couRejectReason}
+                  onChangeText={setCouRejectReason}
+                  placeholder="Enter the reason for rejection..."
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={200}
+                />
+                <View style={styles.couModalActions}>
+                  <TouchableOpacity
+                    style={styles.couModalCancel}
+                    onPress={() => setCouRejectApp(null)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.couModalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.couModalConfirm, !couRejectReason.trim() && { opacity: 0.5 }]}
+                    onPress={confirmCouReject}
+                    disabled={!couRejectReason.trim()}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.couModalConfirmText}>Confirm Rejection</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1516,5 +1770,261 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.md,
     lineHeight: 18,
+  },
+
+  // ── Change of Unit section ──
+  couSection: {
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning + '40',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.warning + '08',
+  },
+  couSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning + '30',
+    backgroundColor: colors.warning + '12',
+  },
+  couSectionTitle: {
+    ...typography.label,
+    color: colors.text,
+    flex: 1,
+    fontWeight: '700',
+  },
+  couBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.warning,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  couBadgeText: {
+    ...typography.labelSmall,
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  couCard: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning + '20',
+  },
+  couCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  couPendingBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.warning + '20',
+  },
+  couPendingBadgeText: {
+    ...typography.labelSmall,
+    color: colors.warning,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  couFieldGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  couOrCrRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  couField: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+  },
+  couFieldLabel: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  couFieldValue: {
+    ...typography.label,
+    fontSize: 13,
+    color: colors.text,
+  },
+  couRequestedAt: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  couImagesRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  couImageThumb: {
+    flex: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  couImageThumbImg: {
+    width: '100%',
+    height: 72,
+  },
+  couImageThumbLabel: {
+    ...typography.labelSmall,
+    fontSize: 9,
+    letterSpacing: 0.5,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: 4,
+  },
+  couActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  couRejectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 40,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.error,
+    backgroundColor: colors.errorLight,
+  },
+  couRejectText: {
+    ...typography.label,
+    color: colors.error,
+    fontSize: 13,
+  },
+  couApproveBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.success,
+  },
+  couApproveText: {
+    ...typography.label,
+    color: '#fff',
+    fontSize: 13,
+  },
+
+  // ── COU Rejection Reason Modal ──
+  couModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  couModalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingBottom: spacing.xl,
+  },
+  couModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  couModalTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  couModalBody: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  couModalDriver: {
+    ...typography.label,
+    color: colors.text,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  couModalPlate: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  couModalLabel: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  couModalInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: spacing.lg,
+  },
+  couModalActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  couModalCancel: {
+    flex: 1,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  couModalCancelText: {
+    ...typography.label,
+    color: colors.textSecondary,
+  },
+  couModalConfirm: {
+    flex: 2,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  couModalConfirmText: {
+    ...typography.label,
+    color: '#fff',
   },
 });

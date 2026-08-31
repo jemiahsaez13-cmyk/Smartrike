@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchMyApplication, submitApplication, submitFranchisePayment, submitFaceToFaceAppointment, patchApplication } from '@/controllers/slices/franchiseSlice';
+import { fetchMyApplication, submitApplication, submitFranchisePayment, submitFaceToFaceAppointment, patchApplication, submitChangeOfUnit } from '@/controllers/slices/franchiseSlice';
 import {
   REQUIRED_DOCUMENTS,
   FRANCHISE_FLOW,
@@ -16,6 +16,7 @@ import {
   docReviewStatus,
   anyDocumentRejected,
   FRANCHISE_RECORD_STATUS_LABEL,
+  ChangeOfUnitStatus,
 } from '@/models/entities/Franchise';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { AdminMtopPaymentService } from '@/models/services/AdminMtopPaymentService';
@@ -680,10 +681,22 @@ export const FranchiseScreen = () => {
   );
   const [plate, setPlate] = useState<string>(driver?.vehicle_details?.plate_number || 'ABC-1234');
   const [submitting, setSubmitting] = useState(false);
+  const [renewalMode, setRenewalMode] = useState(false);
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentProof, setPaymentProof] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [showPayNow, setShowPayNow] = useState(false);
+
+  // Change of Unit modal state
+  const [showCouModal, setShowCouModal]     = useState(false);
+  const [couNewPlate, setCouNewPlate]       = useState('');
+  const [couNewBody, setCouNewBody]         = useState('');
+  const [couOrNumber, setCouOrNumber]       = useState('');
+  const [couCrNumber, setCouCrNumber]       = useState('');
+  const [couOrImage, setCouOrImage]         = useState('');
+  const [couCrImage, setCouCrImage]         = useState('');
+  const [couUnitImage, setCouUnitImage]     = useState('');
+  const [couSubmitting, setCouSubmitting]   = useState(false);
 
   // Live payment methods — used by the payment summary card when
   // selected_payment_methods was not saved on the application yet.
@@ -857,20 +870,69 @@ export const FranchiseScreen = () => {
           remarks: null,
         })
       ).unwrap();
-      await notify('Submitted', 'Your franchise application has been submitted for review.');
-    } catch {
-      await notify('Error', 'Failed to submit application.');
+      setRenewalMode(false);
+      await notify(
+        type === 'renewal' ? 'Renewal Submitted' : 'Submitted',
+        type === 'renewal'
+          ? 'Your updated requirements were sent to the administrator for renewal review.'
+          : 'Your franchise application has been submitted for review.'
+      );
+    } catch (error: any) {
+      await notify('Error', typeof error === 'string' ? error : error?.message || 'Failed to submit application.');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleRenew = async () => {
-    const yes = await confirm('Renew Franchise', 'Submit a renewal application for your MTOP?', {
-      confirmText: 'Renew',
+    const yes = await confirm('Renew Franchise', 'You must upload new, updated copies of all MTOP requirements. Continue?', {
+      confirmText: 'Continue',
       cancelText: 'Cancel',
     });
-    if (yes) handleSubmit('renewal');
+    if (yes) {
+      setDocs(REQUIRED_DOCUMENTS.map((name) => ({
+        name,
+        uploaded: false,
+        file_url: null,
+        uploaded_at: null,
+        review_status: 'pending' as const,
+        review_remarks: null,
+      })));
+      setPlate(myApplication?.plate_number || driver?.vehicle_details?.plate_number || '');
+      setRenewalMode(true);
+    }
+  };
+
+  const handleCouSubmit = async () => {
+    if (!myApplication) return;
+    setCouSubmitting(true);
+    try {
+      await dispatch(
+        submitChangeOfUnit({
+          id: myApplication.id,
+          newPlate: couNewPlate,
+          newBody: couNewBody,
+          orNumber: couOrNumber,
+          crNumber: couCrNumber,
+          orImage: couOrImage || null,
+          crImage: couCrImage || null,
+          unitImage: couUnitImage || null,
+        })
+      ).unwrap();
+      setShowCouModal(false);
+      setCouNewPlate('');
+      setCouNewBody('');
+      setCouOrNumber('');
+      setCouCrNumber('');
+      setCouOrImage('');
+      setCouCrImage('');
+      setCouUnitImage('');
+      await notify('Request Submitted', 'Your Change of Unit request has been submitted for admin review.');
+    } catch (err: any) {
+      await notify('Submission Failed', err?.message || 'Could not submit the Change of Unit request.');
+    } finally {
+      setCouSubmitting(false);
+    }
   };
 
   if (loading && !myApplication) return <Loading message="Loading franchise records..." />;
@@ -891,7 +953,7 @@ export const FranchiseScreen = () => {
   );
 
   // --- Active MTOP ---
-  if (isActive) {
+  if (isActive && !renewalMode) {
     return (
       <View style={styles.container}>
         <Header subtitle={`Operational status: ${recordStatusLabel}`} />
@@ -950,6 +1012,211 @@ export const FranchiseScreen = () => {
               Renew Franchise
             </Button>
           ) : null}
+
+          {/* ── Change of Unit ── */}
+          {recordStatus !== 'terminated' && recordStatus !== 'transferred' ? (() => {
+            const couStatus = myApplication?.cou_status as ChangeOfUnitStatus | null | undefined;
+            const couColor  = couStatus === 'approved' ? colors.success
+                            : couStatus === 'rejected' ? colors.error
+                            : couStatus === 'pending'  ? colors.warning
+                            : undefined;
+            return (
+              <>
+                {couStatus ? (
+                  <View style={styles.couChipRow}>
+                    <View style={[styles.couChip, { backgroundColor: couColor + '22' }]}>
+                      <MaterialCommunityIcons
+                        name={couStatus === 'approved' ? 'check-circle' : couStatus === 'rejected' ? 'close-circle' : 'clock-outline'}
+                        size={15}
+                        color={couColor}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.couChipText, { color: couColor }]}>
+                        {couStatus === 'pending'  ? 'Change of Unit: Pending Review'
+                       : couStatus === 'approved' ? 'Change of Unit: Approved'
+                       : 'Change of Unit: Rejected'}
+                      </Text>
+                    </View>
+                    {couStatus === 'rejected' && myApplication?.cou_rejection_reason ? (
+                      <Text style={styles.couRejectReason}>Reason: {myApplication.cou_rejection_reason}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {couStatus !== 'pending' ? (
+                  <TouchableOpacity
+                    style={styles.couBtn}
+                    onPress={() => setShowCouModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="swap-horizontal" size={18} color={colors.accent} />
+                    <Text style={styles.couBtnText}>
+                      {couStatus === 'rejected' ? 'Re-submit Change of Unit' : 'Request Change of Unit'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            );
+          })() : null}
+
+          {/* ── Change of Unit Modal ── */}
+          <Modal
+            visible={showCouModal}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setShowCouModal(false)}
+          >
+            <View style={couModalStyles.overlay}>
+              <View style={couModalStyles.sheet}>
+                <View style={couModalStyles.header}>
+                  <Text style={couModalStyles.title}>Change of Unit Request</Text>
+                  <TouchableOpacity onPress={() => setShowCouModal(false)} style={couModalStyles.closeBtn}>
+                    <MaterialCommunityIcons name="close" size={22} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView contentContainerStyle={couModalStyles.body} showsVerticalScrollIndicator={false}>
+                  <Text style={couModalStyles.hint}>
+                    Submit details of your replacement tricycle unit. The admin will verify and update your franchise records.
+                  </Text>
+
+                  <Text style={couModalStyles.label}>NEW PLATE NUMBER</Text>
+                  <TextInput
+                    style={couModalStyles.input}
+                    value={couNewPlate}
+                    onChangeText={(v) => setCouNewPlate(v.toUpperCase())}
+                    placeholder="e.g. XYZ-9876"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="characters"
+                    maxLength={20}
+                  />
+
+                  <Text style={couModalStyles.label}>NEW BODY / CHASSIS NUMBER</Text>
+                  <TextInput
+                    style={couModalStyles.input}
+                    value={couNewBody}
+                    onChangeText={(v) => setCouNewBody(v.toUpperCase())}
+                    placeholder="e.g. BDY-00123"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="characters"
+                    maxLength={30}
+                  />
+
+                  <Text style={couModalStyles.label}>OR NUMBER (LTO Official Receipt)</Text>
+                  <TextInput
+                    style={couModalStyles.input}
+                    value={couOrNumber}
+                    onChangeText={setCouOrNumber}
+                    placeholder="e.g. 00123456"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="default"
+                    maxLength={30}
+                  />
+
+                  <Text style={couModalStyles.label}>OR PHOTO <Text style={couModalStyles.labelOptional}>(optional)</Text></Text>
+                  <TouchableOpacity
+                    style={couModalStyles.imagePicker}
+                    onPress={async () => {
+                      try {
+                        const img = await pickImageDataUri();
+                        if (img) setCouOrImage(img);
+                      } catch { void notify('Error', 'Could not pick image.'); }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {couOrImage ? (
+                      <Image source={{ uri: couOrImage }} style={couModalStyles.imagePreview} resizeMode="cover" />
+                    ) : (
+                      <View style={couModalStyles.imagePickerPlaceholder}>
+                        <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primary} />
+                        <Text style={couModalStyles.imagePickerText}>Tap to attach OR photo</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {couOrImage ? (
+                    <TouchableOpacity onPress={() => setCouOrImage('')} style={couModalStyles.removeImageBtn}>
+                      <MaterialCommunityIcons name="close-circle" size={15} color={colors.error} />
+                      <Text style={couModalStyles.removeImageText}>Remove photo</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <Text style={couModalStyles.label}>CR NUMBER (Certificate of Registration)</Text>
+                  <TextInput
+                    style={couModalStyles.input}
+                    value={couCrNumber}
+                    onChangeText={setCouCrNumber}
+                    placeholder="e.g. 00654321"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="default"
+                    maxLength={30}
+                  />
+
+                  <Text style={couModalStyles.label}>CR PHOTO <Text style={couModalStyles.labelOptional}>(optional)</Text></Text>
+                  <TouchableOpacity
+                    style={couModalStyles.imagePicker}
+                    onPress={async () => {
+                      try {
+                        const img = await pickImageDataUri();
+                        if (img) setCouCrImage(img);
+                      } catch { void notify('Error', 'Could not pick image.'); }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {couCrImage ? (
+                      <Image source={{ uri: couCrImage }} style={couModalStyles.imagePreview} resizeMode="cover" />
+                    ) : (
+                      <View style={couModalStyles.imagePickerPlaceholder}>
+                        <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primary} />
+                        <Text style={couModalStyles.imagePickerText}>Tap to attach CR photo</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {couCrImage ? (
+                    <TouchableOpacity onPress={() => setCouCrImage('')} style={couModalStyles.removeImageBtn}>
+                      <MaterialCommunityIcons name="close-circle" size={15} color={colors.error} />
+                      <Text style={couModalStyles.removeImageText}>Remove photo</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <Text style={couModalStyles.label}>UNIT PHOTO <Text style={couModalStyles.labelOptional}>(optional)</Text></Text>
+                  <TouchableOpacity
+                    style={couModalStyles.imagePicker}
+                    onPress={async () => {
+                      try {
+                        const img = await pickImageDataUri();
+                        if (img) setCouUnitImage(img);
+                      } catch { void notify('Error', 'Could not pick image.'); }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {couUnitImage ? (
+                      <Image source={{ uri: couUnitImage }} style={couModalStyles.imagePreview} resizeMode="cover" />
+                    ) : (
+                      <View style={couModalStyles.imagePickerPlaceholder}>
+                        <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primary} />
+                        <Text style={couModalStyles.imagePickerText}>Tap to attach unit photo</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {couUnitImage ? (
+                    <TouchableOpacity onPress={() => setCouUnitImage('')} style={couModalStyles.removeImageBtn}>
+                      <MaterialCommunityIcons name="close-circle" size={15} color={colors.error} />
+                      <Text style={couModalStyles.removeImageText}>Remove photo</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <Button
+                    variant="primary"
+                    onPress={handleCouSubmit}
+                    loading={couSubmitting}
+                    disabled={!couNewPlate.trim() || !couNewBody.trim() || !couOrNumber.trim() || !couCrNumber.trim()}
+                    style={couModalStyles.submitBtn}
+                  >
+                    Submit Request
+                  </Button>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           <Text style={styles.note}>
             Keep your OR/CR and TODA membership updated. Renew before expiry to avoid penalties.
@@ -1229,11 +1496,21 @@ export const FranchiseScreen = () => {
     );
   }
 
-  // --- Apply form (no application or rejected) ---
+  // --- New application, re-application, or renewal requirements form ---
+  const formType: FranchiseType = renewalMode || myApplication?.type === 'renewal' ? 'renewal' : 'new';
+  const formFee = formType === 'renewal' ? 1000 : 1500;
   return (
     <View style={styles.container}>
-      <Header subtitle="Apply for a tricycle franchise" />
+      <Header subtitle={formType === 'renewal' ? 'Submit updated requirements for renewal' : 'Apply for a tricycle franchise'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {formType === 'renewal' ? (
+          <Card variant="outlined" padding="md" style={styles.remarkCard}>
+            <MaterialCommunityIcons name="autorenew" size={20} color={colors.primary} />
+            <Text style={styles.remarkText}>
+              Upload a current copy of every requirement below. Previous files are not reused, and the administrator will receive this as a Renewal request.
+            </Text>
+          </Card>
+        ) : null}
         {myApplication?.status === 'rejected' && (
           <Card variant="outlined" padding="md" style={[styles.remarkCard, { borderColor: colors.error, flexDirection: 'column', gap: 12 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1295,17 +1572,26 @@ export const FranchiseScreen = () => {
 
         <View style={styles.feeRow}>
           <Text style={styles.feeLabel}>Filing & Franchise Fees</Text>
-          <Text style={[styles.feeValue, typography.currency]}>₱1,500.00</Text>
+          <Text style={[styles.feeValue, typography.currency]}>₱{formFee.toLocaleString()}.00</Text>
         </View>
 
         <Button
           variant="primary"
-          onPress={() => handleSubmit('new')}
+          onPress={() => handleSubmit(formType)}
           disabled={!allUploaded || submitting}
           loading={submitting}
         >
-          {myApplication?.status === 'rejected' ? 'Re-submit Application' : 'Submit Application'}
+          {formType === 'renewal'
+            ? 'Submit Renewal Request'
+            : myApplication?.status === 'rejected'
+            ? 'Re-submit Application'
+            : 'Submit Application'}
         </Button>
+        {renewalMode ? (
+          <Button variant="outline" onPress={() => setRenewalMode(false)} disabled={submitting}>
+            Cancel Renewal
+          </Button>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -1422,6 +1708,45 @@ const styles = StyleSheet.create({
   renewBtn: {
     height: 52,
     marginBottom: spacing.lg,
+  },
+  couBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 52,
+    marginBottom: spacing.lg,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+    backgroundColor: 'transparent',
+  },
+  couBtnText: {
+    ...typography.label,
+    color: colors.accent,
+    fontSize: 14,
+  },
+  couChipRow: {
+    marginBottom: spacing.md,
+  },
+  couChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  couChipText: {
+    ...typography.labelSmall,
+    fontWeight: '600',
+  },
+  couRejectReason: {
+    ...typography.bodySmall,
+    color: colors.error,
+    marginTop: 2,
+    paddingHorizontal: 4,
   },
   note: { 
     ...typography.bodySmall,
@@ -2138,5 +2463,120 @@ const modalStyles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Change of Unit modal styles
+// ─────────────────────────────────────────────────────────────────────────────
+const couModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    maxHeight: '85%',
+    paddingBottom: spacing.xl,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  title: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontWeight: '700',
+    flex: 1,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  body: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  hint: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 18,
+  },
+  label: {
+    ...typography.labelSmall,
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+    marginTop: spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    ...typography.body,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    marginBottom: spacing.sm,
+  },
+  submitBtn: {
+    marginTop: spacing.lg,
+    height: 52,
+  },
+  labelOptional: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    fontWeight: '400',
+    textTransform: 'none',
+    letterSpacing: 0,
+  },
+  imagePicker: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    minHeight: 110,
+  },
+  imagePickerPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.lg,
+  },
+  imagePickerText: {
+    ...typography.label,
+    color: colors.primary,
+    fontSize: 13,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 140,
+  },
+  removeImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  removeImageText: {
+    ...typography.labelSmall,
+    color: colors.error,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

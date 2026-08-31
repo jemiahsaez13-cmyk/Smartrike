@@ -21,6 +21,11 @@ export interface RecordFranchiseEventInput {
   agreementNumber?: string;
   agreementText?: string;
   createdBy?: string | null;
+  /** Change of Unit fields */
+  newPlateNumber?: string;
+  newBodyNumber?: string;
+  orNumber?: string;
+  crNumber?: string;
 }
 
 const validISODate = (value: string): boolean =>
@@ -106,6 +111,13 @@ export class FranchiseService {
       if (!input.reason?.trim()) throw new Error('A termination reason is required.');
       patch.franchise_status = 'terminated';
       patch.remarks = input.reason.trim();
+    } else if (input.eventType === 'change_of_unit') {
+      if (!input.newPlateNumber?.trim()) throw new Error('New plate number is required for Change of Unit.');
+      if (!input.newBodyNumber?.trim()) throw new Error('New body number is required for Change of Unit.');
+      if (!input.orNumber?.trim()) throw new Error('OR number of the new unit is required.');
+      if (!input.crNumber?.trim()) throw new Error('CR number of the new unit is required.');
+      patch.plate_number = input.newPlateNumber.trim().toUpperCase();
+      patch.body_number  = input.newBodyNumber.trim().toUpperCase();
     }
 
     const updated = await this.patch(application.id, patch);
@@ -121,6 +133,10 @@ export class FranchiseService {
         effective_date: effectiveDate,
         agreement_number: input.agreementNumber || null,
         agreement_text: input.agreementText || null,
+        new_plate_number: input.newPlateNumber?.trim().toUpperCase() || null,
+        new_body_number:  input.newBodyNumber?.trim().toUpperCase() || null,
+        or_number:  input.orNumber?.trim() || null,
+        cr_number:  input.crNumber?.trim() || null,
         created_by: input.createdBy || null,
       })
       .select()
@@ -223,8 +239,7 @@ export class FranchiseService {
       submitted: ['document_verification', 'rejected'],
       document_verification: ['payment', 'rejected'],
       inspection: ['payment'],
-      payment: ['approved'],
-      approved: ['issued'],
+      payment: ['issued'],
     };
     if (status !== current.status && !allowed[current.status]?.includes(status)) {
       throw new Error(`Invalid MTOP transition from ${current.status} to ${status}.`);
@@ -318,5 +333,101 @@ export class FranchiseService {
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) throw new Error('The payment is not pending review.');
     return row as FranchiseApplication;
+  }
+
+  /**
+   * Driver submits a Change of Unit request.
+   * Only allowed when the franchise is issued and no other COU is pending.
+   */
+  async submitChangeOfUnitRequest(
+    id: string,
+    input: {
+      newPlate: string;
+      newBody: string;
+      orNumber: string;
+      crNumber: string;
+      orImage?: string | null;
+      crImage?: string | null;
+      unitImage?: string | null;
+    }
+  ): Promise<FranchiseApplication> {
+    const current = await this.getById(id);
+    if (!current) throw new Error('Franchise application not found.');
+    if (current.status !== 'issued') throw new Error('Change of Unit requests are only allowed for issued franchises.');
+    if (current.cou_status === 'pending') throw new Error('A Change of Unit request is already pending review.');
+
+    const plate = input.newPlate.trim().toUpperCase();
+    const body  = input.newBody.trim().toUpperCase();
+    const or    = input.orNumber.trim();
+    const cr    = input.crNumber.trim();
+
+    if (!plate) throw new Error('New plate number is required.');
+    if (!body)  throw new Error('New body/chassis number is required.');
+    if (!or)    throw new Error('OR number of the new unit is required.');
+    if (!cr)    throw new Error('CR number of the new unit is required.');
+
+    const { data, error } = await supabase
+      .from('franchise_applications')
+      .update({
+        cou_status: 'pending',
+        cou_new_plate: plate,
+        cou_new_body: body,
+        cou_or_number: or,
+        cou_cr_number: cr,
+        cou_or_image: input.orImage ?? null,
+        cou_cr_image: input.crImage ?? null,
+        cou_unit_image: input.unitImage ?? null,
+        cou_requested_at: new Date().toISOString(),
+        cou_reviewed_at: null,
+        cou_reviewed_by: null,
+        cou_rejection_reason: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as FranchiseApplication;
+  }
+
+  /**
+   * Admin approves or rejects a pending Change of Unit request.
+   * On approval the plate and body numbers on the application are updated.
+   */
+  async reviewChangeOfUnitRequest(
+    id: string,
+    decision: 'approved' | 'rejected',
+    reviewedBy: string,
+    rejectionReason?: string
+  ): Promise<FranchiseApplication> {
+    const current = await this.getById(id);
+    if (!current) throw new Error('Franchise application not found.');
+    if (current.cou_status !== 'pending') throw new Error('No pending Change of Unit request found.');
+    if (decision === 'rejected' && !rejectionReason?.trim()) {
+      throw new Error('A rejection reason is required.');
+    }
+
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {
+      cou_status: decision,
+      cou_reviewed_at: now,
+      cou_reviewed_by: reviewedBy,
+      cou_rejection_reason: decision === 'rejected' ? rejectionReason!.trim() : null,
+      updated_at: now,
+    };
+
+    if (decision === 'approved') {
+      patch.plate_number = current.cou_new_plate;
+      patch.body_number  = current.cou_new_body;
+    }
+
+    const { data, error } = await supabase
+      .from('franchise_applications')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as FranchiseApplication;
   }
 }

@@ -27,14 +27,16 @@ const TITLES: Record<ManagementReportFilters['type'], string> = {
   violations:          'Driver Violation Report',
   inventory:           'Association Inventory Report',
   // ── Module 16 ──
-  booking_records:     'Booking Records',
-  trip_records:        'Trip Records (Completed)',
-  monitoring_logs:     'Monitoring / Activity Logs',
-  registered_tricycles:'Registered Tricycle Report',
-  toda_membership:     'TODA Membership Report',
-  renewal_due_dates:   'Tricycle Renewal Due-Date Report',
-  due_within_30_days:  '30-Day Due Date Report',
-  assignment_records:  'Assignment Records',
+  booking_records:      'Booking Records',
+  trip_records:         'Trip Records (Completed)',
+  monitoring_logs:      'Monitoring / Activity Logs',
+  registered_tricycles: 'Registered Tricycle Report',
+  toda_membership:      'TODA Membership Report',
+  renewal_due_dates:    'Tricycle Renewal Due-Date Report',
+  due_within_30_days:   '30-Day Due Date Report',
+  assignment_records:   'Assignment Records',
+  operator_registration:'Operator / Driver Registration Report',
+  toda_association:     'TODA Association Report',
 };
 
 const emptyCounts = (): Record<FranchiseRecordStatus, number> => ({
@@ -88,6 +90,12 @@ export class ManagementReportService {
     }
     if (type === 'assignment_records') {
       return this._assignmentRecordsReport(filters);
+    }
+    if (type === 'operator_registration') {
+      return this._operatorRegistrationReport(filters);
+    }
+    if (type === 'toda_association') {
+      return this._todaAssociationReport(filters);
     }
 
     // ── Existing types ──────────────────────────────────────────────────────
@@ -354,6 +362,112 @@ export class ManagementReportService {
 
     rows = rows.filter((r) => inDateRange(r.date, filters.dateFrom, filters.dateTo));
     return { title: TITLES.assignment_records, rows, activeFranchises: 0, renewedThisYear: 0, statusCounts: emptyCounts() };
+  }
+
+  // ── Module 16: Operator / Driver Registration Report ─────────────────────
+  private async _operatorRegistrationReport(filters: ManagementReportFilters): Promise<ManagementReportDataset> {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, email, user_type, toda_membership, verification_status, current_status, created_at')
+      .in('user_type', ['driver', 'passenger'])
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    const users = (data ?? []) as any[];
+
+    // Enrich drivers with their franchise/MTOP number
+    const driverIds = users.filter((u) => u.user_type === 'driver').map((u) => u.id);
+    const mtopMap = new Map<string, string>();
+    if (driverIds.length) {
+      const { data: franchises } = await supabase
+        .from('franchise_applications')
+        .select('driver_id, mtop_number')
+        .in('driver_id', driverIds)
+        .eq('status', 'issued');
+      (franchises ?? []).forEach((f: any) => {
+        if (f.mtop_number) mtopMap.set(f.driver_id, f.mtop_number);
+      });
+    }
+
+    let rows: ManagementReportRow[] = users.map((u) => ({
+      id: u.id,
+      title: u.name ?? 'Unknown',
+      subtitle: u.user_type === 'driver'
+        ? `Driver · TODA: ${u.toda_membership ?? 'Unassigned'} · MTOP: ${mtopMap.get(u.id) ?? 'None'}`
+        : `Passenger`,
+      status: u.verification_status ?? 'pending',
+      date: u.created_at,
+      category: u.user_type,
+      details: `Status: ${u.current_status ?? 'offline'} · ${u.email ?? ''}`,
+    }));
+
+    rows = rows.filter((r) => inDateRange(r.date, filters.dateFrom, filters.dateTo));
+    return {
+      title: TITLES.operator_registration,
+      rows,
+      activeFranchises: driverIds.length,
+      renewedThisYear: 0,
+      statusCounts: emptyCounts(),
+    };
+  }
+
+  // ── Module 16: TODA Association Report ───────────────────────────────────
+  private async _todaAssociationReport(filters: ManagementReportFilters): Promise<ManagementReportDataset> {
+    const { data: todas, error } = await supabase
+      .from('toda_associations')
+      .select('*')
+      .order('name', { ascending: true });
+    if (error) throw error;
+    const assocs = (todas ?? []) as any[];
+
+    // Count members per TODA
+    const { data: drivers } = await supabase
+      .from('users')
+      .select('toda_membership')
+      .eq('user_type', 'driver')
+      .not('toda_membership', 'is', null);
+    const memberCount: Record<string, number> = {};
+    (drivers ?? []).forEach((d: any) => {
+      if (d.toda_membership) {
+        memberCount[d.toda_membership] = (memberCount[d.toda_membership] ?? 0) + 1;
+      }
+    });
+
+    // Count routes per TODA
+    const { data: routes } = await supabase
+      .from('toda_routes')
+      .select('toda_id');
+    const routeCount: Record<string, number> = {};
+    (routes ?? []).forEach((r: any) => {
+      routeCount[r.toda_id] = (routeCount[r.toda_id] ?? 0) + 1;
+    });
+
+    let rows: ManagementReportRow[] = assocs.map((t) => ({
+      id: t.id,
+      title: t.name,
+      subtitle: [
+        `${memberCount[t.name] ?? 0} member${(memberCount[t.name] ?? 0) !== 1 ? 's' : ''}`,
+        `${routeCount[t.id] ?? 0} route${(routeCount[t.id] ?? 0) !== 1 ? 's' : ''}`,
+        t.area_barangays?.length
+          ? `${t.area_barangays.length} barangay${t.area_barangays.length > 1 ? 's' : ''}`
+          : t.area ?? '',
+      ].filter(Boolean).join(' · '),
+      status: t.is_active ? 'active' : 'inactive',
+      date: t.created_at,
+      details: [
+        t.contact_name && `Contact: ${t.contact_name}`,
+        t.contact_phone,
+        t.notes,
+      ].filter(Boolean).join(' · ') || undefined,
+    }));
+
+    rows = rows.filter((r) => inDateRange(r.date, filters.dateFrom, filters.dateTo));
+    return {
+      title: TITLES.toda_association,
+      rows,
+      activeFranchises: assocs.filter((t) => t.is_active).length,
+      renewedThisYear: 0,
+      statusCounts: emptyCounts(),
+    };
   }
 
   // ── Shared helpers ───────────────────────────────────────────────────────

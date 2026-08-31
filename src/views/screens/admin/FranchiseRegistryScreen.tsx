@@ -35,6 +35,7 @@ type RegistryAction =
   | 'succession_transfer'
   | 'third_party_transfer'
   | 'termination'
+  | 'change_of_unit'
   | 'violation';
 
 const STATUS_COLOR: Record<FranchiseRecordStatus, { fg: string; bg: string }> = {
@@ -88,6 +89,11 @@ export const FranchiseRegistryScreen = () => {
   const [violationType, setViolationType] = useState('');
   const [description, setDescription] = useState('');
   const [penalty, setPenalty] = useState('');
+  // Change of Unit
+  const [newPlateNumber, setNewPlateNumber] = useState('');
+  const [newBodyNumber, setNewBodyNumber] = useState('');
+  const [orNumber, setOrNumber] = useState('');
+  const [crNumber, setCrNumber] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -122,6 +128,10 @@ export const FranchiseRegistryScreen = () => {
     setViolationType('');
     setDescription('');
     setPenalty('');
+    setNewPlateNumber('');
+    setNewBodyNumber('');
+    setOrNumber('');
+    setCrNumber('');
   };
 
   const closeModal = () => {
@@ -178,6 +188,11 @@ export const FranchiseRegistryScreen = () => {
           reason: reason || undefined,
           agreementNumber,
           agreementText,
+          // Change of Unit
+          newPlateNumber: action === 'change_of_unit' ? newPlateNumber : undefined,
+          newBodyNumber:  action === 'change_of_unit' ? newBodyNumber  : undefined,
+          orNumber:       action === 'change_of_unit' ? orNumber       : undefined,
+          crNumber:       action === 'change_of_unit' ? crNumber       : undefined,
           createdBy: actor?.id,
         });
 
@@ -293,6 +308,7 @@ export const FranchiseRegistryScreen = () => {
               <View style={styles.actionWrap}>
                 <ActionChip label="Details" icon="pencil-outline" onPress={() => openAction(record, 'details')} />
                 <ActionChip label="Renew" icon="calendar-refresh" onPress={() => openAction(record, 'renewal')} />
+                <ActionChip label="Change Unit" icon="swap-horizontal" onPress={() => openAction(record, 'change_of_unit')} />
                 <ActionChip label="Succession" icon="account-switch-outline" onPress={() => openAction(record, 'succession_transfer')} />
                 <ActionChip label="Third party" icon="handshake-outline" onPress={() => openAction(record, 'third_party_transfer')} />
                 <ActionChip label="Violation" icon="alert-outline" onPress={() => openAction(record, 'violation')} />
@@ -382,6 +398,25 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
+              {action === 'change_of_unit' ? (
+                <>
+                  <View style={styles.changeUnitBanner}>
+                    <MaterialCommunityIcons name="swap-horizontal" size={18} color={colors.primary} />
+                    <Text style={styles.changeUnitBannerText}>
+                      This will update the plate and body number of this MTOP record and log the unit replacement.
+                    </Text>
+                  </View>
+                  <Field label="NEW PLATE NUMBER *" value={newPlateNumber} onChangeText={setNewPlateNumber} placeholder="e.g. LHD-1234" />
+                  <Field label="NEW BODY NUMBER *" value={newBodyNumber} onChangeText={setNewBodyNumber} placeholder="e.g. B-042" />
+                  <Field label="OR NUMBER (Official Receipt — LTO) *" value={orNumber} onChangeText={setOrNumber} placeholder="e.g. 12345678" />
+                  <Field label="CR NUMBER (Certificate of Registration — LTO) *" value={crNumber} onChangeText={setCrNumber} placeholder="e.g. 87654321" />
+                  <Field label="EFFECTIVE DATE (YYYY-MM-DD)" value={effectiveDate} onChangeText={setEffectiveDate} />
+                  <Text style={styles.helper}>
+                    The old plate and body number will be replaced in the franchise record. The original values are preserved in the event history.
+                  </Text>
+                </>
+              ) : null}
+
               {action === 'violation' ? (
                 <>
                   <Field label="Violation type" value={violationType} onChangeText={setViolationType} placeholder="e.g. Overcharging" />
@@ -415,6 +450,7 @@ const actionTitle = (action: RegistryAction): string => ({
   succession_transfer: 'Franchise succession',
   third_party_transfer: 'Third-party transfer',
   termination: 'Terminate franchise',
+  change_of_unit: 'Change of Unit',
   violation: 'Record driver violation',
 })[action];
 
@@ -498,6 +534,8 @@ const styles = StyleSheet.create({
   checkText: { ...typography.body, color: colors.text, flex: 1 },
   agreementNote: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   agreementText: { ...typography.bodySmall, color: colors.primaryDark, flex: 1 },
+  changeUnitBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.warningLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  changeUnitBannerText: { ...typography.bodySmall, color: colors.text, flex: 1, lineHeight: 18 },
   saveBtn: { minHeight: 52, borderRadius: radius.md, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginTop: spacing.sm },
   saveText: { ...typography.button, color: '#fff' },
 });

@@ -27,7 +27,7 @@ import { colors, layout, radius, shadows, spacing, typography } from '@/views/st
 const service = new ManagementReportService();
 const REPORTS: Array<{ key: ManagementReportType; label: string; icon: string }> = [
   // ── Existing ──
-  { key: 'franchise_status',    label: 'Status',       icon: 'chart-box-outline' },
+  { key: 'franchise_status',    label: 'Status',        icon: 'chart-box-outline' },
   { key: 'active_franchises',   label: 'Active',        icon: 'shield-check-outline' },
   { key: 'renewals',            label: 'Renewals',      icon: 'calendar-refresh' },
   { key: 'transfers',           label: 'Transfers',     icon: 'account-switch-outline' },
@@ -43,6 +43,8 @@ const REPORTS: Array<{ key: ManagementReportType; label: string; icon: string }>
   { key: 'renewal_due_dates',   label: 'Due Dates',     icon: 'calendar-clock-outline' },
   { key: 'due_within_30_days',  label: '30-Day',        icon: 'calendar-alert' },
   { key: 'assignment_records',  label: 'Assignments',   icon: 'swap-horizontal-bold' },
+  { key: 'operator_registration',label: 'Operators',    icon: 'account-hard-hat-outline' },
+  { key: 'toda_association',    label: 'Associations',  icon: 'office-building-outline' },
 ];
 const STATUSES: Array<FranchiseRecordStatus | 'all'> = ['all', 'active', 'expired', 'pending_renewal', 'terminated', 'transferred'];
 const CATEGORIES: Array<InventoryCategory | 'all'> = ['all', 'supplies', 'equipment', 'safety', 'office', 'other'];

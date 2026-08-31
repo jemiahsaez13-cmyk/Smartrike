@@ -145,6 +145,47 @@ export const reviewFranchisePayment = createAsyncThunk(
   }
 );
 
+export const submitChangeOfUnit = createAsyncThunk(
+  'franchise/submitChangeOfUnit',
+  async (
+    payload: { id: string; newPlate: string; newBody: string; orNumber: string; crNumber: string; orImage?: string | null; crImage?: string | null; unitImage?: string | null },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await service.submitChangeOfUnitRequest(payload.id, {
+        newPlate: payload.newPlate,
+        newBody: payload.newBody,
+        orNumber: payload.orNumber,
+        crNumber: payload.crNumber,
+        orImage: payload.orImage,
+        crImage: payload.crImage,
+        unitImage: payload.unitImage,
+      });
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const reviewChangeOfUnit = createAsyncThunk(
+  'franchise/reviewChangeOfUnit',
+  async (
+    payload: { id: string; decision: 'approved' | 'rejected'; reviewedBy: string; rejectionReason?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await service.reviewChangeOfUnitRequest(
+        payload.id,
+        payload.decision,
+        payload.reviewedBy,
+        payload.rejectionReason
+      );
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const upsert = (list: FranchiseApplication[], item: FranchiseApplication) => {
   const idx = list.findIndex((a) => a.id === item.id);
   if (idx >= 0) list[idx] = item;
@@ -200,6 +241,14 @@ const franchiseSlice = createSlice({
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })
       .addCase(reviewFranchisePayment.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(submitChangeOfUnit.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(reviewChangeOfUnit.fulfilled, (state, action) => {
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       });

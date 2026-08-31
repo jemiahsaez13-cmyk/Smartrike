@@ -1,4 +1,5 @@
 import { MD3LightTheme } from 'react-native-paper';
+import { Platform, StatusBar } from 'react-native';
 
 // ────────────────────────────────────────────────────────────────
 // Smart Trike design system — fresh green & white
@@ -153,7 +154,12 @@ export const fonts = {
 };
 
 // Shared layout metrics (safe-area offsets, nav bar sizing)
-export const HEADER_PADDING_TOP = 60;
+// Uses the real status bar height on Android so headers never clip.
+// On iOS, 50 is a safe minimum — screens that need exact notch clearance
+// should layer useSafeAreaInsets on top (already done for TodaManagementScreen,
+// DriverTodaScreen, and PassengerTodaRatesScreen).
+const ANDROID_STATUS_BAR = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 24) : 0;
+export const HEADER_PADDING_TOP = Platform.OS === 'ios' ? 50 : ANDROID_STATUS_BAR + 12;
 
 export const layout = {
   headerTop: HEADER_PADDING_TOP,
