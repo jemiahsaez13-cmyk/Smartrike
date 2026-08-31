@@ -35,13 +35,23 @@ export interface DriverViolation {
 }
 
 export type ManagementReportType =
+  // ── Existing ──────────────────────────────────────────────────
   | 'franchise_status'
   | 'active_franchises'
   | 'renewals'
   | 'transfers'
   | 'terminations'
   | 'violations'
-  | 'inventory';
+  | 'inventory'
+  // ── Module 16 additions ───────────────────────────────────────
+  | 'booking_records'       // All bookings with passenger/driver/route/status
+  | 'trip_records'          // Completed trips only
+  | 'monitoring_logs'       // Activity / audit logs
+  | 'registered_tricycles'  // All issued MTOP franchise records
+  | 'toda_membership'       // Drivers and their toda_membership field
+  | 'renewal_due_dates'     // Franchises with expiry dates (all)
+  | 'due_within_30_days'    // Franchises expiring within 30 days
+  | 'assignment_records';   // Franchise assignment / ownership history
 
 export interface ManagementReportFilters {
   type: ManagementReportType;
@@ -49,6 +59,8 @@ export interface ManagementReportFilters {
   dateTo?: string;
   category?: InventoryCategory | 'all';
   franchiseStatus?: FranchiseRecordStatus | 'all';
+  /** Filter for booking_records / trip_records */
+  bookingStatus?: 'all' | 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled';
 }
 
 export interface ManagementReportRow {

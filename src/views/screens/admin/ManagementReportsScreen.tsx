@@ -26,21 +26,35 @@ import { colors, layout, radius, shadows, spacing, typography } from '@/views/st
 
 const service = new ManagementReportService();
 const REPORTS: Array<{ key: ManagementReportType; label: string; icon: string }> = [
-  { key: 'franchise_status', label: 'Status', icon: 'chart-box-outline' },
-  { key: 'active_franchises', label: 'Active', icon: 'shield-check-outline' },
-  { key: 'renewals', label: 'Renewals', icon: 'calendar-refresh' },
-  { key: 'transfers', label: 'Transfers', icon: 'account-switch-outline' },
-  { key: 'terminations', label: 'Terminations', icon: 'file-cancel-outline' },
-  { key: 'violations', label: 'Violations', icon: 'alert-outline' },
-  { key: 'inventory', label: 'Inventory', icon: 'package-variant-closed' },
+  // ── Existing ──
+  { key: 'franchise_status',    label: 'Status',       icon: 'chart-box-outline' },
+  { key: 'active_franchises',   label: 'Active',        icon: 'shield-check-outline' },
+  { key: 'renewals',            label: 'Renewals',      icon: 'calendar-refresh' },
+  { key: 'transfers',           label: 'Transfers',     icon: 'account-switch-outline' },
+  { key: 'terminations',        label: 'Terminations',  icon: 'file-cancel-outline' },
+  { key: 'violations',          label: 'Violations',    icon: 'alert-outline' },
+  { key: 'inventory',           label: 'Inventory',     icon: 'package-variant-closed' },
+  // ── Module 16 ──
+  { key: 'booking_records',     label: 'Bookings',      icon: 'calendar-text-outline' },
+  { key: 'trip_records',        label: 'Trips',         icon: 'car-arrow-right' },
+  { key: 'monitoring_logs',     label: 'Logs',          icon: 'text-box-search-outline' },
+  { key: 'registered_tricycles',label: 'Tricycles',     icon: 'motorbike' },
+  { key: 'toda_membership',     label: 'Membership',    icon: 'account-group-outline' },
+  { key: 'renewal_due_dates',   label: 'Due Dates',     icon: 'calendar-clock-outline' },
+  { key: 'due_within_30_days',  label: '30-Day',        icon: 'calendar-alert' },
+  { key: 'assignment_records',  label: 'Assignments',   icon: 'swap-horizontal-bold' },
 ];
 const STATUSES: Array<FranchiseRecordStatus | 'all'> = ['all', 'active', 'expired', 'pending_renewal', 'terminated', 'transferred'];
 const CATEGORIES: Array<InventoryCategory | 'all'> = ['all', 'supplies', 'equipment', 'safety', 'office', 'other'];
+const BOOKING_STATUSES: Array<'all' | 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled'> = [
+  'all', 'pending', 'accepted', 'in-transit', 'completed', 'cancelled',
+];
 
 const initialFilters: ManagementReportFilters = {
   type: 'franchise_status',
   category: 'all',
   franchiseStatus: 'all',
+  bookingStatus: 'all',
 };
 
 const pretty = (value: string) => value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -173,6 +187,21 @@ export const ManagementReportsScreen = () => {
             </>
           ) : null}
 
+          {filters.type === 'booking_records' ? (
+            <>
+              <Text style={styles.fieldLabel}>Booking status</Text>
+              <View style={styles.optionWrap}>
+                {BOOKING_STATUSES.map((status) => (
+                  <Choice
+                    key={status}
+                    label={status === 'all' ? 'All statuses' : pretty(status)}
+                    active={filters.bookingStatus === status}
+                    onPress={() => setFilters((value) => ({ ...value, bookingStatus: status }))}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
           <TouchableOpacity style={styles.generateBtn} onPress={() => { setLoading(true); generate(); }} activeOpacity={0.82} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <><MaterialCommunityIcons name="file-chart-outline" size={20} color="#fff" /><Text style={styles.generateText}>Generate report</Text></>}
           </TouchableOpacity>
@@ -202,7 +231,25 @@ export const ManagementReportsScreen = () => {
           <View key={row.id} style={styles.resultCard}>
             <View style={styles.resultTop}>
               <Text style={styles.resultTitle} numberOfLines={1}>{row.title}</Text>
-              <View style={styles.resultStatus}><Text style={styles.resultStatusText}>{pretty(row.status)}</Text></View>
+              <View style={[
+                styles.resultStatus,
+                row.status === 'overdue'   && { backgroundColor: colors.errorLight } ||
+                row.status === 'urgent'    && { backgroundColor: colors.errorLight } ||
+                row.status === 'due_soon'  && { backgroundColor: colors.warningLight } ||
+                row.status === 'member'    && { backgroundColor: colors.successLight } ||
+                row.status === 'unassigned'&& { backgroundColor: colors.surfaceAlt } ||
+                undefined,
+              ]}>
+                <Text style={[
+                  styles.resultStatusText,
+                  row.status === 'overdue'   && { color: colors.error } ||
+                  row.status === 'urgent'    && { color: colors.error } ||
+                  row.status === 'due_soon'  && { color: colors.warning } ||
+                  row.status === 'member'    && { color: colors.success } ||
+                  row.status === 'unassigned'&& { color: colors.textMuted } ||
+                  undefined,
+                ]}>{pretty(row.status)}</Text>
+              </View>
             </View>
             <Text style={styles.resultSubtitle}>{row.subtitle}</Text>
             {row.details ? <Text style={styles.resultDetails}>{row.details}</Text> : null}
