@@ -28,6 +28,8 @@ import { AdminMtopPaymentSettingsScreen } from '@/views/screens/admin/AdminMtopP
 import { ViolationManagementScreen } from '@/views/screens/admin/ViolationManagementScreen';
 import { AdminAnnouncementScreen } from '@/views/screens/admin/AdminAnnouncementScreen';
 import { BookingMonitoringScreen } from '@/views/screens/admin/BookingMonitoringScreen';
+import { TodaAssignmentScreen } from '@/views/screens/admin/TodaAssignmentScreen';
+import { TodaManagementScreen } from '@/views/screens/admin/TodaManagementScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -88,5 +90,7 @@ export const AdminNavigator = () => (
     <Stack.Screen name="ViolationManagement" component={ViolationManagementScreen} />
     <Stack.Screen name="Announcements" component={AdminAnnouncementScreen} />
     <Stack.Screen name="BookingMonitoring" component={BookingMonitoringScreen} />
+    <Stack.Screen name="TodaAssignment" component={TodaAssignmentScreen} />
+    <Stack.Screen name="TodaManagement" component={TodaManagementScreen} />
   </Stack.Navigator>
 );
