@@ -967,6 +967,7 @@ export const FranchiseScreen = () => {
         })
       ).unwrap();
       setShowCouModal(false);
+      setCouUnitType('sidecar');
       setCouNewPlate('');
       setCouNewBody('');
       setCouOrNumber('');

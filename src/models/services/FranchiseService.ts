@@ -417,38 +417,15 @@ export class FranchiseService {
     reviewedBy: string,
     rejectionReason?: string
   ): Promise<FranchiseApplication> {
-    const current = await this.getById(id);
-    if (!current) throw new Error('Franchise application not found.');
-    if (current.cou_status !== 'pending') throw new Error('No pending Change of Unit request found.');
-    if (decision === 'rejected' && !rejectionReason?.trim()) {
-      throw new Error('A rejection reason is required.');
-    }
-
-    const now = new Date().toISOString();
-    const patch: Record<string, unknown> = {
-      cou_status: decision,
-      cou_reviewed_at: now,
-      cou_reviewed_by: reviewedBy,
-      cou_rejection_reason: decision === 'rejected' ? rejectionReason!.trim() : null,
-      updated_at: now,
-    };
-
-    if (decision === 'approved') {
-      patch.body_number  = current.cou_new_body;
-      if (current.cou_unit_type === 'motor' || current.cou_unit_type === 'both') {
-        patch.plate_number = current.cou_new_plate;
-        patch.vehicle_make = current.cou_vehicle_make;
-        patch.vehicle_model = current.cou_vehicle_model;
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('franchise_applications')
-      .update(patch)
-      .eq('id', id)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('review_change_of_unit_request', {
+      p_application_id:   id,
+      p_decision:         decision,
+      p_reviewed_by:      reviewedBy,
+      p_rejection_reason: rejectionReason ?? null,
+    });
     if (error) throw error;
-    return data as FranchiseApplication;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The Change of Unit request could not be reviewed.');
+    return row as FranchiseApplication;
   }
 }

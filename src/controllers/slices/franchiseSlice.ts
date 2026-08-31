@@ -247,13 +247,31 @@ const franchiseSlice = createSlice({
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })
+      .addCase(submitChangeOfUnit.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(submitChangeOfUnit.fulfilled, (state, action) => {
+        state.loading = false;
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })
+      .addCase(submitChangeOfUnit.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(reviewChangeOfUnit.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(reviewChangeOfUnit.fulfilled, (state, action) => {
+        state.loading = false;
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(reviewChangeOfUnit.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });

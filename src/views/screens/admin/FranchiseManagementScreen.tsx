@@ -312,7 +312,9 @@ export const FranchiseManagementScreen = () => {
     }
     const ok = await confirm(
       'Approve Change of Unit',
-      `Approve the unit change for ${app.driver_name}?\n\nNew plate: ${app.cou_new_plate}\nNew body: ${app.cou_new_body}`,
+      app.cou_unit_type === 'sidecar'
+        ? `Approve the sidecar replacement for ${app.driver_name}?\n\nNew body/sidecar: ${app.cou_new_body}`
+        : `Approve the unit change for ${app.driver_name}?\n\nNew plate: ${app.cou_new_plate}\nNew body: ${app.cou_new_body}`,
       { confirmText: 'Approve' }
     );
     if (!ok) return;

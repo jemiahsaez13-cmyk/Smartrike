@@ -14,6 +14,14 @@ The Supabase CLI reports matching local and remote versions.
 Migration `043` adds `selected_payment_methods` (JSONB) and `appointment_date`
 (timestamptz) to `franchise_applications`.
 
+Migrations `044` through `058` add TODA associations/routes, Change of Unit
+columns and images, separate payment-verification issuance, motor make/model
+fields, and the `submit_change_of_unit_request` SECURITY DEFINER RPC.
+
+Migration `059` rebuilds `enforce_mtop_workflow` with the Change of Unit bypass
+guards baked in cleanly, and adds the `review_change_of_unit_request` SECURITY
+DEFINER RPC for admin approval/rejection of COU requests.
+
 ---
 
 ## How to apply
