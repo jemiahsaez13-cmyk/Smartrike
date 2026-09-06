@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text, Switch } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus } from '@/controllers/slices/driverSlice';
 import { useLocation } from '@/controllers/hooks/useLocation';
+import { UserRepository } from '@/models/repositories/UserRepository';
+import { Driver } from '@/models/types';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { RealtimeService } from '@/models/services/RealtimeService';
 import { Button } from '@/views/components/common/Button';
@@ -26,6 +28,9 @@ export const DriverDashboard = () => {
   const { startWatchingLocation, stopWatchingLocation } = useLocation();
   const realtimeRef = useRef<RealtimeService | null>(null);
   if (!realtimeRef.current) realtimeRef.current = new RealtimeService();
+  const [changingStatus, setChangingStatus] = useState(false);
+  const statusLock = useRef(false);
+  const statusVersion = useRef(0);
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
@@ -124,8 +129,21 @@ export const DriverDashboard = () => {
     return () => stopWatchingLocation();
   }, [isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
 
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const version = statusVersion.current;
+    if (user?.id && !statusLock.current) {
+      new UserRepository().findById(user.id).then(profile => {
+        if (active && version === statusVersion.current && !statusLock.current && profile) {
+          dispatch(restoreDriverStatus((profile as Driver).current_status));
+        }
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [dispatch, user?.id]));
+
   const toggleStatus = async () => {
-    if (!user?.id) return;
+    if (!user?.id || statusLock.current || currentTrip || currentStatus === 'on-trip') return;
     if (!isVerified) {
       void notify(
         'Account Pending Approval',
@@ -134,7 +152,17 @@ export const DriverDashboard = () => {
       return;
     }
     const newStatus = isOnline ? 'offline' : 'online';
-    await dispatch(updateDriverStatus({ driverId: user.id, status: newStatus }));
+    statusVersion.current += 1;
+    statusLock.current = true;
+    setChangingStatus(true);
+    try {
+      await dispatch(updateDriverStatus({ driverId: user.id, status: newStatus })).unwrap();
+    } catch (error) {
+      void notify('Could not update availability', String(error));
+    } finally {
+      statusLock.current = false;
+      setChangingStatus(false);
+    }
   };
 
   if (loading) return <Loading message="Updating duty status..." />;
@@ -187,11 +215,13 @@ export const DriverDashboard = () => {
             <View style={[styles.statusDot, { backgroundColor: !isVerified ? colors.warning : isOnline ? colors.success : colors.textMuted }]} />
             <View style={styles.statusText}>
               <Text style={styles.statusTitle}>
-                {!isVerified ? 'Pending Approval' : isOnline ? 'Online & Ready' : 'Currently Offline'}
+                {changingStatus ? 'Updating status...' : !isVerified ? 'Pending Approval' : currentStatus === 'on-trip' ? 'On a trip' : isOnline ? 'Online & Ready' : 'Currently Offline'}
               </Text>
               <Text style={styles.statusSub}>
                 {!isVerified
                   ? 'An admin must verify your documents first'
+                  : currentStatus === 'on-trip'
+                  ? 'Finish your current trip to change availability'
                   : isOnline
                   ? 'Waiting for passengers...'
                   : 'Go online to start earning'}
@@ -199,12 +229,24 @@ export const DriverDashboard = () => {
             </View>
           </View>
           <View style={{ flexShrink: 0, marginLeft: 8 }}>
-            <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} disabled={!isVerified} />
+            <Switch value={isOnline} onValueChange={toggleStatus} color={colors.success} disabled={!isVerified || changingStatus || !!currentTrip || currentStatus === 'on-trip'} />
           </View>
         </Card>
       </LinearGradient>
 
       <View style={styles.body}>
+        {incomingRequests.length > 0 && (
+          <TouchableOpacity onPress={() => navigation.navigate('BookingRequests')} activeOpacity={0.9}>
+            <LinearGradient colors={gradients.accent} style={styles.requestAlert} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+              <MaterialCommunityIcons name="bell-ring" size={24} color="#fff" />
+              <View style={styles.requestAlertText}>
+                <Text style={styles.alertTitle}>New Booking Requests!</Text>
+                <Text style={styles.alertSub}>{incomingRequests.length} passengers are waiting nearby.</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
         {currentTrip && (
           <TouchableOpacity activeOpacity={0.9} onPress={() => navigation.navigate('DriverTrip')}>
             <LinearGradient
@@ -266,18 +308,7 @@ export const DriverDashboard = () => {
           </TouchableOpacity>
         ) : null}
 
-        {incomingRequests.length > 0 && (
-          <TouchableOpacity onPress={() => navigation.navigate('BookingRequests')} activeOpacity={0.9}>
-            <LinearGradient colors={gradients.accent} style={styles.requestAlert} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-              <MaterialCommunityIcons name="bell-ring" size={24} color="#fff" />
-              <View style={styles.requestAlertText}>
-                <Text style={styles.alertTitle}>New Booking Requests!</Text>
-                <Text style={styles.alertSub}>{incomingRequests.length} passengers are waiting nearby.</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
+
 
         <Text style={styles.sectionLabel}>LIVE RIDE REQUESTS</Text>
         {!isOnline ? (
@@ -361,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    height: 300,
+    paddingBottom: spacing.lg,
     paddingTop: layout.headerTop,
     paddingHorizontal: spacing.screen,
   },
@@ -445,7 +476,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   body: {
-    marginTop: -40,
+    paddingTop: spacing.lg,
     paddingHorizontal: spacing.screen,
     paddingBottom: 130,
   },
@@ -481,11 +512,14 @@ const styles = StyleSheet.create({
   resumeBtnText: { ...typography.label, color: colors.primary, fontSize: 12 },
   statsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 20,
   },
   statBox: {
     flex: 1,
+    minWidth: 140,
+    flexWrap: 'wrap',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -510,6 +544,8 @@ const styles = StyleSheet.create({
   },
   goalHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
@@ -578,7 +614,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderRadius: 24,
-    marginBottom: 32,
+    marginBottom: 20,
     ...shadows.md,
   },
   requestAlertText: {

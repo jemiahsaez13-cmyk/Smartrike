@@ -32,6 +32,7 @@ export interface RidePaymentSubmission {
   reviewed_at: string | null;
   reviewed_by: string | null;
   reviewed_by_role: 'driver' | 'admin' | null;
+  // Display-only fields resolved from users; never insert/update these columns.
   passenger_name?: string;
   driver_name?: string;
 }

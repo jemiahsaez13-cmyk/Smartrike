@@ -135,7 +135,7 @@ export const ActiveTripScreen = () => {
   const isEMoney = paymentMethod !== 'cash';
   const paidViaEMoney = isEMoney && currentBooking?.payment_status === 'completed';
   const isOnline = paymentMethod === 'online';
-  const onlineUnpaid = isOnline && currentBooking?.payment_status !== 'completed';
+  const onlineUnpaid = isOnline && currentBooking?.payment_status !== 'completed' && paymentReviewStatus !== 'verified';
   const providerLabel = paymentMethod === 'paymaya' ? 'Maya' : paymentMethod === 'gcash' ? 'GCash' : paymentMethod === 'online' ? 'Online' : 'cash';
   const fareText = `₱${(currentBooking?.total_fare ?? 0).toFixed(2)}`;
   const pickupCoord = currentBooking?.pickup_location
@@ -404,6 +404,7 @@ export const ActiveTripScreen = () => {
   };
 
   const handleCancel = async () => {
+    if (cancelling) return;
     if (!currentBooking?.id) return;
     const yes = await confirm('Cancel Ride', 'Cancel this booking? Your driver will be notified.', {
       confirmText: 'Cancel Ride',
@@ -414,11 +415,11 @@ export const ActiveTripScreen = () => {
     setCancelling(true);
     try {
       await dispatch(cancelBooking(currentBooking.id)).unwrap();
-    } catch {
-      /* fall through to navigation */
+      navigation.navigate('PassengerDashboard');
+    } catch (error) {
+      await notify('Could not cancel ride', typeof error === 'string' ? error : 'Please check your connection and try again. Your ride has not been cancelled.');
     } finally {
       setCancelling(false);
-      navigation.navigate('PassengerDashboard');
     }
   };
 

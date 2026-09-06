@@ -174,17 +174,8 @@ export class BookingService {
   }
 
   async cancelBooking(bookingId: string): Promise<Booking> {
-    const booking = await this.bookingRepo.findById(bookingId);
-    if (!booking) throw new Error('Booking not found');
-    // Business rule: cancellation is only allowed BEFORE pickup. Once the
-    // passenger is on board (in-transit) or the trip has ended, it's final.
-    if (booking.status === 'in-transit') {
-      throw new Error('This trip has already started — it can no longer be cancelled.');
-    }
-    if (booking.status === 'completed' || booking.status === 'cancelled') {
-      throw new Error('This trip is already finished.');
-    }
-    if (booking.driver_id) await this.userRepo.updateDriverStatus(booking.driver_id, 'online');
-    return await this.bookingRepo.updateStatus(bookingId, 'cancelled');
+    // Only mutate the passenger-owned booking. Driver availability is released
+    // by the database trigger, never by a passenger writing another profile.
+    return this.bookingRepo.cancel(bookingId);
   }
 }

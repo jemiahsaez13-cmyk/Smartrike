@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, ScrollView, StyleSheet, Animated, Easing, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { notify } from '@/utils/confirm';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch } from '@/controllers/store';
@@ -46,11 +47,12 @@ export const ConfirmBookingScreen = () => {
     );
     breatheLoop.start();
 
+    let active = true;
     let channelKey: string | null = null;
     let poll: ReturnType<typeof setInterval> | null = null;
     if (currentBooking?.id) {
       channelKey = realtimeService.subscribeToBooking(currentBooking.id, (payload) => {
-        if (payload?.new) dispatch(updateBookingStatus(payload.new));
+        if (active && payload?.new) dispatch(updateBookingStatus(payload.new));
       });
       // Realtime can briefly disconnect on mobile networks. Polling keeps the
       // matching screen from getting stuck after a driver has already accepted.
@@ -58,13 +60,14 @@ export const ConfirmBookingScreen = () => {
         bookingRepo
           .findById(currentBooking.id)
           .then((fresh) => {
-            if (fresh) dispatch(updateBookingStatus(fresh));
+            if (active && fresh) dispatch(updateBookingStatus(fresh));
           })
           .catch(() => undefined);
       }, 6000);
     }
 
     return () => {
+      active = false;
       radarAnimation.stop();
       breatheLoop.stop();
       if (channelKey) realtimeService.unsubscribe(channelKey);
@@ -86,6 +89,7 @@ export const ConfirmBookingScreen = () => {
   }, [currentBooking?.status, navigation]);
 
   const handleCancel = async () => {
+    if (cancelling) return;
     if (!currentBooking?.id) {
       navigation.navigate('PassengerDashboard');
       return;
@@ -93,11 +97,11 @@ export const ConfirmBookingScreen = () => {
     setCancelling(true);
     try {
       await dispatch(cancelBooking(currentBooking.id)).unwrap();
-    } catch {
-      /* fall through to navigation */
+      navigation.navigate('PassengerDashboard');
+    } catch (error) {
+      await notify('Could not cancel ride', typeof error === 'string' ? error : 'Please check your connection and try again. Your ride has not been cancelled.');
     } finally {
       setCancelling(false);
-      navigation.navigate('PassengerDashboard');
     }
   };
 
@@ -232,7 +236,7 @@ const styles = StyleSheet.create({
   timerText: { ...typography.number, fontSize: 13, color: colors.text },
 
   scroll: { flex: 1 },
-  scrollBody: { flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.lg },
+  scrollBody: { width: '100%', maxWidth: 640, alignSelf: 'center', flexGrow: 1, justifyContent: 'center', paddingVertical: spacing.lg },
   hero: { alignItems: 'center', marginBottom: spacing.lg },
   radar: { width: 180, height: 180, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xl },
   ring: {
@@ -273,7 +277,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     ...shadows.sm,
   },
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, height: 52 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 52, paddingVertical: spacing.xs },
   stepRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   stepDot: {
     width: 26,

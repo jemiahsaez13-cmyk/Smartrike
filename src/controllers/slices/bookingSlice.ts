@@ -21,6 +21,7 @@ export const fetchActiveBooking = createAsyncThunk(
 );
 
 interface BookingState {
+  activeRequestId?: string;
   currentBooking: Booking | null;
   bookingHistory: Booking[];
   activeBookings: Booking[];
@@ -176,12 +177,17 @@ const bookingSlice = createSlice({
   initialState,
   reducers: {
     clearCurrentBooking: (state) => {
+      state.activeRequestId = undefined;
       state.currentBooking = null;
       state.searchingForDriver = false;
     },
     updateBookingStatus: (state, action: PayloadAction<Booking>) => {
-      state.currentBooking = action.payload;
-      if (action.payload.status === 'accepted') state.searchingForDriver = false;
+      // Late polling/payment callbacks must never restore a cleared ride or
+      // overwrite a different booking (including its chosen payment method).
+      if (state.currentBooking?.id !== action.payload.id) return;
+      state.activeRequestId = undefined;
+      state.currentBooking = action.payload.status === 'cancelled' ? null : action.payload;
+      state.searchingForDriver = action.payload.status === 'pending';
     },
     setSearchingForDriver: (state, action: PayloadAction<boolean>) => {
       state.searchingForDriver = action.payload;
@@ -190,6 +196,7 @@ const bookingSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(createBooking.pending, (state) => {
+        state.activeRequestId = undefined;
         state.loading = true;
         state.error = null;
         state.searchingForDriver = true;
@@ -211,20 +218,37 @@ const bookingSlice = createSlice({
         state.currentBooking = action.payload;
       })
       .addCase(completeTrip.fulfilled, (state, action) => {
+        state.activeRequestId = undefined;
         state.bookingHistory.unshift(action.payload);
         state.currentBooking = null;
       })
-      .addCase(cancelBooking.fulfilled, (state) => {
-        state.currentBooking = null;
-        state.searchingForDriver = false;
+      .addCase(cancelBooking.pending, (state) => {
+        state.activeRequestId = undefined;
+        state.error = null;
       })
-      // Restore the in-flight booking on load (only sets when one exists, so it
-      // never clobbers a fresh booking already held in memory).
-      .addCase(fetchActiveBooking.fulfilled, (state, action) => {
-        if (action.payload) {
-          state.currentBooking = action.payload;
-          state.searchingForDriver = action.payload.status === 'pending';
+      .addCase(cancelBooking.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+      .addCase(cancelBooking.fulfilled, (state, action) => {
+        state.activeRequestId = undefined;
+        if (state.currentBooking?.id === action.meta.arg) {
+          state.currentBooking = null;
+          state.searchingForDriver = false;
         }
+        state.activeBookings = state.activeBookings.filter(b => b.id !== action.meta.arg);
+        state.bookingHistory = state.bookingHistory.map(b => b.id === action.meta.arg ? action.payload : b);
+      })
+      .addCase(fetchActiveBooking.pending, (state, action) => {
+        state.activeRequestId = action.meta.requestId;
+      })
+      .addCase(fetchActiveBooking.rejected, (state, action) => {
+        if (state.activeRequestId === action.meta.requestId) state.activeRequestId = undefined;
+      })
+      .addCase(fetchActiveBooking.fulfilled, (state, action) => {
+        if (state.activeRequestId !== action.meta.requestId) return;
+        state.activeRequestId = undefined;
+        state.currentBooking = action.payload;
+        state.searchingForDriver = action.payload?.status === 'pending';
       })
       // Passenger rated driver — persist the rating back onto currentBooking
       .addCase(submitRating.fulfilled, (state, action) => {

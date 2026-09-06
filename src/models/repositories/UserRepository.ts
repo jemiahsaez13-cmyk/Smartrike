@@ -68,7 +68,9 @@ export class UserRepository {
     const { error } = await supabase
       .from('users')
       .update({ current_status: status })
-      .eq('id', driverId);
+      .eq('id', driverId)
+      .select('current_status')
+      .single();
     if (error) throw error;
   }
 }

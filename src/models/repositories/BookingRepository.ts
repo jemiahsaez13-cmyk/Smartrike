@@ -38,6 +38,22 @@ export class BookingRepository {
     return data;
   }
 
+  async cancel(id: string): Promise<Booking> {
+    // The status predicate is checked by the database at write time, so a
+    // concurrent pickup cannot be cancelled using an earlier cached status.
+    const { data, error } = await supabase.from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .in('status', ['pending', 'accepted'])
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+    const existing = await this.findById(id);
+    if (existing?.status === 'cancelled') return existing;
+    throw new Error(existing ? 'This ride has already started or finished and cannot be cancelled.' : 'Unable to cancel this booking. Refresh and try again.');
+  }
+
   async assignDriver(bookingId: string, driverId: string): Promise<Booking> {
     const { data, error } = await supabase
       .from('bookings')
@@ -117,7 +133,7 @@ export class BookingRepository {
       .in('status', ['pending', 'accepted', 'in-transit'])
       .order('created_at', { ascending: false })
       .limit(1);
-    if (error) return null;
+    if (error) throw error;
     return (data && data[0]) || null;
   }
 

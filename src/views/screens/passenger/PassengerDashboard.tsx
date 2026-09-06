@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, AppState, Dimensions, StyleSheet, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { supabase } from '@/config/supabase';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { useBooking } from '@/controllers/hooks/useBooking';
 import { useAppDispatch } from '@/controllers/store';
@@ -30,22 +31,28 @@ const fareService = new FareCalculationService();
 
 export const PassengerDashboard = () => {
   const { user } = useAuth();
-  const { currentBooking, loading: bookingLoading } = useBooking();
+  const { currentBooking: storedBooking, loading: bookingLoading } = useBooking();
+  const currentBooking = storedBooking && ['pending', 'accepted', 'in-transit'].includes(storedBooking.status) ? storedBooking : null;
   const navigation = useNavigation<any>();
   const [recentTrips, setRecentTrips] = useState<Booking[]>([]);
   const [fetchingActivity, setFetchingActivity] = useState(true);
   const [places, setPlaces] = useState<PopularPlace[]>([]);
+  const [availabilityFailed, setAvailabilityFailed] = useState(false);
   const [driversOnline, setDriversOnline] = useState<number | null>(null);
   const [fareInfo, setFareInfo] = useState<{ base: number; perKm: number } | null>(null);
 
   const dispatch = useAppDispatch();
 
-  // Restore any in-flight booking (searching / matched / mid-ride) after an
-  // app reload so the active trip card comes back instead of being lost.
-  useEffect(() => {
-    if (user?.id && !currentBooking) dispatch(fetchActiveBooking(user.id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  useFocusEffect(useCallback(() => {
+    if (!user?.id) return;
+    const refresh = () => { void dispatch(fetchActiveBooking(user.id)); };
+    refresh();
+    const channel = supabase.channel(`passenger-home-bookings-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `passenger_id=eq.${user.id}` }, refresh)
+      .subscribe();
+    const poll = setInterval(refresh, 6000);
+    return () => { clearInterval(poll); supabase.removeChannel(channel); };
+  }, [dispatch, user?.id]));
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
@@ -74,16 +81,31 @@ export const PassengerDashboard = () => {
       .then(setPlaces)
       .catch(() => undefined);
 
-    driverMatching
-      .getOnlineCount()
-      .then(setDriversOnline)
-      .catch(() => setDriversOnline(0));
-
     fareService
       .getFareConfig()
       .then((c) => setFareInfo({ base: c.baseFare, perKm: c.perKmRate }))
       .catch(() => undefined);
   }, [user?.id]);
+
+  useEffect(() => {
+    let active = true;
+    let sequence = 0;
+    const refresh = async () => {
+      const request = ++sequence;
+      try {
+        const count = await driverMatching.getOnlineCount();
+        if (active && request === sequence) { setDriversOnline(count); setAvailabilityFailed(false); }
+      } catch { if (active && request === sequence) setAvailabilityFailed(true); }
+    };
+    const channel = supabase.channel(`passenger-availability-${user?.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_availability' }, refresh)
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') void refresh(); });
+    void refresh();
+    const poll = setInterval(refresh, 5000);
+    const focus = navigation.addListener('focus', refresh);
+    const appState = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
+    return () => { active = false; clearInterval(poll); focus(); appState.remove(); supabase.removeChannel(channel); };
+  }, [user?.id, navigation]);
 
   const loadActivity = async () => {
     if (!user?.id) return;
@@ -163,6 +185,8 @@ export const PassengerDashboard = () => {
           <Text style={styles.statusText}>
             {currentBooking
               ? 'TRIP ACTIVE'
+              : availabilityFailed
+              ? 'DRIVER STATUS UNAVAILABLE'
               : driversOnline === null
               ? 'CHECKING DRIVERS…'
               : driversOnline > 0
@@ -237,7 +261,7 @@ export const PassengerDashboard = () => {
               
               <View style={styles.statsGrid}>
                 <View style={styles.statBox}>
-                  <Text style={styles.statNum}>{driversOnline === null ? '—' : driversOnline}</Text>
+                  <Text style={styles.statNum}>{availabilityFailed || driversOnline === null ? '—' : driversOnline}</Text>
                   <Text style={styles.statLabel}>Online</Text>
                 </View>
                 <View style={styles.statBox}>

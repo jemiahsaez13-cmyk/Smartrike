@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, useWindowDimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,7 +40,6 @@ const UBER_MAP_STYLE = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
 ];
 
-const { height } = Dimensions.get('window');
 const fareService = new FareCalculationService();
 const placeService = new PopularPlaceService();
 const geo = new GeocodingService();
@@ -83,6 +82,7 @@ const RIDE_OPTIONS = [
 ] as const;
 
 export const BookRideScreen = () => {
+  const { height } = useWindowDimensions();
   const { user } = useAuth();
   const { bookRide, loading } = useBooking();
   const { currentLocation, getLocation } = useLocation();
@@ -434,16 +434,12 @@ export const BookRideScreen = () => {
       }
     };
 
-    // Online payment is a DEMO and settles at pickup: the app asks the
-    // passenger to pay once the driver confirms "Passenger Picked Up" —
-    // nothing is charged at booking time. Real GCash/card requires a licensed
-    // gateway (PayMongo/Xendit/Maya) plus business registration and BIR
-    // permits, so no actual money moves here.
+    // The passenger transfers payment externally and submits proof for review.
     if (paymentMethod === 'online') {
       const fare = estimate?.fare ?? 0;
       const ok = await confirm(
-        'Online payment (demo)',
-        `You'll be asked to pay ₱${fare.toFixed(2)} online when your driver picks you up.\n\nThis is a demo — no real charge is made.`,
+        'Online payment',
+        `You'll be asked to pay ₱${fare.toFixed(2)} online when your driver picks you up.\n\nTransfer payment to your assigned driver, then upload your screenshot and reference number for verification.`,
         { confirmText: 'Book ride', cancelText: 'Cancel' }
       );
       if (!ok) return;
@@ -643,13 +639,13 @@ export const BookRideScreen = () => {
       </View>
 
       <Animated.View
-        style={[styles.sheet, { transform: [{ translateY: sheetAnim }] }]}
+        style={[styles.sheet, { maxHeight: Math.max(180, height - layout.headerTop - 48), transform: [{ translateY: sheetAnim }] }]}
         onLayout={(e) => { sheetHeightRef.current = e.nativeEvent.layout.height; }}
       >
         <View style={styles.grabZone} {...panResponder.panHandlers}>
           <View style={styles.handle} />
         </View>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+        <ScrollView keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Plan your ride</Text>
           <Text style={styles.sheetSubtitle}>Drag this card down to set your drop-off on the map, or pick a saved place below.</Text>
 
@@ -1187,7 +1183,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    maxHeight: '82%',
+    maxWidth: 640,
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,

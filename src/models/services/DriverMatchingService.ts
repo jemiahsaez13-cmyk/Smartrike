@@ -79,12 +79,10 @@ export class DriverMatchingService {
   // needed). Used for the passenger "drivers online" indicator.
   async getOnlineCount(): Promise<number> {
     const { data, error } = await supabase
-      .from('users')
-      .select('id')
-      .eq('user_type', 'driver')
-      .eq('current_status', 'online')
-      .eq('status', 'active');
-    if (error || !data) return 0;
-    return data.length;
+      .from('driver_availability')
+      .select('driver_id')
+      .eq('is_available', true);
+    if (error) throw error;
+    return data?.length ?? 0;
   }
 }

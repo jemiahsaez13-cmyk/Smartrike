@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Booking } from '@/models/types';
 import { DriverPaymentMethod, RidePaymentStatus, RidePaymentSubmission } from '@/models/entities/RidePayment';
 import { RidePaymentService } from '@/models/services/RidePaymentService';
+import { watchRidePayment } from '@/models/services/RidePaymentSyncService';
 import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { notify } from '@/utils/confirm';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
@@ -34,23 +35,44 @@ export const PassengerRidePaymentModal = ({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [available, current] = await Promise.all([
-        service.getMethodsForRide(booking.id),
-        service.getForBooking(booking.id),
-      ]);
-      setMethods(available);
-      setSelectedId((value) => value || available[0]?.id || '');
+  // Keep observing while the sheet is closed so the trip's payment banner
+  // updates too. Callback refs avoid reconnecting on every parent render.
+  const callbacks = useRef({ onStatus, onBookingChanged, onClose });
+  callbacks.current = { onStatus, onBookingChanged, onClose };
+  const sync = useRef<ReturnType<typeof watchRidePayment> | null>(null);
+  useEffect(() => {
+    setSubmission(null);
+    setSelectedId('');
+    setReference('');
+    setProof('');
+    const observer = watchRidePayment(booking.id, (current, freshBooking) => {
       setSubmission(current);
-      onStatus(current?.status ?? null);
-    } catch (error: any) {
+      callbacks.current.onStatus(current?.status ?? null);
+      if (freshBooking) callbacks.current.onBookingChanged(freshBooking);
+    });
+    sync.current = observer;
+    const appState = AppState.addEventListener('change', state => {
+      if (state === 'active') void observer.refresh();
+    });
+    return () => { observer.stop(); appState.remove(); sync.current = null; };
+  }, [booking.id]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    setLoading(true);
+    void sync.current?.refresh();
+    service.getMethodsForRide(booking.id).then(available => {
+      if (!active) return;
+      setMethods(available);
+      setSelectedId(value => available.some(method => method.id === value) ? value : available[0]?.id || '');
+    }).catch((error: any) => {
+      if (!active) return;
       setMethods([]);
-      if (visible) void notify('Payment details unavailable', error?.message || 'Please ask your driver to check their payment profile.');
-    } finally { setLoading(false); }
-  }, [booking.id, onStatus, visible]);
-  useEffect(() => { void load(); }, [load]);
+      void notify('Payment details unavailable', error?.message || 'Please ask your driver to check their payment profile.');
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [booking.id, visible]);
 
   const chooseProof = async () => {
     try { const image = await pickImageDataUri(); if (image) setProof(image); }
@@ -61,7 +83,8 @@ export const PassengerRidePaymentModal = ({
     try {
       const row = await service.submit(booking.id, selectedId, reference, proof);
       setSubmission(row); onStatus(row.status); setReference(''); setProof('');
-      await notify('Payment submitted', 'Your driver can now review the screenshot and reference. The ride will be marked paid only after verification.');
+      void sync.current?.refresh();
+      // The pending state is shown inline; no extra modal keeps Close disabled.
     } catch (error: any) { await notify('Could not submit payment', error?.message || 'Check the proof and reference, then try again.'); }
     finally { setSubmitting(false); }
   };
@@ -74,14 +97,18 @@ export const PassengerRidePaymentModal = ({
     } catch (error: any) { await notify('Could not change payment', error?.message || 'Please try again.'); }
   };
   const selected = methods.find((method) => method.id === selectedId);
-  const pending = submission?.status === 'pending';
-  const verified = submission?.status === 'verified';
+  const verified = booking.payment_status === 'completed' || submission?.status === 'verified';
+  const pending = !verified && submission?.status === 'pending';
 
-  return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+  useEffect(() => {
+    if (visible && verified) callbacks.current.onClose();
+  }, [visible, verified]);
+
+  return <Modal visible={visible && !verified} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.overlay}><Surface style={styles.card} elevation={5}>
-      <View style={styles.head}><View style={styles.headCopy}><Text style={styles.title}>Online Payment</Text><Text style={styles.subtitle}>Pay the assigned driver, then submit proof</Text></View><TouchableOpacity style={styles.close} onPress={onClose} disabled={submitting}><MaterialCommunityIcons name="close" size={23} color={colors.text} /></TouchableOpacity></View>
+      <View style={styles.head}><View style={styles.headCopy}><Text style={styles.title}>Online Payment</Text><Text style={styles.subtitle}>Pay the assigned driver, then submit proof</Text></View><TouchableOpacity style={styles.close} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close payment" hitSlop={8}><MaterialCommunityIcons name="close" size={23} color={colors.text} /></TouchableOpacity></View>
       {loading ? <View style={styles.loading}><ActivityIndicator color={colors.primary} /><Text style={styles.loadingText}>Loading {driverName}’s payment details…</Text></View> : (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.amountRow}><Text style={styles.amountLabel}>TRIP FARE</Text><Text style={styles.amount}>₱{Number(booking.total_fare).toFixed(2)}</Text></View>
           {verified || pending ? <View style={[styles.stateCard, verified ? styles.verified : styles.pending]}><MaterialCommunityIcons name={verified ? 'check-decagram' : 'clock-check-outline'} size={30} color={verified ? colors.success : colors.warning} /><View style={styles.stateCopy}><Text style={styles.stateTitle}>{verified ? 'Payment verified' : 'Waiting for driver verification'}</Text><Text style={styles.stateText}>Reference {submission?.payment_reference}</Text>{submission?.reviewed_at ? <Text style={styles.stateText}>Reviewed {new Date(submission.reviewed_at).toLocaleString()}</Text> : null}</View></View> : (
             <>
@@ -105,6 +132,6 @@ export const PassengerRidePaymentModal = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' }, card: { maxHeight: '92%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden' }, head: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.borderLight }, headCopy: { flex: 1, minWidth: 0 }, title: { ...typography.h2, fontSize: 21 }, subtitle: { ...typography.bodySmall, color: colors.textSecondary }, close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, loading: { minHeight: 260, alignItems: 'center', justifyContent: 'center', gap: spacing.md }, loadingText: { ...typography.body, color: colors.textSecondary }, content: { padding: spacing.lg, paddingBottom: 48 }, amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryLight, marginBottom: spacing.lg }, amountLabel: { ...typography.labelSmall, color: colors.primary }, amount: { ...typography.h1, fontSize: 27, color: colors.primary }, sectionLabel: { ...typography.labelSmall, color: colors.textMuted, letterSpacing: 0.8, marginBottom: spacing.sm, marginTop: spacing.sm }, method: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm }, methodActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight }, methodCopy: { flex: 1, minWidth: 0 }, methodName: { ...typography.label, color: colors.text }, methodDetail: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 }, credentials: { alignItems: 'center', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, marginVertical: spacing.md }, qr: { width: 176, height: 176, backgroundColor: '#fff', borderRadius: radius.sm }, noQr: { minHeight: 72, alignItems: 'center', justifyContent: 'center', gap: spacing.xs }, noQrText: { ...typography.bodySmall, color: colors.textSecondary }, credentialName: { ...typography.h3, marginTop: spacing.md }, credentialNumber: { ...typography.h2, fontSize: 20, color: colors.primary, marginTop: spacing.xs }, instructions: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }, externalNote: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', marginTop: spacing.md }, proofPicker: { minHeight: 130, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.primaryLight, borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing.lg }, proofPreview: { width: '100%', height: 170 }, proofPickerText: { ...typography.label, color: colors.primary, marginVertical: spacing.sm }, input: { ...typography.body, minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, color: colors.text, marginBottom: spacing.lg }, submit: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary, borderRadius: radius.md }, submitText: { ...typography.button, color: '#fff' }, disabled: { opacity: 0.6 }, empty: { alignItems: 'center', paddingVertical: spacing.xxl }, emptyTitle: { ...typography.h3, marginTop: spacing.md }, emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs }, stateCard: { flexDirection: 'row', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg }, verified: { backgroundColor: colors.successLight }, pending: { backgroundColor: colors.warningLight }, stateCopy: { flex: 1 }, stateTitle: { ...typography.h3 }, stateText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 3 }, rejected: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.errorLight, marginBottom: spacing.md }, rejectedTitle: { ...typography.label, color: colors.error }, rejectedText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 3 },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' }, card: { width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: '92%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, overflow: 'hidden' }, head: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.borderLight }, headCopy: { flex: 1, minWidth: 0 }, title: { ...typography.h2, fontSize: 21 }, subtitle: { ...typography.bodySmall, color: colors.textSecondary }, close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, loading: { minHeight: 260, alignItems: 'center', justifyContent: 'center', gap: spacing.md }, loadingText: { ...typography.body, color: colors.textSecondary }, content: { padding: spacing.lg, paddingBottom: 48 }, amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryLight, marginBottom: spacing.lg }, amountLabel: { ...typography.labelSmall, color: colors.primary }, amount: { ...typography.h1, fontSize: 27, color: colors.primary }, sectionLabel: { ...typography.labelSmall, color: colors.textMuted, letterSpacing: 0.8, marginBottom: spacing.sm, marginTop: spacing.sm }, method: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm }, methodActive: { borderColor: colors.primary, backgroundColor: colors.primaryLight }, methodCopy: { flex: 1, minWidth: 0 }, methodName: { ...typography.label, color: colors.text }, methodDetail: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 }, credentials: { alignItems: 'center', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, marginVertical: spacing.md }, qr: { width: 176, height: 176, backgroundColor: '#fff', borderRadius: radius.sm }, noQr: { minHeight: 72, alignItems: 'center', justifyContent: 'center', gap: spacing.xs }, noQrText: { ...typography.bodySmall, color: colors.textSecondary }, credentialName: { ...typography.h3, marginTop: spacing.md }, credentialNumber: { ...typography.h2, fontSize: 20, color: colors.primary, marginTop: spacing.xs }, instructions: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.sm }, externalNote: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', marginTop: spacing.md }, proofPicker: { minHeight: 130, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, backgroundColor: colors.primaryLight, borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing.lg }, proofPreview: { width: '100%', height: 170 }, proofPickerText: { ...typography.label, color: colors.primary, marginVertical: spacing.sm }, input: { ...typography.body, minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, color: colors.text, marginBottom: spacing.lg }, submit: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.primary, borderRadius: radius.md }, submitText: { ...typography.button, color: '#fff' }, disabled: { opacity: 0.6 }, empty: { alignItems: 'center', paddingVertical: spacing.xxl }, emptyTitle: { ...typography.h3, marginTop: spacing.md }, emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs }, stateCard: { flexDirection: 'row', gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg }, verified: { backgroundColor: colors.successLight }, pending: { backgroundColor: colors.warningLight }, stateCopy: { flex: 1 }, stateTitle: { ...typography.h3 }, stateText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 3 }, rejected: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.errorLight, marginBottom: spacing.md }, rejectedTitle: { ...typography.label, color: colors.error }, rejectedText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 3 },
   cashBtn: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.lg, marginTop: spacing.lg }, cashBtnText: { ...typography.button, color: colors.primary },
 });

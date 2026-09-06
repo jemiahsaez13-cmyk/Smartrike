@@ -81,6 +81,9 @@ const driverSlice = createSlice({
   name: 'driver',
   initialState,
   reducers: {
+    restoreDriverStatus: (state, action: PayloadAction<Driver['current_status']>) => {
+      state.currentStatus = state.currentTrip ? 'on-trip' : action.payload;
+    },
     setDriverInfo: (state, action: PayloadAction<Driver>) => {
       state.driverInfo = action.payload;
       state.currentStatus = action.payload.current_status;
@@ -153,5 +156,5 @@ const driverSlice = createSlice({
   }
 });
 
-export const { setDriverInfo, addIncomingRequest, removeIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
+export const { restoreDriverStatus, setDriverInfo, addIncomingRequest, removeIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
 export default driverSlice.reducer;
