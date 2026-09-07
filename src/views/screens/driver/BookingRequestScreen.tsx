@@ -114,7 +114,7 @@ export const BookingRequestScreen = () => {
 
             <View style={styles.actions}>
               <Button 
-                variant="outline" 
+                variant="danger"
                 onPress={() => handleReject(request.id)} 
                 style={styles.rejectBtn}
                 containerStyle={{ flex: 1 }}

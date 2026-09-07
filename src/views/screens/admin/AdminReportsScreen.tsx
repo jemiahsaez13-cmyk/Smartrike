@@ -25,10 +25,11 @@ const FILTERS: { key: 'all' | ReportStatus; label: string }[] = [
   { key: 'dismissed', label: 'Dismissed' },
 ];
 
-export const AdminReportsScreen = () => {
+export const AdminReportsScreen = ({ embedded = false, onViolationRecorded }: { embedded?: boolean; onViolationRecorded?: () => void }) => {
   const navigation = useNavigation<any>();
   const { width } = useWindowDimensions();
-  const compact = width < 390;
+  const compact = width < 600;
+  const [busy, setBusy] = useState(false);
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -38,7 +39,7 @@ export const AdminReportsScreen = () => {
     try {
       setReports(await service.listReports());
     } catch (e) {
-      console.error('Failed to load reports:', e);
+      void notify('Could not load reports', 'Please pull down to retry.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,21 +56,33 @@ export const AdminReportsScreen = () => {
   };
 
   const changeStatus = async (r: ReportRow, status: ReportStatus) => {
+    if (busy) return;
+    setBusy(true);
     try {
       await service.setStatus(r.id, status);
       setReports((prev) => prev.map((x) => (x.id === r.id ? { ...x, status } : x)));
     } catch {
       await notify('Update failed', 'Could not update the report. Please try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
   const onManage = async (r: ReportRow) => {
-    const choice = await confirm(`Report: ${r.reason}`, r.details || 'No additional details provided.', {
-      confirmText: 'Mark Actioned',
-      cancelText: 'Dismiss',
-    });
-    // confirm() returns true for the primary action, false for the secondary.
-    await changeStatus(r, choice ? 'actioned' : 'dismissed');
+    if (busy) return;
+    const role = r.reporter_role === 'passenger' ? 'Driver' : 'Passenger';
+    const okay = await confirm(`Record ${role.toLowerCase()} violation?`,
+      `Record "${r.reason}" for ${role.toLowerCase()} ${r.reportedName || 'User'}? This creates a linked violation and marks this report actioned.`,
+      { confirmText: `Record ${role} Violation` });
+    if (!okay) return;
+    setBusy(true);
+    try {
+      await service.recordViolation(r.id);
+      setReports((prev) => prev.map((x) => x.id === r.id ? { ...x, status: 'actioned' } : x));
+      onViolationRecorded?.();
+    } catch (error: any) {
+      await notify('Could not record violation', error?.message || 'Please try again.');
+    } finally { setBusy(false); }
   };
 
   const filtered = filter === 'all' ? reports : reports.filter((r) => r.status === filter);
@@ -82,7 +95,7 @@ export const AdminReportsScreen = () => {
         <View style={styles.cardTop}>
           <View style={[styles.reasonChip, { backgroundColor: colors.errorLight }]}>
             <MaterialCommunityIcons name="flag" size={13} color={colors.error} />
-            <Text style={styles.reasonText} numberOfLines={1}>{item.reason}</Text>
+            <Text style={styles.reasonText}>{item.reason}</Text>
           </View>
           <View style={[styles.statusChip, { backgroundColor: meta.bg }]}>
             <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
@@ -93,26 +106,33 @@ export const AdminReportsScreen = () => {
           <Text style={styles.partyStrong}>{item.reporterName}</Text>
           <Text style={styles.partyMuted}> ({item.reporter_role}) reported </Text>
           <Text style={styles.partyStrong}>{item.reportedName}</Text>
+          <Text style={styles.partyMuted}> ({item.reporter_role === 'passenger' ? 'driver' : 'passenger'})</Text>
         </Text>
 
         {item.details ? <Text style={styles.details}>"{item.details}"</Text> : null}
 
+        {item.violation && <Text style={styles.details}>Linked violation: {item.violation.status}</Text>}
+
         <View style={[styles.cardFooter, compact && styles.cardFooterCompact]}>
           <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
-          {item.status === 'open' ? (
+          {item.violation ? (
+            <TouchableOpacity style={styles.actBtn} onPress={onViolationRecorded}>
+              <Text style={styles.reopen}>View Violations</Text>
+            </TouchableOpacity>
+          ) : (item.status === 'open' || item.status === 'reviewed') ? (
             <View style={[styles.actions, compact && styles.actionsCompact]}>
-              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actDismiss]} onPress={() => changeStatus(item, 'dismissed')} activeOpacity={0.8}>
-                <Text style={[styles.actText, { color: colors.textSecondary }]}>Dismiss</Text>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actDismiss]} disabled={busy} onPress={() => changeStatus(item, 'dismissed')} activeOpacity={0.8}>
+                <Text style={[styles.actText, { color: '#fff' }]}>Dismiss</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actReview]} onPress={() => changeStatus(item, 'reviewed')} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actReview]} disabled={busy} onPress={() => changeStatus(item, 'reviewed')} activeOpacity={0.8}>
                 <Text style={[styles.actText, { color: colors.info }]}>Reviewed</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actAction]} onPress={() => onManage(item)} activeOpacity={0.8}>
-                <Text style={[styles.actText, { color: '#fff' }]}>Action</Text>
+              <TouchableOpacity style={[styles.actBtn, compact && styles.actBtnCompact, styles.actAction, compact && styles.actActionCompact]} disabled={busy} onPress={() => onManage(item)} activeOpacity={0.8}>
+                <Text style={[styles.actText, { color: '#fff' }]}>{item.reporter_role === 'passenger' ? 'Record Driver Violation' : 'Record Passenger Violation'}</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity onPress={() => changeStatus(item, 'open')} activeOpacity={0.7}>
+            <TouchableOpacity disabled={busy} onPress={() => changeStatus(item, 'open')} activeOpacity={0.7}>
               <Text style={styles.reopen}>Reopen</Text>
             </TouchableOpacity>
           )}
@@ -123,7 +143,7 @@ export const AdminReportsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {!embedded && <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
         </TouchableOpacity>
@@ -131,9 +151,9 @@ export const AdminReportsScreen = () => {
           <Text style={styles.title}>User Reports</Text>
           {openCount > 0 && <Text style={styles.subtitle}>{openCount} open</Text>}
         </View>
-      </View>
+      </View>}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+      <ScrollView style={{ flexGrow: 0 }} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f.key}
@@ -188,7 +208,8 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.screen, paddingVertical: spacing.md },
   filterChip: {
     paddingHorizontal: 14,
-    height: 34,
+    minHeight: 40,
+    paddingVertical: 8,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -210,9 +231,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, gap: spacing.sm },
-  reasonChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, height: 28, borderRadius: radius.pill, flex: 1 },
+  reasonChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, minHeight: 28, paddingVertical: 6, borderRadius: radius.pill, flex: 1 },
   reasonText: { ...typography.label, fontSize: 12, color: colors.error, flex: 1 },
-  statusChip: { paddingHorizontal: 10, height: 24, borderRadius: radius.pill, justifyContent: 'center' },
+  statusChip: { paddingHorizontal: 10, minHeight: 24, paddingVertical: 4, borderRadius: radius.pill, justifyContent: 'center' },
   statusText: { ...typography.labelSmall, fontSize: 11, fontWeight: '700' },
   partiesText: { ...typography.body, fontSize: 14, color: colors.text },
   partyStrong: { ...typography.label, fontSize: 14, color: colors.text },
@@ -229,14 +250,15 @@ const styles = StyleSheet.create({
   },
   cardFooterCompact: { alignItems: 'flex-start', flexDirection: 'column', gap: spacing.sm },
   dateText: { ...typography.bodySmall, fontSize: 12, color: colors.textLight },
-  actions: { flexDirection: 'row', gap: spacing.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actionsCompact: { width: '100%' },
-  actBtn: { minHeight: 40, paddingHorizontal: 12, borderRadius: radius.md, justifyContent: 'center', alignItems: 'center' },
-  actBtnCompact: { flex: 1, minHeight: 44, paddingHorizontal: 8 },
-  actDismiss: { backgroundColor: colors.surfaceAlt },
+  actBtn: { minHeight: 44, paddingVertical: 8, paddingHorizontal: 12, borderRadius: radius.md, justifyContent: 'center', alignItems: 'center' },
+  actBtnCompact: { flexGrow: 1, flexBasis: 90, minHeight: 44, paddingHorizontal: 8 },
+  actDismiss: { backgroundColor: colors.error },
   actReview: { backgroundColor: colors.infoLight },
   actAction: { backgroundColor: colors.primary },
-  actText: { ...typography.label, fontSize: 12 },
+  actActionCompact: { flexBasis: '100%' },
+  actText: { ...typography.label, fontSize: 12, textAlign: 'center' },
   reopen: { ...typography.label, fontSize: 13, color: colors.primary },
   emptyContent: { flexGrow: 1, justifyContent: 'center' },
   empty: { alignItems: 'center', gap: spacing.sm },

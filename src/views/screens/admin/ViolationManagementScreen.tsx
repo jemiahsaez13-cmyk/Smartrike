@@ -52,6 +52,8 @@ const PRESET_VIOLATIONS = [
   'Other',
 ];
 
+const PASSENGER_VIOLATIONS = ['No-show at pickup', 'Rude or abusive behavior', 'Unsafe conduct', 'Refused to pay the fare', 'Fake / prank booking', 'Other'];
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const formatDate = (iso: string) =>
@@ -61,26 +63,29 @@ const formatDate = (iso: string) =>
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-export const ViolationManagementScreen = () => {
+export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boolean }) => {
   const navigation = useNavigation<any>();
   const actor = useAppSelector((state) => state.auth.user);
 
   const [violations, setViolations] = useState<DriverViolation[]>([]);
-  const [drivers, setDrivers] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [subjectRole, setSubjectRole] = useState<'driver' | 'passenger'>('driver');
+  const roleLabel = subjectRole === 'driver' ? 'Driver' : 'Passenger';
+  const eligibleUsers = users.filter((user) => user.user_type === subjectRole);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<Filter>('open');
+  const [filter, setFilter] = useState<Filter>('all');
 
   // Add violation form
   const [formVisible, setFormVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [selectedDriverId, setSelectedDriverId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [violationType, setViolationType] = useState('');
   const [customType, setCustomType] = useState('');
   const [description, setDescription] = useState('');
   const [penalty, setPenalty] = useState('');
   const [incidentDate, setIncidentDate] = useState(today());
-  const [driverPickerVisible, setDriverPickerVisible] = useState(false);
+  const [userPickerVisible, setUserPickerVisible] = useState(false);
 
   // Status change busy guard
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
@@ -93,7 +98,7 @@ export const ViolationManagementScreen = () => {
         adminService.getAllUsers(),
       ]);
       setViolations(v);
-      setDrivers((allUsers as User[]).filter((u: any) => u.user_type === 'driver'));
+      setUsers(allUsers as User[]);
     } catch (error: any) {
       void notify('Could not load violations', error?.message || 'Please try again.');
     } finally {
@@ -120,7 +125,8 @@ export const ViolationManagementScreen = () => {
 
   // ─── Form helpers ────────────────────────────────────────────────
   const openForm = () => {
-    setSelectedDriverId('');
+    setSubjectRole('driver');
+    setSelectedUserId('');
     setViolationType('');
     setCustomType('');
     setDescription('');
@@ -129,12 +135,12 @@ export const ViolationManagementScreen = () => {
     setFormVisible(true);
   };
 
-  const selectedDriver = drivers.find((d) => d.id === selectedDriverId);
+  const selectedUser = eligibleUsers.find((d) => d.id === selectedUserId);
   const finalViolationType = violationType === 'Other' ? customType : violationType;
 
   const saveViolation = async () => {
-    if (!selectedDriverId) {
-      void notify('Missing field', 'Select a driver.');
+    if (!selectedUser) {
+      void notify('Missing field', `Select a ${subjectRole}.`);
       return;
     }
     if (!finalViolationType.trim()) {
@@ -149,7 +155,8 @@ export const ViolationManagementScreen = () => {
     try {
       const newViolation = await violationService.record(
         {
-          driver_id: selectedDriverId,
+          driver_id: subjectRole === 'driver' ? selectedUserId : null,
+          passenger_id: subjectRole === 'passenger' ? selectedUserId : null,
           franchise_id: null,
           violation_type: finalViolationType.trim(),
           description: description.trim() || null,
@@ -158,11 +165,13 @@ export const ViolationManagementScreen = () => {
         },
         actor?.id
       );
-      // Attach driver name immediately for display
-      newViolation.driver_name = selectedDriver?.name ?? 'Driver';
+      // Attach the selected user and role immediately for display
+      newViolation.subject_name = selectedUser.name || roleLabel;
+      newViolation.subject_role = subjectRole;
+      newViolation.driver_name = subjectRole === 'driver' ? newViolation.subject_name : undefined;
       setViolations((prev) => [newViolation, ...prev]);
       setFormVisible(false);
-      await notify('Violation recorded', `${newViolation.violation_type} has been logged for ${newViolation.driver_name}.`);
+      await notify('Violation recorded', `${newViolation.violation_type} has been logged for ${newViolation.subject_name}.`);
     } catch (error: any) {
       await notify('Could not save', error?.message || 'Check the fields and try again.');
     } finally {
@@ -177,8 +186,8 @@ export const ViolationManagementScreen = () => {
     const okay = await confirm(
       `Mark as ${label}?`,
       status === 'resolved'
-        ? `Confirm that the violation by ${v.driver_name ?? 'this driver'} has been resolved.`
-        : `Dismiss the violation by ${v.driver_name ?? 'this driver'}? This does not erase the record.`,
+        ? `Confirm that the violation by ${v.subject_name ?? v.driver_name ?? 'this user'} has been resolved.`
+        : `Dismiss the violation by ${v.subject_name ?? v.driver_name ?? 'this user'}? This does not erase the record.`,
       { confirmText: label, destructive: status === 'dismissed' }
     );
     if (!okay) return;
@@ -199,13 +208,13 @@ export const ViolationManagementScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+      <View style={[styles.header, embedded && { paddingTop: spacing.md, paddingLeft: spacing.screen, gap: spacing.sm }]}>
+        {!embedded && <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-        </TouchableOpacity>
+        </TouchableOpacity>}
         <View style={styles.headerCopy}>
           <Text style={styles.headerTitle}>Violations</Text>
-          <Text style={styles.headerSub}>Driver violation records & resolution</Text>
+          <Text style={styles.headerSub}>Driver and passenger records & resolution</Text>
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={openForm} activeOpacity={0.8}>
           <MaterialCommunityIcons name="plus" size={20} color="#fff" />
@@ -273,7 +282,7 @@ export const ViolationManagementScreen = () => {
             <MaterialCommunityIcons name="shield-check-outline" size={52} color={colors.textLight} />
             <Text style={styles.emptyTitle}>No {filter === 'all' ? '' : filter} violations</Text>
             <Text style={styles.emptyText}>
-              Tap <Text style={{ color: colors.primary, fontWeight: '700' }}>Record</Text> to log a new driver violation.
+              Tap <Text style={{ color: colors.primary, fontWeight: '700' }}>Record</Text> to log a driver or passenger violation.
             </Text>
           </View>
         ) : (
@@ -316,16 +325,30 @@ export const ViolationManagementScreen = () => {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Driver picker */}
-              <Text style={styles.fieldLabel}>DRIVER *</Text>
+              <Text style={styles.fieldLabel}>RECORD FOR *</Text>
+              <View style={styles.roleRow}>
+                {(['driver', 'passenger'] as const).map((role) => (
+                  <TouchableOpacity key={role} accessibilityRole="radio" accessibilityState={{ checked: subjectRole === role }}
+                    disabled={saving} style={[styles.roleOption, subjectRole === role && styles.presetChipActive]}
+                    onPress={() => {
+                      setSubjectRole(role); setSelectedUserId(''); setUserPickerVisible(false);
+                      setViolationType(''); setCustomType('');
+                    }}>
+                    <Text style={[styles.presetChipText, subjectRole === role && styles.presetChipTextActive]}>
+                      {role === 'driver' ? 'Driver' : 'Passenger'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.fieldLabel}>{roleLabel.toUpperCase()} *</Text>
               <TouchableOpacity
                 style={styles.pickerBtn}
-                onPress={() => setDriverPickerVisible(true)}
+                onPress={() => setUserPickerVisible(true)}
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="account-outline" size={18} color={colors.primary} />
-                <Text style={[styles.pickerText, !selectedDriver && { color: colors.textMuted }]}>
-                  {selectedDriver?.name ?? 'Select a driver…'}
+                <Text style={[styles.pickerText, !selectedUser && { color: colors.textMuted }]}>
+                  {selectedUser?.name ?? `Select a ${subjectRole}...`}
                 </Text>
                 <MaterialCommunityIcons name="chevron-down" size={18} color={colors.textLight} />
               </TouchableOpacity>
@@ -337,7 +360,7 @@ export const ViolationManagementScreen = () => {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.presetsRow}
               >
-                {PRESET_VIOLATIONS.map((preset) => {
+                {(subjectRole === 'driver' ? PRESET_VIOLATIONS : PASSENGER_VIOLATIONS).map((preset) => {
                   const active = violationType === preset;
                   return (
                     <TouchableOpacity
@@ -424,40 +447,40 @@ export const ViolationManagementScreen = () => {
 
       {/* ── Driver Picker Modal ── */}
       <Modal
-        visible={driverPickerVisible}
+        visible={userPickerVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setDriverPickerVisible(false)}
+        onRequestClose={() => setUserPickerVisible(false)}
       >
         <View style={styles.sheetOverlay}>
           <View style={[styles.sheet, { maxHeight: '70%' }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Select Driver</Text>
+              <Text style={styles.sheetTitle}>Select {roleLabel}</Text>
               <TouchableOpacity
                 style={styles.sheetClose}
-                onPress={() => setDriverPickerVisible(false)}
+                onPress={() => setUserPickerVisible(false)}
                 activeOpacity={0.7}
               >
                 <MaterialCommunityIcons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={styles.driverList}>
-              {drivers.length === 0 && (
+              {eligibleUsers.length === 0 && (
                 <Text style={[styles.emptyText, { textAlign: 'center', padding: spacing.lg }]}>
-                  No drivers found.
+                  No {subjectRole}s found.
                 </Text>
               )}
-              {drivers.map((driver) => (
+              {eligibleUsers.map((driver) => (
                 <TouchableOpacity
                   key={driver.id}
                   style={[
                     styles.driverRow,
-                    selectedDriverId === driver.id && styles.driverRowActive,
+                    selectedUserId === driver.id && styles.driverRowActive,
                   ]}
                   onPress={() => {
-                    setSelectedDriverId(driver.id);
-                    setDriverPickerVisible(false);
+                    setSelectedUserId(driver.id);
+                    setUserPickerVisible(false);
                   }}
                   activeOpacity={0.75}
                 >
@@ -467,10 +490,10 @@ export const ViolationManagementScreen = () => {
                     </Text>
                   </View>
                   <View style={styles.driverInfo}>
-                    <Text style={styles.driverName}>{driver.name ?? 'Driver'}</Text>
-                    <Text style={styles.driverMeta}>{(driver as any).plate_number ?? (driver as any).user_type ?? 'Driver'}</Text>
+                    <Text style={styles.driverName}>{driver.name ?? roleLabel}</Text>
+                    <Text style={styles.driverMeta}>{(driver as any).plate_number ?? (driver as any).user_type ?? roleLabel}</Text>
                   </View>
-                  {selectedDriverId === driver.id && (
+                  {selectedUserId === driver.id && (
                     <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary} />
                   )}
                 </TouchableOpacity>
@@ -515,16 +538,18 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
           <MaterialCommunityIcons name="account-alert-outline" size={22} color={colors.error} />
         </View>
         <View style={styles.cardNames}>
-          <Text style={styles.cardDriverName} numberOfLines={1}>
-            {v.driver_name ?? 'Driver'}
+          <Text style={styles.cardDriverName}>
+            {v.subject_name ?? v.driver_name ?? 'User'}
           </Text>
-          <Text style={styles.cardDate}>{formatDate(v.incident_date)}</Text>
+          <Text style={styles.cardDate}>{v.passenger_id ? 'Passenger' : 'Driver'} / {formatDate(v.incident_date)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
           <MaterialCommunityIcons name={meta.icon as any} size={12} color={meta.color} />
           <Text style={[styles.statusText, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
         </View>
       </View>
+
+      {v.report_id && <Text style={styles.description}>Source: user report {v.report_id.slice(0, 8)}</Text>}
 
       {/* Violation type */}
       <View style={styles.violationTypeRow}>
@@ -534,7 +559,7 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
 
       {/* Description */}
       {v.description ? (
-        <Text style={styles.description} numberOfLines={3}>{v.description}</Text>
+        <Text style={styles.description}>{v.description}</Text>
       ) : null}
 
       {/* Penalty */}
@@ -561,7 +586,7 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
             onPress={() => onChangeStatus(v, 'dismissed')}
             activeOpacity={0.8}
           >
-            <MaterialCommunityIcons name="close" size={15} color={colors.textSecondary} />
+            <MaterialCommunityIcons name="close" size={15} color="#fff" />
             <Text style={styles.dismissBtnText}>Dismiss</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -586,6 +611,8 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  roleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  roleOption: { flex: 1, minHeight: 44, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -617,7 +644,7 @@ const styles = StyleSheet.create({
     gap: 5,
     backgroundColor: colors.error,
     paddingHorizontal: spacing.md,
-    height: 38,
+    minHeight: 38,
     borderRadius: radius.md,
   },
   addBtnText: { ...typography.label, color: '#fff', fontSize: 13 },
@@ -660,7 +687,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 36,
+    minHeight: 36,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
@@ -737,24 +764,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     marginBottom: spacing.sm,
   },
-  penaltyText: { ...typography.labelSmall, fontSize: 12, color: '#8A5A00' },
+  penaltyText: { flex: 1, ...typography.labelSmall, fontSize: 12, color: '#8A5A00' },
 
   divider: { height: 1, backgroundColor: colors.borderLight, marginBottom: spacing.sm },
 
   actions: { flexDirection: 'row', gap: spacing.sm },
   dismissBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, minHeight: 44,
-    borderWidth: 1.5, borderColor: colors.border,
+    gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 8,
+    backgroundColor: colors.error,
     borderRadius: radius.md,
   },
-  dismissBtnText: { ...typography.label, fontSize: 13, color: colors.textSecondary },
+  dismissBtnText: { ...typography.label, fontSize: 13, color: '#fff', flexShrink: 1, textAlign: 'center' },
   resolveBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, minHeight: 44,
+    gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 8,
     backgroundColor: colors.primary, borderRadius: radius.md,
   },
-  resolveBtnText: { ...typography.label, fontSize: 13, color: '#fff' },
+  resolveBtnText: { ...typography.label, fontSize: 13, color: '#fff', flexShrink: 1, textAlign: 'center' },
   busyRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: spacing.sm, minHeight: 44,
@@ -833,7 +860,7 @@ const styles = StyleSheet.create({
   pickerText: { ...typography.label, flex: 1, fontSize: 14, color: colors.text },
   presetsRow: { gap: spacing.sm, paddingVertical: spacing.xs },
   presetChip: {
-    paddingHorizontal: spacing.md, height: 34,
+    paddingHorizontal: spacing.md, minHeight: 34,
     borderRadius: radius.pill,
     borderWidth: 1, borderColor: colors.border,
     justifyContent: 'center', alignItems: 'center',
@@ -857,7 +884,7 @@ const styles = StyleSheet.create({
 
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 50,
+    gap: 8, minHeight: 50,
     borderRadius: radius.md,
     backgroundColor: colors.error,
   },

@@ -185,4 +185,5 @@ export const NOTIFICATION_TYPES = {
   PAYMENT_RECEIVED: 'payment_received',
   FRANCHISE_STATUS: 'franchise_status',
   SYSTEM_ALERT: 'system_alert',
+  VIOLATION: 'violation',
 } as const;

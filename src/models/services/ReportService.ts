@@ -43,9 +43,15 @@ export interface ReportRow {
   created_at: string;
   reporterName?: string;
   reportedName?: string;
+  violation?: { id: string; status: 'open' | 'resolved' | 'dismissed' };
 }
 
 export class ReportService {
+  async recordViolation(reportId: string): Promise<void> {
+    const { error } = await supabase.rpc('record_report_violation', { p_report_id: reportId });
+    if (error) throw error;
+  }
+
   // Plain insert (no .select()) so the row need not be read back — the reporter
   // can SELECT it under RLS anyway, but keeping it minimal avoids a round-trip.
   async fileReport(p: FileReportPayload): Promise<void> {
@@ -71,6 +77,15 @@ export class ReportService {
       .limit(200);
     if (error) throw error;
     const rows = (data ?? []) as ReportRow[];
+    // Keep the linked violation's current outcome visible beside its report.
+    const { data: violations, error: violationError } = await supabase
+      .from('driver_violations').select('*');
+    if (violationError) throw violationError;
+    const byReport = new Map((violations ?? []).filter((v: any) => v.report_id).map((v: any) => [v.report_id, v]));
+    rows.forEach((row) => {
+      const linked = byReport.get(row.id) as any;
+      if (linked) row.violation = { id: linked.id, status: linked.status };
+    });
     const ids = Array.from(new Set(rows.flatMap((r) => [r.reporter_id, r.reported_id]).filter(Boolean)));
     if (ids.length) {
       const { data: users } = await supabase.from('users').select('id, name').in('id', ids);

@@ -389,9 +389,9 @@ const PayNowModal = ({
 
             {/* Loading methods */}
             {loadingMethods ? (
-              <View style={modalStyles.loadingBox}>
+              <View style={pickerStyles.loadingBox}>
                 <ActivityIndicator color={colors.primary} />
-                <Text style={modalStyles.loadingText}>Loading payment methods…</Text>
+                <Text style={pickerStyles.loadingText}>Loading payment methods…</Text>
               </View>
             ) : (
 
@@ -1884,7 +1884,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    borderRadius: radius.full,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     marginBottom: 4,

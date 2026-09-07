@@ -24,7 +24,7 @@ const TITLES: Record<ManagementReportFilters['type'], string> = {
   renewals:            'Renewal Report',
   transfers:           'Transfer Report',
   terminations:        'Termination Report',
-  violations:          'Driver Violation Report',
+  violations:          'Driver and Passenger Violation Report',
   inventory:           'Association Inventory Report',
   // ── Module 16 ──
   booking_records:      'Booking Records',
@@ -139,7 +139,7 @@ export class ManagementReportService {
     } else if (type === 'violations') {
       rows = violations.map((v) => ({
         id: v.id,
-        title: v.driver_name || 'Driver',
+        title: `${v.passenger_id ? 'Passenger' : 'Driver'}: ${v.subject_name || v.driver_name || 'User'}`,
         subtitle: v.violation_type,
         status: v.status,
         date: v.incident_date,

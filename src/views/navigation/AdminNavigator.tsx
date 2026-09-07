@@ -1,3 +1,4 @@
+import { ReportsAndViolationsScreen } from '@/views/screens/admin/ReportsAndViolationsScreen';
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -17,15 +18,12 @@ import { ChangePasswordScreen } from '@/views/screens/shared/ChangePasswordScree
 import { NotificationsScreen } from '@/views/screens/shared/NotificationsScreen';
 import { SettingsScreen } from '@/views/screens/shared/SettingsScreen';
 import { AnalyticsScreen } from '@/views/screens/admin/AnalyticsScreen';
-import { AdminReportsScreen } from '@/views/screens/admin/AdminReportsScreen';
 import { AdminMessagesScreen } from '@/views/screens/admin/AdminMessagesScreen';
 import { DriverProfileScreen } from '@/views/screens/passenger/DriverProfileScreen';
 import { FranchiseRegistryScreen } from '@/views/screens/admin/FranchiseRegistryScreen';
-import { InventoryManagementScreen } from '@/views/screens/admin/InventoryManagementScreen';
 import { ManagementReportsScreen } from '@/views/screens/admin/ManagementReportsScreen';
 import { RidePaymentManagementScreen } from '@/views/screens/admin/RidePaymentManagementScreen';
 import { AdminMtopPaymentSettingsScreen } from '@/views/screens/admin/AdminMtopPaymentSettingsScreen';
-import { ViolationManagementScreen } from '@/views/screens/admin/ViolationManagementScreen';
 import { AdminAnnouncementScreen } from '@/views/screens/admin/AdminAnnouncementScreen';
 import { BookingMonitoringScreen } from '@/views/screens/admin/BookingMonitoringScreen';
 import { TodaAssignmentScreen } from '@/views/screens/admin/TodaAssignmentScreen';
@@ -79,15 +77,14 @@ export const AdminNavigator = () => (
     <Stack.Screen name="Legal" component={LegalScreen} />
     <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
     <Stack.Screen name="Analytics" component={AnalyticsScreen} />
-    <Stack.Screen name="Reports" component={AdminReportsScreen} />
+    <Stack.Screen name="Reports" component={ReportsAndViolationsScreen} />
     <Stack.Screen name="AdminMessages" component={AdminMessagesScreen} />
     <Stack.Screen name="DriverProfile" component={DriverProfileScreen} />
     <Stack.Screen name="FranchiseRegistry" component={FranchiseRegistryScreen} />
-    <Stack.Screen name="InventoryManagement" component={InventoryManagementScreen} />
     <Stack.Screen name="ManagementReports" component={ManagementReportsScreen} />
     <Stack.Screen name="RidePaymentManagement" component={RidePaymentManagementScreen} />
     <Stack.Screen name="AdminMtopPaymentSettings" component={AdminMtopPaymentSettingsScreen} />
-    <Stack.Screen name="ViolationManagement" component={ViolationManagementScreen} />
+    <Stack.Screen name="ViolationManagement" component={ReportsAndViolationsScreen} />
     <Stack.Screen name="Announcements" component={AdminAnnouncementScreen} />
     <Stack.Screen name="BookingMonitoring" component={BookingMonitoringScreen} />
     <Stack.Screen name="TodaAssignment" component={TodaAssignmentScreen} />

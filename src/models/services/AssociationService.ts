@@ -76,19 +76,24 @@ export class ViolationService {
     const { data, error } = await query;
     if (error) throw error;
     const rows = (data ?? []) as DriverViolation[];
-    const ids = Array.from(new Set(rows.map((row) => row.driver_id).filter(Boolean)));
+    const ids = Array.from(new Set(rows.map((row) => row.driver_id || row.passenger_id).filter(Boolean)));
     if (ids.length) {
       const { data: users } = await supabase.from('users').select('id, name').in('id', ids);
       const names = new Map<string, string>((users ?? []).map((user: any) => [user.id, user.name]));
-      rows.forEach((row) => { row.driver_name = names.get(row.driver_id) || 'Driver'; });
+      rows.forEach((row) => {
+        row.subject_role = row.passenger_id ? 'passenger' : 'driver';
+        row.subject_name = names.get((row.driver_id || row.passenger_id)!) || (row.passenger_id ? 'Passenger' : 'Driver');
+        row.driver_name = row.driver_id ? row.subject_name : undefined;
+      });
     }
     return rows;
   }
 
   async record(
-    violation: Pick<DriverViolation, 'driver_id' | 'franchise_id' | 'violation_type' | 'description' | 'incident_date' | 'penalty'>,
+    violation: Pick<DriverViolation, 'driver_id' | 'passenger_id' | 'franchise_id' | 'violation_type' | 'description' | 'incident_date' | 'penalty'>,
     actorId?: string | null
   ): Promise<DriverViolation> {
+    if (!!violation.driver_id === !!violation.passenger_id) throw new Error('Select exactly one driver or passenger.');
     if (!violation.violation_type.trim()) throw new Error('Violation type is required.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(violation.incident_date)
       || Number.isNaN(new Date(`${violation.incident_date}T00:00:00`).getTime())) {

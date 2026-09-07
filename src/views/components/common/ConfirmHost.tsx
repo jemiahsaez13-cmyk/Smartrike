@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, View, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { DialogRequest, _setDialogListener } from '@/utils/confirm';
 import { colors, radius, shadows, spacing, typography } from '@/views/styles/theme';
@@ -34,9 +34,11 @@ export const ConfirmHost = () => {
       <View style={styles.overlay}>
         <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => close(false)} />
         <View style={styles.card}>
+          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: spacing.xs }}>
           {request?.title ? <Text style={styles.title}>{request.title}</Text> : null}
           {request?.message ? <Text style={styles.message}>{request.message}</Text> : null}
 
+          </ScrollView>
           <View style={[styles.actions, isAlert && styles.actionsSingle]}>
             {!isAlert && (
               <TouchableOpacity style={[styles.btn, styles.cancelBtn]} activeOpacity={0.8} onPress={() => close(false)}>
@@ -72,7 +74,8 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 420,
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.lg,
@@ -101,7 +104,9 @@ const styles = StyleSheet.create({
   },
   btn: {
     flex: 1,
-    height: 48,
+    minHeight: 48,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -111,6 +116,8 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     ...typography.button,
+    textAlign: 'center',
+    flexShrink: 1,
     fontSize: 15,
     color: colors.text,
   },
@@ -127,6 +134,8 @@ const styles = StyleSheet.create({
   },
   confirmText: {
     ...typography.button,
+    textAlign: 'center',
+    flexShrink: 1,
     fontSize: 15,
     color: '#fff',
   },

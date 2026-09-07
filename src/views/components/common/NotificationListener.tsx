@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { Platform, Vibration } from 'react-native';
+import { AppState, Platform, Vibration } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { addNotification, fetchNotifications } from '@/controllers/slices/notificationSlice';
+import { addNotification, clearNotifications, fetchNotifications } from '@/controllers/slices/notificationSlice';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 
 // Heads-up banners even while the app is open (Messenger-style pop-over).
@@ -57,7 +57,11 @@ export const NotificationListener = () => {
   useEffect(() => {
     if (!isSupabaseConfigured || !user?.id || user.id.startsWith('demo-')) return;
 
-    dispatch(fetchNotifications(user.id));
+    dispatch(clearNotifications());
+    let active = true;
+    const refresh = () => { if (active) void dispatch(fetchNotifications(user.id)); };
+    refresh();
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') refresh(); });
 
     let channel: any;
     try {
@@ -65,18 +69,19 @@ export const NotificationListener = () => {
         .channel(`user_notifications_${user.id}`)
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
           (payload: any) => {
             const row = payload?.new;
-            if (!row || row.user_id !== user.id) return; // never someone else's
+            if (!active || !row || row.user_id !== user.id) return; // never someone else's
             dispatch(addNotification(row));
+            if (payload.eventType !== 'INSERT') return;
             Vibration.vibrate([0, 180, 90, 180]);
             if (notificationsSupported) {
               Notifications.scheduleNotificationAsync({
                 content: {
                   title: row.title || 'Smart Trike',
                   body: row.body || '',
-                  data: { booking_id: row.booking_id ?? null, type: row.type },
+                  data: { booking_id: row.booking_id ?? null, violation_id: row.violation_id ?? null, type: row.type },
                   sound: true,
                 },
                 trigger: null, // fire immediately → heads-up banner
@@ -84,11 +89,14 @@ export const NotificationListener = () => {
             }
           }
         )
-        .subscribe();
+        .subscribe((status: string) => { if (status === 'SUBSCRIBED') refresh(); });
     } catch {
       /* realtime unavailable — badges still refresh on screen focus */
     }
     return () => {
+      active = false;
+      appState.remove();
+      dispatch(clearNotifications());
       try {
         if (channel) supabase.removeChannel(channel);
       } catch {

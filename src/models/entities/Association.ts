@@ -21,8 +21,12 @@ export interface InventoryItem {
 export type ViolationStatus = 'open' | 'resolved' | 'dismissed';
 
 export interface DriverViolation {
+  report_id?: string | null;
   id: string;
-  driver_id: string;
+  driver_id: string | null;
+  passenger_id?: string | null;
+  subject_name?: string;
+  subject_role?: 'driver' | 'passenger';
   franchise_id: string | null;
   driver_name?: string;
   violation_type: string;

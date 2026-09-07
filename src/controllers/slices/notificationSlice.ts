@@ -11,11 +11,14 @@ export interface AppNotification {
   title: string;
   body: string;
   booking_id?: string | null;
+  violation_id?: string | null;
   read: boolean;
   created_at: string;
 }
 
 interface NotificationState {
+  userId: string | null;
+  fetchRequestId: string | null;
   notifications: AppNotification[];
   unreadCount: number;
   loading: boolean;
@@ -23,6 +26,8 @@ interface NotificationState {
 }
 
 const initialState: NotificationState = {
+  userId: null,
+  fetchRequestId: null,
   notifications: [],
   unreadCount: 0,
   loading: false,
@@ -73,9 +78,12 @@ const notificationSlice = createSlice({
     addNotification(state, action: PayloadAction<AppNotification>) {
       // Realtime can deliver a row we already have (e.g. inserted locally then
       // echoed back) — dedupe by id so live updates never double-count.
-      if (state.notifications.some(n => n.id === action.payload.id)) return;
-      state.notifications.unshift(action.payload);
-      if (!action.payload.read) state.unreadCount += 1;
+      if (action.payload.user_id !== state.userId) return;
+      const index = state.notifications.findIndex(n => n.id === action.payload.id);
+      if (index >= 0) state.notifications[index] = action.payload;
+      else state.notifications.unshift(action.payload);
+      state.notifications.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      state.unreadCount = state.notifications.filter(n => !n.read).length;
     },
     markNotificationRead(state, action: PayloadAction<string>) {
       const notif = state.notifications.find(n => n.id === action.payload);
@@ -91,20 +99,31 @@ const notificationSlice = createSlice({
     clearNotifications(state) {
       state.notifications = [];
       state.unreadCount = 0;
+      state.userId = null;
+      state.fetchRequestId = null;
+      state.loading = false;
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchNotifications.pending, (state) => {
+      .addCase(fetchNotifications.pending, (state, action) => {
+        if (state.userId !== action.meta.arg) {
+          state.notifications = [];
+          state.unreadCount = 0;
+        }
+        state.userId = action.meta.arg;
+        state.fetchRequestId = action.meta.requestId;
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchNotifications.fulfilled, (state, action) => {
+        if (state.fetchRequestId !== action.meta.requestId || state.userId !== action.meta.arg) return;
         state.loading = false;
         state.notifications = action.payload;
         state.unreadCount = action.payload.filter((n: AppNotification) => !n.read).length;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
+        if (state.fetchRequestId !== action.meta.requestId) return;
         state.loading = false;
         state.error = action.payload as string;
       });

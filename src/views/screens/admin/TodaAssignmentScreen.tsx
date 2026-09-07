@@ -256,7 +256,7 @@ export const TodaAssignmentScreen = () => {
 
       setDrivers((prev) =>
         prev.map((d) =>
-          d.id === sheetDriver.id ? { ...d, toda_membership: undefined } : d
+          d.id === sheetDriver.id ? { ...d, toda_membership: '' } : d
         )
       );
       setMemberCounts((prev) => {

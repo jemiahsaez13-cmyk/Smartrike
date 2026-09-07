@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Image, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Switch, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -33,6 +33,8 @@ export const OnlinePaymentSettingsScreen = () => {
   const [qr, setQr] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const pendingToggles = useRef(new Set<string>());
+  const [togglingIds, setTogglingIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -47,6 +49,7 @@ export const OnlinePaymentSettingsScreen = () => {
     setInstructions(''); setQr(''); setEnabled(true); setVisible(true);
   };
   const openEdit = (method: DriverPaymentMethod) => {
+    if (pendingToggles.current.has(method.id)) return;
     setEditingId(method.id); setType(method.method_type); setName(method.display_name);
     setHolder(method.account_name); setNumber(method.account_number); setInstructions(method.instructions || '');
     setQr(method.qr_code_url || ''); setEnabled(method.is_enabled); setVisible(true);
@@ -74,12 +77,21 @@ export const OnlinePaymentSettingsScreen = () => {
     } catch (error: any) { await notify('Could not save', error?.message || 'Check the payment details and try again.'); }
     finally { setSaving(false); }
   };
-  const toggle = async (method: DriverPaymentMethod) => {
-    if (!user?.id) return;
+  const toggle = async (method: DriverPaymentMethod, nextEnabled: boolean) => {
+    if (!user?.id || pendingToggles.current.has(method.id)) return;
+    pendingToggles.current.add(method.id);
+    setTogglingIds([...pendingToggles.current]);
     try {
-      await service.setMethodEnabled(user.id, method.id, !method.is_enabled);
-      setMethods((rows) => rows.map((row) => row.id === method.id ? { ...row, is_enabled: !row.is_enabled } : row));
-    } catch (error: any) { void notify('Could not update method', error?.message || 'Please try again.'); }
+      await service.setMethodEnabled(user.id, method.id, nextEnabled);
+      setMethods((rows) => rows.map((row) =>
+        row.id === method.id ? { ...row, is_enabled: nextEnabled } : row
+      ));
+    } catch (error: any) {
+      void notify('Could not update method', error?.message || 'Please try again.');
+    } finally {
+      pendingToggles.current.delete(method.id);
+      setTogglingIds([...pendingToggles.current]);
+    }
   };
 
   return (
@@ -93,21 +105,27 @@ export const OnlinePaymentSettingsScreen = () => {
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.notice}><MaterialCommunityIcons name="shield-lock-outline" size={22} color={colors.primary} /><Text style={styles.noticeText}>Only passengers assigned to your ride can view enabled details. QR codes and account numbers are never shown to unrelated users.</Text></View>
           {methods.map((method) => (
-            <TouchableOpacity key={method.id} style={styles.card} onPress={() => openEdit(method)} activeOpacity={0.8}>
-              {method.qr_code_url ? (
-                <Image source={{ uri: method.qr_code_url }} style={styles.qrThumb} />
-              ) : (
-                <View style={styles.qrPlaceholder}>
-                  <MaterialCommunityIcons name="credit-card-outline" size={25} color={colors.primary} />
+            <View key={method.id} style={styles.card}>
+              <TouchableOpacity style={styles.cardEdit} onPress={() => openEdit(method)} activeOpacity={0.8}
+                accessibilityRole="button" accessibilityLabel={`Edit ${method.display_name}`}
+                disabled={togglingIds.includes(method.id)}>
+                {method.qr_code_url ? (
+                  <Image source={{ uri: method.qr_code_url }} style={styles.qrThumb} />
+                ) : (
+                  <View style={styles.qrPlaceholder}>
+                    <MaterialCommunityIcons name="credit-card-outline" size={25} color={colors.primary} />
+                  </View>
+                )}
+                <View style={styles.cardCopy}>
+                  <Text style={styles.cardTitle}>{method.display_name}</Text>
+                  <Text style={styles.cardText}>{method.account_name}</Text>
+                  <Text style={styles.cardNumber}>{method.account_number}</Text>
                 </View>
-              )}
-              <View style={styles.cardCopy}>
-                <Text style={styles.cardTitle}>{method.display_name}</Text>
-                <Text style={styles.cardText}>{method.account_name}</Text>
-                <Text style={styles.cardNumber}>{method.account_number}</Text>
-              </View>
-              <Switch value={method.is_enabled} onValueChange={() => toggle(method)} color={colors.primary} />
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <Switch value={method.is_enabled} onValueChange={(value) => toggle(method, value)}
+                accessibilityLabel={`Enable ${method.display_name}`}
+                disabled={togglingIds.includes(method.id)} color={colors.primary} />
+            </View>
           ))}
           {!methods.length && <View style={styles.empty}><MaterialCommunityIcons name="wallet-plus-outline" size={46} color={colors.textLight} /><Text style={styles.emptyTitle}>No online method yet</Text><Text style={styles.emptyText}>Add GCash, a bank account, or another payment method. A QR code is optional.</Text></View>}
         </ScrollView>
@@ -137,5 +155,6 @@ export const OnlinePaymentSettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  cardEdit: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 64 },
   container: { flex: 1, backgroundColor: colors.background }, header: { flexDirection: 'row', alignItems: 'center', paddingTop: layout.headerTop, paddingHorizontal: spacing.sm, paddingRight: spacing.screen, paddingBottom: spacing.md, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.borderLight }, back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, headerCopy: { flex: 1, minWidth: 0 }, title: { ...typography.h2, fontSize: 21 }, subtitle: { ...typography.bodySmall, color: colors.textSecondary }, add: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, content: { padding: spacing.screen, paddingBottom: layout.contentBottom }, notice: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryLight, marginBottom: spacing.lg }, noticeText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary }, card: { minHeight: 98, flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderLight, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.md }, qrThumb: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt }, qrPlaceholder: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' }, cardCopy: { flex: 1, minWidth: 0 }, cardTitle: { ...typography.h3, fontSize: 16 }, cardText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 }, cardNumber: { ...typography.label, color: colors.primary, marginTop: 3 }, empty: { alignItems: 'center', paddingVertical: 72 }, emptyTitle: { ...typography.h3, marginTop: spacing.md }, emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs }, overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, sheet: { width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: '92%', backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl }, sheetHead: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.borderLight }, sheetTitle: { ...typography.h2, fontSize: 20, flex: 1 }, close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, form: { padding: spacing.lg, paddingBottom: 48 }, label: { ...typography.labelSmall, color: colors.textSecondary, marginBottom: spacing.sm, marginTop: spacing.sm }, types: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }, type: { flex: 1, minHeight: 48, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }, typeActive: { backgroundColor: colors.primary, borderColor: colors.primary }, typeText: { ...typography.labelSmall, color: colors.primary }, typeTextActive: { color: '#fff' }, input: { ...typography.body, minHeight: 50, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, paddingHorizontal: spacing.md, color: colors.text, marginBottom: spacing.md }, multiline: { minHeight: 86, paddingTop: spacing.md, textAlignVertical: 'top' }, qrPicker: { minHeight: 130, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary, borderRadius: radius.lg, backgroundColor: colors.primaryLight, overflow: 'hidden' }, qrPreview: { width: 112, height: 112, marginTop: spacing.sm }, qrPickerText: { ...typography.label, color: colors.primary, marginVertical: spacing.sm }, removeQr: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }, removeQrText: { ...typography.labelSmall, color: colors.error }, qrHint: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.lg }, enableRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg }, enableTitle: { ...typography.label, color: colors.text }, save: { minHeight: 54, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }, disabled: { opacity: 0.6 }, saveText: { ...typography.button, color: '#fff' },
 });

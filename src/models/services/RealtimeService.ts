@@ -39,7 +39,7 @@ export class RealtimeService {
     const key = `notifications-${userId}`;
     const channel = supabase.channel(`notifications-${userId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${userId}`

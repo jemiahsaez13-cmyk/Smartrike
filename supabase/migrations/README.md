@@ -159,3 +159,66 @@ The customer payment observer updates both the sheet and trip banner, including
 when the sheet is closed, with reconnect/foreground refresh and a 3-second polling
 fallback. Polling works even before 064 is applied. Management access is not
 available here, so 064 has not been applied to the live project.
+
+
+## Reports and Violations (065)
+
+Apply `065_link_reports_and_violations.sql` before using **Record Violation** in
+Reports and Violations. This adds the source report relationship and an admin-only
+RPC that creates the violation and marks the report actioned in one transaction.
+Retries reuse the same violation. Reports against passengers remain reports and
+can be reviewed, dismissed, or marked actioned without creating driver violations.
+Violation resolution/dismissal remains visible on the linked report; an actioned
+report means the report has been handled, while the violation tracks its outcome.
+
+Validation: `scripts/test-report-violation.cjs` runs against isolated PGlite.
+Set `PGLITE_MODULE` to an installed `@electric-sql/pglite` package directory.
+It covers successful conversion, repeated migration, retry deduplication, admin
+permissions, invalid reports, reviewed reports, and rollback of both writes.
+
+Migration 065 has not been applied to the live project: this environment has no
+Supabase management login. Apply the SQL using the project's Supabase SQL Editor
+or your authenticated migration workflow. No live records were modified here.
+
+
+## Driver and passenger violations (066)
+
+Apply `065_link_reports_and_violations.sql`, then `066_passenger_violations.sql`.
+Migration 066 supersedes the driver-only conversion behavior described above:
+reports against passengers now create linked passenger violations, just as reports
+against drivers create driver violations. Both conversions mark the report actioned
+atomically, and retries reuse the existing violation.
+
+The existing table gains `passenger_id`; exactly one of `driver_id`/`passenger_id`
+must be present. Server validation checks the selected user's actual role and the
+reported user when linked. Existing driver records and driver-only access stay
+intact. Manual Record supports Driver/Passenger choices and role-filtered pickers.
+Management exports identify the recorded user's role and name.
+
+Validation: `scripts/test-report-violation.cjs` covers both migrations and roles;
+`scripts/test-reports-ui.cjs` covers the explicit report actions;
+`scripts/test-violation-role-picker.cjs` covers role switching, dropdown filtering,
+presets, and both manual record payloads. UI tests use React/react-test-renderer
+19.1 via `UI_TEST_MODULES`. No live database was modified; migration 066 still
+needs to be applied through an authenticated Supabase management session.
+
+
+## Violation notifications in the Account bell (067)
+
+Apply `067_violation_notifications.sql` after 065 and 066. Manual records and
+report conversions automatically notify only the driver/passenger recorded in
+the violation. The notification includes type, incident date, current status,
+details, and penalty. Changes update the same notice and make it unread again.
+Existing violations are backfilled once; repeating the migration preserves read
+state and creates no duplicates. Recipient RLS allows each user to read and mark
+only their own notifications, while existing administrator access is retained.
+
+The app displays violation details without truncation, updates the unread badge
+on notification changes, and refreshes on Account focus, app resume, and realtime
+reconnect. Notification state clears on account change and rejects stale fetches.
+
+Validation: `scripts/test-report-violation.cjs` covers recipient targeting,
+backfill, status updates, read persistence and driver/passenger RLS isolation.
+`scripts/test-notification-ownership.cjs` covers client badge updates, duplicate
+handling and account switching. Migration 067 has not been applied to the live
+project because this environment has no Supabase management login.

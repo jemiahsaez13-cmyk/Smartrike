@@ -7,7 +7,8 @@ export type NotificationType =
   | 'trip_started'
   | 'payment_received'
   | 'franchise_status'
-  | 'system_alert';
+  | 'system_alert'
+  | 'violation';
 
 export interface AppNotification {
   id: string;
@@ -16,6 +17,7 @@ export interface AppNotification {
   title: string;
   body: string;
   booking_id?: string | null;
+  violation_id?: string | null;
   read: boolean;
   created_at: string;
 }

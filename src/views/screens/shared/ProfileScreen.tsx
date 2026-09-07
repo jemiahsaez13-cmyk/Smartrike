@@ -1,18 +1,23 @@
-import React from 'react';
+import { fetchNotifications } from '@/controllers/slices/notificationSlice';
+import React, { useCallback } from 'react';
 import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/controllers/hooks/useAuth';
-import { useAppSelector } from '@/controllers/store';
+import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 export const ProfileScreen = () => {
   const { user, logout } = useAuth();
+  const dispatch = useAppDispatch();
+  useFocusEffect(useCallback(() => {
+    if (user?.id) void dispatch(fetchNotifications(user.id));
+  }, [user?.id, dispatch]));
   const navigation = useNavigation<any>();
   // Red dot on the bell only while there are actual unread notifications.
-  const unreadNotifs = useAppSelector((state) => state.notification.unreadCount);
+  const unreadNotifs = useAppSelector((state) => state.notification.userId === user?.id ? state.notification.unreadCount : 0);
 
   const handleLogout = async () => {
     const ok = await confirm('Log Out', 'Are you sure you want to log out?', {

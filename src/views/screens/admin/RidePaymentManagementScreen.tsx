@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 36,
+    minHeight: 36,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
@@ -722,6 +722,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   rejectBtn: {
+    backgroundColor: colors.error,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flex: 1,
     minHeight: 46,
     alignItems: 'center',
@@ -730,9 +733,9 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
     borderRadius: radius.md,
   },
-  rejectBtnText: {
+  rejectBtnText: { flexShrink: 1, textAlign: 'center',
     ...typography.button,
-    color: colors.error,
+    color: '#fff',
     fontSize: 13,
   },
   verifyBtn: {

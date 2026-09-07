@@ -2,14 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Keyboard, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, TouchableOpacity, View,
-  Animated,
+  Animated, useWindowDimensions,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { Text, TextInput } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '@/config/supabase';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
 import { isValidEmail } from '@/utils/validationUtils';
@@ -17,16 +13,17 @@ import { Loading } from '@/views/components/common/Loading';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { Input } from '@/views/components/common/Input';
 import { Button } from '@/views/components/common/Button';
-import { colors, spacing, typography, radius } from '@/views/styles/theme';
+import { colors, spacing, typography } from '@/views/styles/theme';
 
 export const LoginScreen = () => {
+  const { height } = useWindowDimensions();
+  const shortScreen = height < 600;
   const navigation = useNavigation<any>();
-  const { login, loading, checkAuth } = useAuth();
+  const { login, loading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const panelY = useRef(new Animated.Value(80)).current;
@@ -64,69 +61,16 @@ export const LoginScreen = () => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setGoogleLoading(true);
-    try {
-      // Web: Supabase performs the full-page redirect itself, so we just kick it
-      // off and let the page reload handle the session.
-      if (Platform.OS === 'web') {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
-        if (error) throw error;
-        return;
-      }
-
-      // Native: open Google in a secure in-app browser, then catch the redirect
-      // back into the app (smarttrike://auth-callback) and exchange the one-time
-      // code Supabase returns for a real session.
-      const redirectTo = Linking.createURL('auth-callback');
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
-      });
-      if (error) throw error;
-      if (!data?.url) throw new Error('Could not start Google sign-in.');
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      // User dismissed the browser without completing sign-in.
-      if (result.type !== 'success' || !result.url) return;
-
-      const { queryParams } = Linking.parse(result.url);
-      if (queryParams?.error_description || queryParams?.error) {
-        throw new Error(String(queryParams.error_description || queryParams.error));
-      }
-
-      const code = queryParams?.code;
-      if (!code) throw new Error('Google did not return a sign-in code.');
-
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(String(code));
-      if (exchangeError) throw exchangeError;
-
-      // Session is now stored; load the matching app profile into Redux so the
-      // navigator switches the user into the app.
-      await checkAuth();
-    } catch (err: any) {
-      const msg = typeof err === 'string' ? err : err?.message;
-      notify(
-        'Google Sign-In Unavailable',
-        msg
-          ? `Google sign-in could not be completed.\n\n${msg}`
-          : 'Google login isn’t configured yet. Please sign in with email.\n\nTip: enable the Google provider in your Supabase dashboard to turn this on.'
-      );
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
   if (loading) return <Loading message="Authenticating..." />;
 
   return (
     <View style={[styles.root, { paddingTop: Platform.OS === 'android' ? 0 : undefined }]}>
       {/* ── Black Hero ── */}
-      <Animated.View style={[styles.hero, { opacity: heroOpacity }]}>
-        <TricycleIcon size={50} color="#fff" />
-        <Text style={styles.heroKicker}>FEDTODAB</Text>
+      <Animated.View style={[styles.hero, shortScreen && styles.heroCompact, { opacity: heroOpacity }]}>
+        <TricycleIcon size={shortScreen ? 28 : 50} color="#fff" />
+        {!shortScreen && <Text style={styles.heroKicker}>FEDTODAB</Text>}
         <Text style={styles.heroTitle}>Smart Trike</Text>
-        <Text style={styles.heroSub}>Your ride, your way.</Text>
+        {!shortScreen && <Text style={styles.heroSub}>Your ride, your way.</Text>}
       </Animated.View>
 
       {/* ── Animated White Panel ── */}
@@ -194,24 +138,6 @@ export const LoginScreen = () => {
               Sign in
             </Button>
 
-            <View style={styles.divider}>
-              <View style={styles.divLine} />
-              <Text style={styles.divLabel}>OR CONTINUE WITH</Text>
-              <View style={styles.divLine} />
-            </View>
-
-            <View style={styles.altRow}>
-              <TouchableOpacity
-                style={[styles.altBtn, googleLoading && { opacity: 0.6 }]}
-                activeOpacity={0.75}
-                onPress={handleGoogleLogin}
-                disabled={googleLoading}
-              >
-                <MaterialCommunityIcons name="google" size={20} color={colors.text} />
-                <Text style={styles.altBtnText}>{googleLoading ? 'Opening…' : 'Google'}</Text>
-              </TouchableOpacity>
-            </View>
-
             <View style={styles.footer}>
               <Text style={styles.footerText}>New to Smart Trike?  </Text>
               <TouchableOpacity onPress={() => navigation.navigate('EmailRegister')}>
@@ -235,6 +161,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   },
+  heroCompact: { paddingTop: spacing.sm, paddingBottom: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   heroKicker: {
     ...typography.labelSmall,
     fontSize: 10,
@@ -297,48 +224,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cta: {
-    height: 54,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: spacing.xl,
-  },
-  divLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  divLabel: {
-    ...typography.labelSmall,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    color: colors.textMuted,
-    marginHorizontal: spacing.md,
-  },
-  altRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  altBtn: {
-    flex: 1,
-    height: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  altBtnText: {
-    ...typography.label,
-    fontSize: 14,
+    minHeight: 54,
   },
   footer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xl,
     justifyContent: 'center',
     alignItems: 'center',
   },

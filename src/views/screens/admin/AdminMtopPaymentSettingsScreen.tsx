@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Image,
   Modal,
@@ -57,6 +57,8 @@ export const AdminMtopPaymentSettingsScreen = () => {
   const [qr, setQr] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const pendingToggles = useRef(new Set<string>());
+  const [togglingIds, setTogglingIds] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -95,6 +97,7 @@ export const AdminMtopPaymentSettingsScreen = () => {
   };
 
   const openEdit = (method: AdminMtopPaymentMethod) => {
+    if (pendingToggles.current.has(method.id)) return;
     setEditingId(method.id);
     setType(method.method_type);
     setName(method.display_name);
@@ -160,17 +163,20 @@ export const AdminMtopPaymentSettingsScreen = () => {
     }
   };
 
-  const toggle = async (method: AdminMtopPaymentMethod) => {
-    if (!user?.id) return;
+  const toggle = async (method: AdminMtopPaymentMethod, nextEnabled: boolean) => {
+    if (!user?.id || pendingToggles.current.has(method.id)) return;
+    pendingToggles.current.add(method.id);
+    setTogglingIds([...pendingToggles.current]);
     try {
-      await service.setEnabled(user.id, method.id, !method.is_enabled);
-      setMethods((rows) =>
-        rows.map((row) =>
-          row.id === method.id ? { ...row, is_enabled: !row.is_enabled } : row
-        )
-      );
+      await service.setEnabled(user.id, method.id, nextEnabled);
+      setMethods((rows) => rows.map((row) =>
+        row.id === method.id ? { ...row, is_enabled: nextEnabled } : row
+      ));
     } catch (error: any) {
-      void notify('Could not update', error?.message || 'Please try again.');
+      void notify('Could not update method', error?.message || 'Please try again.');
+    } finally {
+      pendingToggles.current.delete(method.id);
+      setTogglingIds([...pendingToggles.current]);
     }
   };
 
@@ -217,59 +223,62 @@ export const AdminMtopPaymentSettingsScreen = () => {
 
           {/* Method cards */}
           {methods.map((method) => (
-            <TouchableOpacity
-              key={method.id}
-              style={styles.card}
-              onPress={() => openEdit(method)}
-              activeOpacity={0.8}
-            >
-              {/* Icon/QR thumbnail */}
-              {method.qr_code_url ? (
-                <Image source={{ uri: method.qr_code_url }} style={styles.qrThumb} />
-              ) : (
-                <View style={styles.iconBox}>
-                  <MaterialCommunityIcons
-                    name={
-                      method.method_type === 'gcash'
-                        ? 'cellphone'
-                        : method.method_type === 'bank'
-                        ? 'bank-outline'
-                        : 'map-marker-outline'
-                    }
-                    size={26}
-                    color={colors.primary}
-                  />
+            <View key={method.id} style={styles.card}>
+              <TouchableOpacity style={styles.cardEdit} onPress={() => openEdit(method)} activeOpacity={0.8}
+                accessibilityRole="button" accessibilityLabel={`Edit ${method.display_name}`}
+                disabled={togglingIds.includes(method.id)}>
+                {/* Icon/QR thumbnail */}
+                {method.qr_code_url ? (
+                  <Image source={{ uri: method.qr_code_url }} style={styles.qrThumb} />
+                ) : (
+                  <View style={styles.iconBox}>
+                    <MaterialCommunityIcons
+                      name={
+                        method.method_type === 'gcash'
+                          ? 'cellphone'
+                          : method.method_type === 'bank'
+                          ? 'bank-outline'
+                          : 'map-marker-outline'
+                      }
+                      size={26}
+                      color={colors.primary}
+                    />
+                  </View>
+                )}
+
+                <View style={styles.cardCopy}>
+                  <Text style={styles.cardTitle}>{method.display_name}</Text>
+                  <Text style={styles.cardSub}>{method.account_name}</Text>
+                  {method.method_type !== 'face_to_face' && method.account_number ? (
+                    <Text style={styles.cardNumber}>{method.account_number}</Text>
+                  ) : null}
+                  {method.method_type === 'face_to_face' && method.address ? (
+                    <Text style={styles.cardAddress} numberOfLines={1}>
+                      {method.address}
+                    </Text>
+                  ) : null}
                 </View>
-              )}
 
-              <View style={styles.cardCopy}>
-                <Text style={styles.cardTitle}>{method.display_name}</Text>
-                <Text style={styles.cardSub}>{method.account_name}</Text>
-                {method.method_type !== 'face_to_face' && method.account_number ? (
-                  <Text style={styles.cardNumber}>{method.account_number}</Text>
-                ) : null}
-                {method.method_type === 'face_to_face' && method.address ? (
-                  <Text style={styles.cardAddress} numberOfLines={1}>
-                    {method.address}
-                  </Text>
-                ) : null}
-              </View>
-
+              </TouchableOpacity>
               <View style={styles.cardActions}>
                 <Switch
                   value={method.is_enabled}
-                  onValueChange={() => toggle(method)}
+                  onValueChange={(value) => toggle(method, value)}
+                  accessibilityLabel={`Enable ${method.display_name}`}
+                  disabled={togglingIds.includes(method.id)}
                   color={colors.primary}
                 />
                 <TouchableOpacity
                   onPress={() => remove(method)}
+                  accessibilityLabel={`Delete ${method.display_name}`}
+                  disabled={togglingIds.includes(method.id)}
                   style={styles.deleteBtn}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <MaterialCommunityIcons name="delete-outline" size={20} color={colors.error} />
                 </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           ))}
 
           {!methods.length && (
@@ -495,6 +504,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   noticeText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary },
+  cardEdit: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56 },
   card: {
     minHeight: 88,
     flexDirection: 'row',

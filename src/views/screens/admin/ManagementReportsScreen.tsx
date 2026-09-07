@@ -33,7 +33,6 @@ const REPORTS: Array<{ key: ManagementReportType; label: string; icon: string }>
   { key: 'transfers',           label: 'Transfers',     icon: 'account-switch-outline' },
   { key: 'terminations',        label: 'Terminations',  icon: 'file-cancel-outline' },
   { key: 'violations',          label: 'Violations',    icon: 'alert-outline' },
-  { key: 'inventory',           label: 'Inventory',     icon: 'package-variant-closed' },
   // ── Module 16 ──
   { key: 'booking_records',     label: 'Bookings',      icon: 'calendar-text-outline' },
   { key: 'trip_records',        label: 'Trips',         icon: 'car-arrow-right' },

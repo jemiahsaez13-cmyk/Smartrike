@@ -183,11 +183,11 @@ export const AdminDashboard = () => {
                 )}
               </View>
               <View style={styles.queueCopy}>
-                <Text style={styles.reportsTitle}>User Reports</Text>
+                <Text style={styles.reportsTitle}>Reports and Violations</Text>
                 <Text style={styles.queueLevel}>
                   {openReports > 0
                     ? `${openReports} open report${openReports > 1 ? 's' : ''} need${openReports === 1 ? 's' : ''} your review`
-                    : 'Review passenger & driver reports'}
+                    : 'Review reports and manage driver violations'}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textLight} />
@@ -235,24 +235,13 @@ export const AdminDashboard = () => {
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('InventoryManagement')}>
-              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
-                <MaterialCommunityIcons name="package-variant-closed" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.queueCopy}>
-                <Text style={styles.queueTitle}>Association Inventory</Text>
-                <Text style={styles.queueLevel}>Monitor total, issued &amp; remaining stock</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
-            </TouchableOpacity>
-            <View style={styles.divider} />
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('ManagementReports')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="file-chart-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Management Reports</Text>
-                <Text style={styles.queueLevel}>Franchise, renewal, transfer, violation &amp; stock reports</Text>
+                <Text style={styles.queueLevel}>Franchise, renewal, transfer, violation reports</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
@@ -264,28 +253,6 @@ export const AdminDashboard = () => {
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Ride Payments</Text>
                 <Text style={styles.queueLevel}>Review passenger payment proof and references</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('ViolationManagement')}>
-              <View style={[styles.queueIcon, { backgroundColor: colors.errorLight }]}>
-                <MaterialCommunityIcons name="alert-circle-outline" size={20} color={colors.error} />
-              </View>
-              <View style={styles.queueCopy}>
-                <Text style={styles.queueTitle}>Violations</Text>
-                <Text style={styles.queueLevel}>Record & track driver violation status</Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('Reports')}>
-              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
-                <MaterialCommunityIcons name="flag-outline" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.queueCopy}>
-                <Text style={styles.queueTitle}>User Reports</Text>
-                <Text style={styles.queueLevel}>Review &amp; action driver / passenger reports</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
@@ -793,6 +760,8 @@ const styles = StyleSheet.create({
   },
   queueCopy: {
     flex: 1,
+    minWidth: 0,
+    paddingRight: spacing.sm,
   },
   queueTitle: {
     ...typography.subtitle,

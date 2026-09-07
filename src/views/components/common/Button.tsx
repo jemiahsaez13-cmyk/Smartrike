@@ -87,6 +87,7 @@ const styles = StyleSheet.create<any>({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   contentWrapper: {
     flexDirection: 'row',
@@ -117,6 +118,8 @@ const styles = StyleSheet.create<any>({
   },
   label: {
     ...typography.button,
+    flexShrink: 1,
+    textAlign: 'center',
     marginVertical: 0,
     marginHorizontal: 0,
     letterSpacing: 0,

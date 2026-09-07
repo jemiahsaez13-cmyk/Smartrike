@@ -508,7 +508,7 @@ export const FranchiseManagementScreen = () => {
                     disabled={couActionBusy === app.id}
                     activeOpacity={0.8}
                   >
-                    <MaterialCommunityIcons name="close" size={16} color={colors.error} />
+                    <MaterialCommunityIcons name="close" size={16} color="#fff" />
                     <Text style={styles.couRejectText}>Reject</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -1015,7 +1015,7 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
                             <MaterialCommunityIcons
                               name="close"
                               size={16}
-                              color={status === 'rejected' ? '#fff' : colors.error}
+                              color="#fff"
                             />
                             <Text style={[styles.docRejectText, status === 'rejected' && { color: '#fff' }]}>
                               Reject
@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
     alignItems: 'center' 
   },
   chip: {
-    height: 36,
+    minHeight: 36,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
@@ -1313,16 +1313,18 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderLight,
   },
   rejectBtn: {
-    paddingHorizontal: spacing.lg,
-    height: 44,
+    backgroundColor: colors.error,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 44,
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.error,
     justifyContent: 'center',
   },
-  rejectText: { 
+  rejectText: { flexShrink: 1, textAlign: 'center',
     ...typography.labelSmall,
-    color: colors.error, 
+    color: '#fff',
     fontWeight: '800', 
     fontSize: 12 
   },
@@ -1332,11 +1334,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 44,
+    minHeight: 44,
     borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
-  advanceText: { 
+  advanceText: { flexShrink: 1, textAlign: 'center',
     ...typography.labelSmall,
     color: '#fff', 
     fontWeight: '800', 
@@ -1366,10 +1368,10 @@ const styles = StyleSheet.create({
   viewPaymentProof: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   viewPaymentProofText: { ...typography.label, color: colors.primary },
   paymentActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  paymentReject: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.error, borderRadius: radius.md },
-  paymentRejectText: { ...typography.label, color: colors.error },
+  paymentReject: { backgroundColor: colors.error, paddingVertical: 10, paddingHorizontal: 12,  flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.error, borderRadius: radius.md },
+  paymentRejectText: { flexShrink: 1, textAlign: 'center',  ...typography.label, color: '#fff' },
   paymentVerify: { flex: 2, minHeight: 46, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, borderRadius: radius.md },
-  paymentVerifyText: { ...typography.label, color: '#fff' },
+  paymentVerifyText: { flexShrink: 1, textAlign: 'center', ...typography.label, color: '#fff' },
   sendBillingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1705,7 +1707,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    height: 38,
+    minHeight: 38,
+    padding: spacing.sm,
   },
   docBusyText: { ...typography.label, fontSize: 12, color: colors.textSecondary },
   docActions: {
@@ -1719,22 +1722,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 42,
+    minHeight: 42,
     borderRadius: radius.md,
     borderWidth: 1.5,
   },
   docRejectBtn: {
+    backgroundColor: colors.error,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderColor: colors.error,
-    backgroundColor: 'transparent',
   },
   docRejectBtnActive: {
     backgroundColor: colors.error,
   },
-  docRejectText: {
+  docRejectText: { flexShrink: 1, textAlign: 'center',
     ...typography.labelSmall,
     fontWeight: '800',
     fontSize: 12,
-    color: colors.error,
+    color: '#fff',
   },
   docApproveBtn: {
     borderColor: colors.success,
@@ -1743,7 +1748,7 @@ const styles = StyleSheet.create({
   docApproveBtnActive: {
     backgroundColor: colors.success,
   },
-  docApproveText: {
+  docApproveText: { flexShrink: 1, textAlign: 'center',
     ...typography.labelSmall,
     fontWeight: '800',
     fontSize: 12,
@@ -1760,11 +1765,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 50,
+    minHeight: 50,
     borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
-  approveAllText: {
+  approveAllText: { flexShrink: 1, textAlign: 'center',
     ...typography.button,
     fontSize: 15,
     color: '#fff',
@@ -1774,11 +1779,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 50,
+    minHeight: 50,
     borderRadius: radius.md,
     backgroundColor: colors.successLight,
+    padding: spacing.sm,
   },
-  verifiedText: {
+  verifiedText: { flexShrink: 1, textAlign: 'center',
     ...typography.label,
     color: colors.success,
     fontWeight: '700',
@@ -1988,20 +1994,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   couRejectBtn: {
+    backgroundColor: colors.error,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 40,
+    minHeight: 44,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.error,
-    backgroundColor: colors.errorLight,
   },
-  couRejectText: {
+  couRejectText: { flexShrink: 1, textAlign: 'center',
     ...typography.label,
-    color: colors.error,
+    color: '#fff',
     fontSize: 13,
   },
   couApproveBtn: {
@@ -2010,11 +2018,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    height: 40,
+    minHeight: 40,
     borderRadius: radius.md,
     backgroundColor: colors.success,
   },
-  couApproveText: {
+  couApproveText: { flexShrink: 1, textAlign: 'center',
     ...typography.label,
     color: '#fff',
     fontSize: 13,

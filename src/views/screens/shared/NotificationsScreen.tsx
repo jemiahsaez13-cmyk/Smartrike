@@ -26,6 +26,7 @@ import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatRelativeTime } from '@/utils/dateUtils';
 import { NOTIFICATION_TYPES } from '@/config/constants';
+import { ViolationNotificationContent } from '@/views/components/notification/ViolationNotificationContent';
 
 const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
   [NOTIFICATION_TYPES.BOOKING_REQUEST]: { icon: 'bell-ring', color: colors.accent, bg: colors.infoLight },
@@ -37,6 +38,7 @@ const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> =
   [NOTIFICATION_TYPES.PAYMENT_RECEIVED]: { icon: 'cash-check', color: colors.secondary, bg: colors.successLight },
   [NOTIFICATION_TYPES.FRANCHISE_STATUS]: { icon: 'card-account-details', color: colors.warning, bg: colors.warningLight },
   [NOTIFICATION_TYPES.SYSTEM_ALERT]: { icon: 'alert-circle', color: colors.warning, bg: colors.warningLight },
+  [NOTIFICATION_TYPES.VIOLATION]: { icon: 'account-alert-outline', color: colors.error, bg: colors.errorLight },
   message: { icon: 'message-text', color: colors.accent, bg: colors.infoLight },
 };
 
@@ -46,8 +48,9 @@ const getNotifMeta = (type: string) =>
 export const NotificationsScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
-  const { notifications, loading } = useAppSelector(state => state.notification);
+  const { notifications: storedNotifications, loading } = useAppSelector(state => state.notification);
   const { user } = useAppSelector(state => state.auth);
+  const notifications = storedNotifications.filter(n => n.user_id === user?.id);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -71,7 +74,7 @@ export const NotificationsScreen = () => {
     let key: string | undefined;
     try {
       key = realtime.subscribeToNotifications(user.id, (payload: any) => {
-        if (payload?.new) dispatch(addNotification(payload.new));
+        if (payload?.new?.user_id === user.id) dispatch(addNotification(payload.new));
       });
     } catch (err) {
       console.warn('Notification realtime subscribe failed:', err);
@@ -163,7 +166,9 @@ export const NotificationsScreen = () => {
                     style={[styles.notifCard, !notif.read && styles.notifUnread]}
                   >
                     {!notif.read && <View style={styles.unreadBar} />}
-                    <View style={styles.notifContent}>
+                    {notif.type === NOTIFICATION_TYPES.VIOLATION ? (
+                      <ViolationNotificationContent body={notif.body} />
+                    ) : <View style={styles.notifContent}>
                       <View style={[styles.notifIcon, { backgroundColor: meta.bg }]}>
                         <MaterialCommunityIcons name={meta.icon as any} size={22} color={meta.color} />
                       </View>
@@ -174,7 +179,7 @@ export const NotificationsScreen = () => {
                           {formatRelativeTime(notif.created_at)}
                         </Text>
                       </View>
-                    </View>
+                    </View>}
                   </Card>
                 </TouchableOpacity>
               );

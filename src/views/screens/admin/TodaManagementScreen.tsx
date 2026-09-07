@@ -47,7 +47,7 @@ const peso = (n: number) => `₱${Number(n).toFixed(2)}`;
 const service = new TodaService();
 
 // ─── View modes ───────────────────────────────────────────────────────────────
-type View = 'list' | 'detail';
+type ViewMode = 'list' | 'detail';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 type PassengerType = 'regular' | 'senior' | 'pwd' | 'student';
@@ -199,7 +199,7 @@ export const TodaManagementScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   // Detail / view state
-  const [view, setView] = useState<View>('list');
+  const [view, setView] = useState<ViewMode>('list');
   const [selected, setSelected] = useState<TodaAssociation | null>(null);
   const [routes, setRoutes] = useState<TodaRoute[]>([]);
   const [members, setMembers] = useState<{ id: string; name: string; plate_number?: string; body_number?: string; verification_status?: string }[]>([]);
