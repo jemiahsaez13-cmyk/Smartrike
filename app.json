@@ -49,11 +49,11 @@
         }
       ]
     ],
+    "owner": "jemiahsaez",
     "extra": {
       "eas": {
-        "projectId": "42488411-c12e-483c-a40b-313a335e10ce"
+        "projectId": "7edb9e94-8e12-4bb8-9822-4a5d9055ff47"
       }
-    },
-    "owner": "elpieees-team"
+    }
   }
 }

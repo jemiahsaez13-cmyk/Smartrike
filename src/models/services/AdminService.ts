@@ -150,7 +150,7 @@ export class AdminService {
     }
   }
 
-  // Permanently deletes a user's profile row. The admin "god mode" ALL policy
+  // Permanently deletes a user's profile row. The admin full-access ALL policy
   // (migration 011) authorizes this; FKs cascade/null related rows.
   // Returns the deleted rows so we can detect a silent RLS block (0 rows, no
   // error) instead of pretending the delete succeeded.

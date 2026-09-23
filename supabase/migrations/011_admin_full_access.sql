@@ -1,5 +1,5 @@
 -- =============================================================================
--- 011 · Admin "god mode" — full manage access across core tables
+-- 011 · Admin full manage access across core tables
 -- -----------------------------------------------------------------------------
 -- The admin console needs to read AND act on every record: suspend/verify users,
 -- audit or cancel bookings, manage transactions and notifications. Earlier

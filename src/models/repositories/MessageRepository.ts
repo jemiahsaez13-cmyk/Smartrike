@@ -73,7 +73,7 @@ export class MessageRepository {
 
   // Unread messages addressed to this user, scoped to bookings they are a
   // party of. (Never count other people's conversations — RLS should already
-  // hide them, but admin god-mode and future policy changes must not inflate
+  // hide them, but admin full-access policies and future policy changes must not inflate
   // the badge.)
   async getUnreadCount(userId: string): Promise<number> {
     const { data: bookings, error: bErr } = await supabase
