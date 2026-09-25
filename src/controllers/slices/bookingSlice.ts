@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { BookingService } from '@/models/services/BookingService';
+import { BookingService, isStalePendingBooking } from '@/models/services/BookingService';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { Booking, Location, Rating } from '@/models/types';
@@ -13,7 +13,13 @@ export const fetchActiveBooking = createAsyncThunk(
   'booking/fetchActive',
   async (passengerId: string, { rejectWithValue }) => {
     try {
-      return await bookingRepo.findActiveByPassenger(passengerId);
+      const active = await bookingRepo.findActiveByPassenger(passengerId);
+      // A search no driver answered in time is closed instead of restored.
+      if (isStalePendingBooking(active)) {
+        await bookingRepo.cancel(active!.id).catch(() => undefined);
+        return null;
+      }
+      return active;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

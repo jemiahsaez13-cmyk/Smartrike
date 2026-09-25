@@ -81,6 +81,7 @@ export const DriverTripScreen = () => {
   const [proofStatus, setProofStatus] = useState<RidePaymentStatus | null>(null);
   const [paymentMethod, setPaymentMethod] = useState(currentBooking?.payment_method ?? 'cash');
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const cancelHandled = useRef(false);
   const isOnlinePay = paymentMethod === 'online';
   const farePaid = paymentStatus === 'completed';
 
@@ -177,7 +178,18 @@ export const DriverTripScreen = () => {
     setPaymentMethod(currentBooking.payment_method ?? 'cash');
     setProofStatus(null);
     setPaymentReference(null);
+    cancelHandled.current = false;
     const observer = watchRidePayment(currentBooking.id, (proof, fresh) => {
+      // The passenger cancelled before pickup: release the driver right away
+      // instead of leaving them on a dead trip (and able to "pick up" it).
+      if (fresh?.status === 'cancelled') {
+        if (cancelHandled.current) return;
+        cancelHandled.current = true;
+        dispatch(clearCurrentTrip());
+        navigation.navigate('DriverDashboard');
+        void notify('Ride cancelled', 'The passenger cancelled this ride. You are available for new requests again.');
+        return;
+      }
       setProofStatus(proof?.status ?? null);
       setPaymentReference(proof?.payment_reference ?? null);
       if (fresh) {
@@ -190,7 +202,7 @@ export const DriverTripScreen = () => {
       if (state === 'active') void observer.refresh();
     });
     return () => { observer.stop(); focus(); appState.remove(); };
-  }, [currentBooking?.id, navigation]);
+  }, [currentBooking?.id, navigation, dispatch]);
 
   if (!currentBooking) {
     return (

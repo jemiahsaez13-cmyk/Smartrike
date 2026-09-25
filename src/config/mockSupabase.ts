@@ -75,6 +75,7 @@ class QueryBuilder implements PromiseLike<Result> {
   private filters: Array<(row: Row) => boolean> = [];
   private orderBy: { column: string; ascending: boolean } | null = null;
   private limitN: number | null = null;
+  private offsetN = 0;
   private wantSelect = false;
   private isSingle = false;
   private countRequested = false;
@@ -131,6 +132,28 @@ class QueryBuilder implements PromiseLike<Result> {
   }
   limit(n: number) {
     this.limitN = n;
+    return this;
+  }
+  range(from: number, to: number) {
+    this.offsetN = from;
+    this.limitN = to - from + 1;
+    return this;
+  }
+  is(column: string, value: any) {
+    this.filters.push((row) => (value === null ? row[column] == null : row[column] === value));
+    return this;
+  }
+  not(column: string, op: string, value: any) {
+    if (op === 'in') {
+      const list = String(value).replace(/[()]/g, '').split(',').map((v) => v.trim());
+      this.filters.push((row) => !list.includes(String(row[column])));
+    } else if (op === 'is') {
+      this.filters.push((row) => (value === null ? row[column] != null : row[column] !== value));
+    }
+    return this;
+  }
+  neq(column: string, value: any) {
+    this.filters.push((row) => row[column] !== value);
     return this;
   }
   maybeSingle() {
@@ -235,7 +258,7 @@ class QueryBuilder implements PromiseLike<Result> {
           return ascending ? cmp : -cmp;
         });
       }
-      if (this.limitN != null) data = data.slice(0, this.limitN);
+      if (this.limitN != null) data = data.slice(this.offsetN, this.offsetN + this.limitN);
     }
 
     const count = this.countRequested && Array.isArray(data) ? data.length : null;
@@ -377,6 +400,10 @@ const auth = {
   async getUser() {
     return { data: { user: currentAuthUser }, error: null };
   },
+  // Offline sessions never expire, so there are no auth events to emit.
+  onAuthStateChange(_callback: (event: string, session: any) => void) {
+    return { data: { subscription: { unsubscribe() {} } } };
+  },
   async getSession() {
     return { 
       data: { 
@@ -395,6 +422,37 @@ export const mockSupabase: any = {
   auth,
   rpc: async (fn: string, params: any) => {
     const currentProfile = () => db.users.find((u) => u.auth_id === currentAuthUser?.id || u.id === currentAuthUser?.id);
+    if (fn === 'admin_delete_user') {
+      const me = currentProfile();
+      if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can delete accounts.' } };
+      if (me.id === params?.p_user_id) return { data: null, error: { message: 'You cannot delete your own account.' } };
+      const before = db.users.length;
+      db.users = db.users.filter((u) => u.id !== params?.p_user_id);
+      if (db.users.length === before) return { data: null, error: { message: 'That account no longer exists.' } };
+      return { data: null, error: null };
+    }
+    if (fn === 'resubmit_mtop_document') {
+      const app = db.franchise_applications.find((row) => row.id === params?.p_application_id);
+      const me = currentProfile();
+      if (!app || !me || app.driver_id !== me.id) return { data: null, error: { message: 'MTOP application not found.' } };
+      if (app.documents_verified_at || !['submitted', 'document_verification'].includes(app.status)) {
+        return { data: null, error: { message: 'Documents can only be replaced while the application is in review.' } };
+      }
+      const doc = (app.documents || []).find((d: any) => d.name === params?.p_document_name);
+      if (!doc || doc.review_status !== 'rejected') {
+        return { data: null, error: { message: 'Only a rejected document can be re-uploaded.' } };
+      }
+      Object.assign(doc, {
+        uploaded: true,
+        file_url: params.p_file_url,
+        file_name: params.p_file_name ?? null,
+        uploaded_at: new Date().toISOString(),
+        review_status: 'pending',
+        review_remarks: null,
+      });
+      app.updated_at = new Date().toISOString();
+      return { data: [clone(app)], error: null };
+    }
     if (fn === 'find_nearby_drivers') {
       const drivers = db.users.filter(
         (u) => u.user_type === 'driver' && u.current_status === 'online'

@@ -54,7 +54,18 @@ export const signIn = createAsyncThunk(
   }
 );
 
-export const signOut = createAsyncThunk('auth/signOut', async () => {
+export const signOut = createAsyncThunk('auth/signOut', async (_, { getState }) => {
+  // An online driver who logs out would otherwise stay "online" in the
+  // database and keep appearing to passengers. Never touch an on-trip driver.
+  const state = getState() as any;
+  const current = state.auth.user as Driver | null;
+  if (current?.user_type === 'driver' && state.driver?.currentStatus === 'online' && !current.id?.startsWith('demo-')) {
+    try {
+      await userRepo.updateDriverStatus(current.id, 'offline');
+    } catch (error) {
+      console.warn('Could not set driver offline before sign-out:', error);
+    }
+  }
   // Best-effort remote sign-out. Demo sessions and expired/missing Supabase
   // sessions throw here, but logout must always succeed locally — the
   // fulfilled reducer clears the auth state regardless of the remote result.
@@ -112,6 +123,14 @@ const authSlice = createSlice({
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
       state.isAuthenticated = true;
+    },
+    // The Supabase session ended outside of a user-initiated logout (refresh
+    // token expired or revoked). rootReducer also resets every other slice.
+    sessionEnded: (state) => {
+      state.user = null;
+      state.session = null;
+      state.isAuthenticated = false;
+      state.loading = false;
     },
   },
   extraReducers: (builder) => {
@@ -177,5 +196,5 @@ const authSlice = createSlice({
   }
 });
 
-export const { clearError, setUser } = authSlice.actions;
+export const { clearError, setUser, sessionEnded } = authSlice.actions;
 export default authSlice.reducer;

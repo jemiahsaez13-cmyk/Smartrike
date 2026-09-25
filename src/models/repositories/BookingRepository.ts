@@ -55,17 +55,27 @@ export class BookingRepository {
   }
 
   async assignDriver(bookingId: string, driverId: string): Promise<Booking> {
+    // Only claim a request that is still open. If another driver got there
+    // first (or the passenger cancelled), zero rows match and we say so plainly
+    // instead of surfacing PostgREST's "Cannot coerce the result" error.
     const { data, error } = await supabase
       .from('bookings')
-      .update({ 
+      .update({
         driver_id: driverId,
         status: 'accepted',
         accepted_at: new Date().toISOString()
       })
       .eq('id', bookingId)
+      .eq('status', 'pending')
+      .is('driver_id', null)
       .select()
-      .single();
+      .maybeSingle();
     if (error) throw error;
+    if (!data) {
+      // A taken/cancelled request is usually hidden from us by RLS, so we
+      // cannot always tell which of the two happened.
+      throw new Error('This ride is no longer available. Another driver accepted it or the passenger cancelled.');
+    }
     return data;
   }
 

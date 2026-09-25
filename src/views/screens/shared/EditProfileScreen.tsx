@@ -15,6 +15,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { updateProfile } from '@/controllers/slices/authSlice';
 import { confirm, notify } from '@/utils/confirm';
+import {
+  isValidDriverLicenseNumber,
+  isValidDriverPlateNumber,
+  isValidPhilippinePhone,
+  normalizeDriverLicenseNumber,
+  normalizePlateNumber,
+  LICENSE_NUMBER_FORMAT,
+  PLATE_NUMBER_FORMAT,
+} from '@/utils/validationUtils';
 import { Input } from '@/views/components/common/Input';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
@@ -24,13 +33,15 @@ export const EditProfileScreen = () => {
   const { user } = useAppSelector((state) => state.auth);
   const driver = user as any;
   const isDriver = user?.user_type === 'driver';
+  // Once an admin has verified the driver, license and plate are the vetted
+  // identity of the unit; changing them requires the administrator.
+  const vehicleLocked = isDriver && driver?.verification_status === 'verified';
 
   // ── Form state ──
   const [photo, setPhoto] = useState<string | null>(user?.profile_photo_url ?? null);
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
 
-  const [toda, setToda] = useState(driver?.toda_membership ?? '');
   const [license, setLicense] = useState(driver?.license_number ?? '');
   const [plate, setPlate] = useState(driver?.vehicle_details?.plate_number ?? '');
 
@@ -84,24 +95,49 @@ export const EditProfileScreen = () => {
       notify('Name required', 'Please enter your full name.');
       return;
     }
-    if (phone.trim() && !/^[0-9+()\-\s]{7,}$/.test(phone.trim())) {
-      notify('Invalid phone', 'Please enter a valid contact number.');
+    if (name.trim().length > 255) {
+      notify('Name too long', 'Please shorten your name to 255 characters or fewer.');
       return;
+    }
+    const cleanPhone = phone.replace(/[\s()-]/g, '');
+    if (cleanPhone && !isValidPhilippinePhone(cleanPhone)) {
+      notify('Invalid phone', 'Enter a Philippine mobile number like 09171234567 or +639171234567.');
+      return;
+    }
+    if (isDriver && !vehicleLocked) {
+      if (!license.trim()) {
+        notify('License number required', 'Drivers must keep a license number on file.');
+        return;
+      }
+      if (!isValidDriverLicenseNumber(license)) {
+        notify('Invalid license number', LICENSE_NUMBER_FORMAT);
+        return;
+      }
+      if (!plate.trim()) {
+        notify('Plate number required', 'Drivers must keep a vehicle plate number on file.');
+        return;
+      }
+      if (!isValidDriverPlateNumber(plate)) {
+        notify('Invalid plate number', PLATE_NUMBER_FORMAT);
+        return;
+      }
     }
 
     const updates: any = {
       name: name.trim(),
-      phone: phone.trim() || null,
+      phone: cleanPhone || null,
       profile_photo_url: photo || null,
     };
 
     if (isDriver) {
-      updates.toda_membership = toda.trim() || null;
-      updates.license_number = license.trim() || null;
-      updates.vehicle_details = {
-        ...(driver?.vehicle_details ?? {}),
-        plate_number: plate.trim(),
-      };
+      // TODA membership is assigned by the administrator and never sent from here.
+      if (!vehicleLocked) {
+        updates.license_number = normalizeDriverLicenseNumber(license);
+        updates.vehicle_details = {
+          ...(driver?.vehicle_details ?? {}),
+          plate_number: normalizePlateNumber(plate),
+        };
+      }
       const hasBank = bankName.trim() || accountNumber.trim() || accountName.trim();
       updates.bank_account = hasBank
         ? {
@@ -196,13 +232,39 @@ export const EditProfileScreen = () => {
               <Text style={styles.sectionTitle}>Driver & Vehicle</Text>
               <View style={styles.card}>
                 <Text style={styles.fieldLabel}>TODA Membership</Text>
-                <Input value={toda} onChangeText={setToda} placeholder="e.g. FEDTODAB" autoCapitalize="characters" />
+                <View style={styles.readonlyRow}>
+                  <MaterialCommunityIcons name="account-group-outline" size={18} color={colors.textMuted} />
+                  <Text style={styles.readonlyValue} numberOfLines={1}>{driver?.toda_membership || 'Not assigned yet'}</Text>
+                  <MaterialCommunityIcons name="lock-outline" size={16} color={colors.textMuted} />
+                </View>
+                <Text style={styles.helper}>Your TODA is assigned by the FEDTODAB administrator.</Text>
 
                 <Text style={styles.fieldLabel}>License Number</Text>
-                <Input value={license} onChangeText={setLicense} placeholder="Driver's license no." autoCapitalize="characters" />
+                {vehicleLocked ? (
+                  <View style={styles.readonlyRow}>
+                    <MaterialCommunityIcons name="card-account-details-outline" size={18} color={colors.textMuted} />
+                    <Text style={styles.readonlyValue} numberOfLines={1}>{license || 'Not set'}</Text>
+                    <MaterialCommunityIcons name="lock-outline" size={16} color={colors.textMuted} />
+                  </View>
+                ) : (
+                  <Input value={license} onChangeText={setLicense} placeholder="A01-23-456789" autoCapitalize="characters" />
+                )}
 
                 <Text style={styles.fieldLabel}>Plate Number</Text>
-                <Input value={plate} onChangeText={setPlate} placeholder="e.g. ABC-1234" autoCapitalize="characters" />
+                {vehicleLocked ? (
+                  <View style={styles.readonlyRow}>
+                    <MaterialCommunityIcons name="rickshaw" size={18} color={colors.textMuted} />
+                    <Text style={styles.readonlyValue} numberOfLines={1}>{plate || 'Not set'}</Text>
+                    <MaterialCommunityIcons name="lock-outline" size={16} color={colors.textMuted} />
+                  </View>
+                ) : (
+                  <Input value={plate} onChangeText={setPlate} placeholder="123 ABC or AB 1234" autoCapitalize="characters" />
+                )}
+                {vehicleLocked ? (
+                  <Text style={styles.helper}>
+                    Your license and plate were verified by the administrator. Contact the FEDTODAB office to change them.
+                  </Text>
+                ) : null}
               </View>
 
               {/* Payout / bank account */}

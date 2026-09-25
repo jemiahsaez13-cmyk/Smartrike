@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchMyApplication, submitApplication, submitFranchisePayment, submitFaceToFaceAppointment, patchApplication, submitChangeOfUnit } from '@/controllers/slices/franchiseSlice';
+import { fetchMyApplication, submitApplication, submitFranchisePayment, submitFaceToFaceAppointment, patchApplication, submitChangeOfUnit, resubmitDocument } from '@/controllers/slices/franchiseSlice';
 import {
   REQUIRED_DOCUMENTS,
   FRANCHISE_FLOW,
@@ -670,7 +670,7 @@ const PayNowModal = ({
 export const FranchiseScreen = () => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
-  const { myApplication, loading } = useAppSelector((state) => state.franchise);
+  const { myApplication, loading, error: loadError } = useAppSelector((state) => state.franchise);
   const driver = user as any;
   const accountLicenseNumber = String(driver?.license_number || '').trim().toUpperCase();
 
@@ -788,18 +788,19 @@ export const FranchiseScreen = () => {
 
   // Pick a real file (image or PDF) and attach it as a data URI so the admin
   // can actually view what was submitted. Re-tapping a row replaces the file.
-  const pickDoc = async (idx: number) => {
-    try {
+  // Opens the picker and returns the chosen file as a data URI (or null when
+  // cancelled / rejected for size). Shared by the form and the re-upload flow.
+  const pickDocumentFile = async (): Promise<{ dataUri: string; name: string | null } | null> => {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
         multiple: false,
       });
-      if (res.canceled || !res.assets?.length) return;
+      if (res.canceled || !res.assets?.length) return null;
       const asset = res.assets[0];
       if ((asset.size ?? 0) > 2_500_000) {
         void notify('File too large', 'Please choose a file under 2.5 MB — a clear photo or a compressed PDF.');
-        return;
+        return null;
       }
       const mime =
         asset.mimeType || (asset.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
@@ -820,6 +821,14 @@ export const FranchiseScreen = () => {
         });
         dataUri = `data:${mime};base64,${base64}`;
       }
+      return { dataUri, name: asset.name ?? null };
+  };
+
+  const pickDoc = async (idx: number) => {
+    try {
+      const picked = await pickDocumentFile();
+      if (!picked) return;
+      const { dataUri } = picked;
       setDocs((prev) =>
         prev.map((d, i) =>
           i === idx
@@ -828,7 +837,7 @@ export const FranchiseScreen = () => {
                 uploaded: true,
                 uploaded_at: new Date().toISOString(),
                 file_url: dataUri,
-                file_name: asset.name ?? null,
+                file_name: picked.name,
                 review_status: 'pending' as const,
                 review_remarks: null,
               }
@@ -839,6 +848,32 @@ export const FranchiseScreen = () => {
       void notify('Could not attach file', 'Please try again.');
     }
   };
+
+  // Replaces a document the admin rejected while the application is still in
+  // review. Goes through an RPC because drivers cannot edit review fields.
+  const [reuploading, setReuploading] = useState<string | null>(null);
+  const reuploadDoc = async (docName: string) => {
+    if (!myApplication || reuploading) return;
+    try {
+      const picked = await pickDocumentFile();
+      if (!picked) return;
+      setReuploading(docName);
+      await dispatch(resubmitDocument({
+        id: myApplication.id,
+        documentName: docName,
+        fileUrl: picked.dataUri,
+        fileName: picked.name,
+      })).unwrap();
+      void notify('Document re-uploaded', `${docName} was sent back to the administrator for review.`);
+    } catch (error: any) {
+      void notify('Could not re-upload', typeof error === 'string' ? error : error?.message || 'Please try again.');
+    } finally {
+      setReuploading(null);
+    }
+  };
+  const canReupload = !!myApplication
+    && (myApplication.status === 'submitted' || myApplication.status === 'document_verification')
+    && !myApplication.documents_verified_at;
 
   const allUploaded = docs.every((d) => d.uploaded);
 
@@ -986,6 +1021,22 @@ export const FranchiseScreen = () => {
   };
 
   if (loading && !myApplication) return <Loading message="Loading franchise records..." />;
+
+  // Never fall through to the application form when we simply could not load
+  // the driver's existing record — that is how duplicates were created.
+  if (loadError && !myApplication) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', padding: spacing.xl }]}>
+        <Text style={[styles.sectionTitle, { textAlign: 'center' }]}>Could not load your MTOP record</Text>
+        <Text style={[styles.remarkText, { textAlign: 'center', marginBottom: spacing.lg }]}>
+          {loadError || 'Check your internet connection and try again.'}
+        </Text>
+        <Button variant="primary" onPress={() => { if (user?.id) dispatch(fetchMyApplication(user.id)); }}>
+          Try again
+        </Button>
+      </View>
+    );
+  }
 
   const isActive = myApplication?.status === 'issued';
   const recordStatus = myApplication?.franchise_status || 'active';
@@ -1408,6 +1459,19 @@ export const FranchiseScreen = () => {
                     {status === 'rejected' && doc.review_remarks ? (
                       <Text style={styles.docReviewRemark}>{doc.review_remarks}</Text>
                     ) : null}
+                    {status === 'rejected' && canReupload ? (
+                      <TouchableOpacity
+                        onPress={() => reuploadDoc(doc.name)}
+                        disabled={!!reuploading}
+                        style={styles.reuploadBtn}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="upload" size={14} color="#fff" />
+                        <Text style={styles.reuploadText}>
+                          {reuploading === doc.name ? 'Uploading...' : 'Re-upload'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                   <Text style={[styles.docReviewStatus, { color }]}>{DOCUMENT_REVIEW_LABEL[status]}</Text>
                 </View>
@@ -1419,7 +1483,7 @@ export const FranchiseScreen = () => {
             <Card variant="outlined" padding="md" style={[styles.remarkCard, { borderColor: colors.error }]}>
               <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error} />
               <Text style={styles.remarkText}>
-                Some documents were rejected. Please re-upload clear, valid copies to continue.
+                Some documents were rejected. Tap "Re-upload" on each one to send a clear, valid copy.
               </Text>
             </Card>
           ) : null}
@@ -1749,6 +1813,22 @@ export const FranchiseScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  reuploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primary,
+  },
+  reuploadText: {
+    ...typography.labelSmall,
+    color: '#fff',
+    fontWeight: '700',
+  },
   container: { 
     flex: 1, 
     backgroundColor: colors.surface 

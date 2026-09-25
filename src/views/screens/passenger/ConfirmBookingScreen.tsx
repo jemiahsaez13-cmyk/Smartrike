@@ -13,6 +13,8 @@ import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
+import { isStalePendingBooking } from '@/models/services/BookingService';
+import { REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 
 const realtimeService = new RealtimeService();
 const bookingRepo = new BookingRepository();
@@ -79,6 +81,27 @@ export const ConfirmBookingScreen = () => {
     const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Drivers stop seeing a request after REQUEST_FRESHNESS_MINUTES, so end the
+  // search at the same point instead of spinning forever.
+  const expiring = useRef(false);
+  useEffect(() => {
+    if (!currentBooking?.id || currentBooking.status !== 'pending') return;
+    const check = async () => {
+      if (expiring.current || !isStalePendingBooking(currentBooking)) return;
+      expiring.current = true;
+      try {
+        await dispatch(cancelBooking(currentBooking.id)).unwrap();
+        navigation.navigate('PassengerDashboard');
+        void notify('No driver available', `No driver accepted your request within ${REQUEST_FRESHNESS_MINUTES} minutes, so it was cancelled. Please try booking again.`);
+      } catch {
+        expiring.current = false; // e.g. a driver accepted at the last second
+      }
+    };
+    void check();
+    const timer = setInterval(() => { void check(); }, 15000);
+    return () => clearInterval(timer);
+  }, [currentBooking?.id, currentBooking?.status, currentBooking?.created_at, dispatch, navigation]);
 
   // Navigate to the live trip view once a driver is assigned. `replace` so this
   // matching screen (and its realtime subscription) tears down cleanly.
@@ -195,7 +218,7 @@ export const ConfirmBookingScreen = () => {
                 {' • '}{currentBooking?.payment_method === 'cash' ? 'Pay driver in cash' : 'Online payment'}
               </Text>
             </View>
-            <Text style={[styles.fareValue, typography.currency]}>₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '0.00'}</Text>
+            <Text style={[styles.fareValue, typography.currency]}>₱{currentBooking ? Number(currentBooking.total_fare || 0).toFixed(2) : '0.00'}</Text>
           </View>
         </View>
         </ScrollView>

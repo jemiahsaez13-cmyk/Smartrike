@@ -29,9 +29,10 @@ const { BookingService } = load('src/models/services/BookingService.ts', {
   '@/models/repositories/BookingRepository': { BookingRepository },
   '@/models/repositories/UserRepository': { UserRepository: class { updateDriverStatus() { throw Error('Passenger cannot update driver'); } } },
   './FareCalculationService': { FareCalculationService: class {} }, './NotificationService': { NotificationService: class {} }, '@/config/supabase': { supabase: db },
+  '@/config/constants': { REQUEST_FRESHNESS_MINUTES: 20 },
 });
 const slice = load('src/controllers/slices/bookingSlice.ts', {
-  '@reduxjs/toolkit': toolkit, '@/models/services/BookingService': { BookingService },
+  '@reduxjs/toolkit': toolkit, '@/models/services/BookingService': { BookingService, isStalePendingBooking: () => false },
   '@/models/repositories/BookingRepository': { BookingRepository }, '@/models/services/ActivityLogService': { ActivityLogService: { logActivity() {} } },
 });
 (async () => {

@@ -17,7 +17,17 @@ import {
   isValidPassword,
   normalizeEmail,
   PASSWORD_REQUIREMENTS,
+  isValidDriverPlateNumber,
+  isValidDriverLicenseNumber,
+  normalizePlateNumber,
+  normalizeDriverLicenseNumber,
+  PLATE_NUMBER_FORMAT,
+  LICENSE_NUMBER_FORMAT,
 } from '@/utils/validationUtils';
+
+type Field =
+  | 'firstName' | 'lastName' | 'email' | 'password' | 'confirmPassword'
+  | 'licenseNumber' | 'plateNumber';
 
 export const EmailRegisterScreen = () => {
   const [firstName, setFirstName] = useState('');
@@ -31,10 +41,15 @@ export const EmailRegisterScreen = () => {
   const [plateNumber, setPlateNumber] = useState('');
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
-  const [todaMembership, setTodaMembership] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  // Wraps a setter so editing a field clears its inline error.
+  const edit = (field: Field, setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    if (errors[field]) setErrors((e) => ({ ...e, [field]: undefined }));
+  };
   const navigation = useNavigation<any>();
   const { register, loading } = useAuth();
 
@@ -57,30 +72,33 @@ export const EmailRegisterScreen = () => {
       .join(' ');
     const cleanEmail = normalizeEmail(email);
 
-    if (!firstName.trim() || !lastName.trim() || !cleanEmail || !password) {
-      notify('Missing details', 'Please fill in your first name, last name, email, and password.');
+    // Checked top to bottom so the popup names the first field to fix; the same
+    // message is shown under that field until the user edits it.
+    const checks: [Field, boolean, string, string][] = [
+      ['firstName', !firstName.trim(), 'First name required', 'Please enter your first name.'],
+      ['lastName', !lastName.trim(), 'Last name required', 'Please enter your last name.'],
+      ['email', !cleanEmail, 'Email required', 'Please enter your email address.'],
+      ['email', !!cleanEmail && !isValidEmail(cleanEmail), 'Invalid email', `"${cleanEmail}" is not a valid email address. Example: juana@gmail.com`],
+      ['password', !password, 'Password required', 'Please enter a password.'],
+      ['password', !!password && !isValidPassword(password).valid, 'Weak password', `Your password is missing: ${isValidPassword(password).errors.join(', ').toLowerCase()}. ${PASSWORD_REQUIREMENTS}`],
+      ['confirmPassword', password !== confirmPassword, 'Passwords do not match', 'Please re-type the same password in both fields.'],
+    ];
+    if (userType === 'driver') {
+      checks.push(
+        ['licenseNumber', !licenseNumber.trim(), 'License number required', 'Enter your driver\'s license number.'],
+        ['licenseNumber', !!licenseNumber.trim() && !isValidDriverLicenseNumber(licenseNumber), 'Invalid license number', `"${licenseNumber.trim()}" is not a valid license number. ${LICENSE_NUMBER_FORMAT}`],
+        ['plateNumber', !plateNumber.trim(), 'Plate number required', 'Enter your vehicle plate number.'],
+        ['plateNumber', !!plateNumber.trim() && !isValidDriverPlateNumber(plateNumber), 'Invalid plate number', `"${plateNumber.trim()}" is not a valid plate number. ${PLATE_NUMBER_FORMAT}`],
+      );
+    }
+    const failed = checks.find(([, bad]) => bad);
+    if (failed) {
+      const [field, , title, message] = failed;
+      setErrors({ [field]: message });
+      notify(title, message);
       return;
     }
-
-    if (!isValidEmail(cleanEmail)) {
-      notify('Invalid email', 'Please enter a valid email address.');
-      return;
-    }
-
-    if (!isValidPassword(password).valid) {
-      notify('Weak password', PASSWORD_REQUIREMENTS);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      notify('Passwords do not match', 'Please re-type the same password in both fields.');
-      return;
-    }
-
-    if (userType === 'driver' && (!licenseNumber.trim() || !plateNumber.trim())) {
-      notify('Driver details required', 'Enter your license number and vehicle plate number.');
-      return;
-    }
+    setErrors({});
 
     if (!agreedToTerms) {
       notify('Almost there', 'Please agree to the terms and conditions to continue.');
@@ -93,10 +111,9 @@ export const EmailRegisterScreen = () => {
         user_type: userType,
         ...(userType === 'driver'
           ? {
-              license_number: licenseNumber.trim(),
-              toda_membership: todaMembership.trim(),
+              license_number: normalizeDriverLicenseNumber(licenseNumber),
               vehicle_details: {
-                plate_number: plateNumber.trim().toUpperCase(),
+                plate_number: normalizePlateNumber(plateNumber),
                 make: vehicleMake.trim(),
                 model: vehicleModel.trim(),
               },
@@ -110,7 +127,7 @@ export const EmailRegisterScreen = () => {
       await notify('Account created', 'Your account is ready. Welcome to Smart Trike.');
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Registration failed.';
-      notify('Registration error', msg);
+      notify('Sign up failed', msg);
     }
   };
 
@@ -151,7 +168,8 @@ export const EmailRegisterScreen = () => {
                 label="First name"
                 placeholder="Juana"
                 value={firstName}
-                onChangeText={setFirstName}
+                onChangeText={edit('firstName', setFirstName)}
+              errorText={errors.firstName}
                 autoCapitalize="words"
                 containerStyle={styles.nameField}
                 left={<TextInput.Icon icon="account-outline" color={colors.textMuted} />}
@@ -160,7 +178,8 @@ export const EmailRegisterScreen = () => {
                 label="Last name"
                 placeholder="Dela Cruz"
                 value={lastName}
-                onChangeText={setLastName}
+                onChangeText={edit('lastName', setLastName)}
+              errorText={errors.lastName}
                 autoCapitalize="words"
                 containerStyle={styles.nameField}
               />
@@ -179,7 +198,8 @@ export const EmailRegisterScreen = () => {
               label="Email address"
               placeholder="you@example.com"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={edit('email', setEmail)}
+              errorText={errors.email}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -192,7 +212,8 @@ export const EmailRegisterScreen = () => {
               label="Password"
               placeholder="••••••••"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={edit('password', setPassword)}
+              errorText={errors.password}
               secureTextEntry={!showPassword}
               autoComplete="new-password"
               textContentType="newPassword"
@@ -212,7 +233,8 @@ export const EmailRegisterScreen = () => {
               label="Confirm password"
               placeholder="••••••••"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={edit('confirmPassword', setConfirmPassword)}
+              errorText={errors.confirmPassword}
               secureTextEntry={!showConfirmPassword}
               autoComplete="new-password"
               textContentType="newPassword"
@@ -252,17 +274,19 @@ export const EmailRegisterScreen = () => {
                 <Text style={styles.sectionLabel}>DRIVER DETAILS</Text>
                 <Input
                   label="License number"
-                  placeholder="D01-XX-XXXXXX"
+                  placeholder="A01-23-456789"
                   value={licenseNumber}
-                  onChangeText={setLicenseNumber}
+                  onChangeText={edit('licenseNumber', setLicenseNumber)}
+              errorText={errors.licenseNumber}
                   autoCapitalize="characters"
                   left={<TextInput.Icon icon="card-account-details-outline" color={colors.textMuted} />}
                 />
                 <Input
                   label="Vehicle plate number"
-                  placeholder="123 ABC"
+                  placeholder="123 ABC or AB 1234"
                   value={plateNumber}
-                  onChangeText={setPlateNumber}
+                  onChangeText={edit('plateNumber', setPlateNumber)}
+              errorText={errors.plateNumber}
                   autoCapitalize="characters"
                   left={<TextInput.Icon icon="tricycle" color={colors.textMuted} />}
                 />
@@ -282,13 +306,12 @@ export const EmailRegisterScreen = () => {
                     containerStyle={styles.nameField}
                   />
                 </View>
-                <Input
-                  label="TODA membership ID (optional)"
-                  placeholder="TODA-12345"
-                  value={todaMembership}
-                  onChangeText={setTodaMembership}
-                  left={<TextInput.Icon icon="badge-account-horizontal-outline" color={colors.textMuted} />}
-                />
+                {/* TODA membership is assigned by the administrator from the
+                    registered TODA list (the app matches members by TODA name),
+                    so it is not typed in at sign-up. */}
+                <Text style={styles.passwordHint}>
+                  Your TODA will be assigned by the FEDTODAB administrator when your account is approved.
+                </Text>
               </View>
             )}
 

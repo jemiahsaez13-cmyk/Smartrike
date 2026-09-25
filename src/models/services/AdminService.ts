@@ -1,5 +1,7 @@
 import { supabase, createIsolatedClient } from '@/config/supabase';
 import { User, Message } from '@/models/types';
+import { fetchAllRows } from '@/utils/supabaseUtils';
+import { phtStartOfDay } from '@/utils/dateUtils';
 
 export interface AdminConversation {
   bookingId: string;
@@ -77,12 +79,9 @@ const num = (v: any): number => (typeof v === 'number' ? v : parseFloat(v) || 0)
 export class AdminService {
   // ── Users ──────────────────────────────────────────────────────────────────
   async getAllUsers(): Promise<User[]> {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data || [];
+    return fetchAllRows<User>(() =>
+      supabase.from('users').select('*').order('created_at', { ascending: false }).order('id')
+    );
   }
 
   async updateUserStatus(id: string, status: 'active' | 'inactive' | 'suspended'): Promise<User> {
@@ -111,12 +110,13 @@ export class AdminService {
     return data;
   }
 
-  // Invites a new administrator by email. We send a magic-link sign-up on an
-  // isolated client so the inviting admin's own session is never replaced. The
-  // `handle_new_user` DB trigger (migration 008) reads the `user_type: 'admin'`
-  // metadata and immediately creates an *active* admin profile — so the account
-  // appears in the user list right away. The invitee finishes by either opening
-  // the emailed link or using "Forgot Password" to set a password and sign in.
+  // Invites a new administrator by email. The invite is first recorded in
+  // `admin_invites` (admin-only table, migration 068); the `handle_new_user`
+  // trigger grants the admin role only to emails found there, because sign-up
+  // metadata is user-controlled and can never be trusted for roles. We then
+  // send a magic-link sign-up on an isolated client so the inviting admin's own
+  // session is never replaced. The invitee finishes by opening the emailed link
+  // or using "Forgot Password" to set a password and sign in.
   async inviteAdmin(input: { name: string; email: string; phone?: string }): Promise<void> {
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
@@ -132,6 +132,13 @@ export class AdminService {
       .eq('email', email)
       .maybeSingle();
     if (existing) throw new Error('An account with this email already exists.');
+
+    const { error: inviteError } = await supabase
+      .from('admin_invites')
+      .upsert({ email, name, phone }, { onConflict: 'email' });
+    if (inviteError) {
+      throw new Error(inviteError.message || 'Could not record the admin invitation.');
+    }
 
     const client = createIsolatedClient();
     const { error } = await client.auth.signInWithOtp({
@@ -150,23 +157,24 @@ export class AdminService {
     }
   }
 
-  // Permanently deletes a user's profile row. The admin full-access ALL policy
-  // (migration 011) authorizes this; FKs cascade/null related rows.
-  // Returns the deleted rows so we can detect a silent RLS block (0 rows, no
-  // error) instead of pretending the delete succeeded.
+  // Permanently deletes an account: the Supabase Auth login AND the profile
+  // (which cascades from auth.users). Deleting only the profile row used to
+  // leave the login behind, so the person could neither sign in ("profile not
+  // found") nor sign up again ("already registered") with that email.
   async deleteUser(id: string): Promise<void> {
-    const { data, error } = await supabase.from('users').delete().eq('id', id).select('id');
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      throw new Error(
-        'The account could not be deleted. You may not have admin permission, or it was already removed. Try signing out and back in as an administrator.'
-      );
+    const { error } = await supabase.rpc('admin_delete_user', { p_user_id: id });
+    if (error) {
+      const message = String(error.message || '');
+      if (/function .*admin_delete_user|could not find the function/i.test(message)) {
+        throw new Error('Deleting accounts needs database migration 068. Apply it in the Supabase SQL editor, then try again.');
+      }
+      throw new Error(message || 'The account could not be deleted.');
     }
   }
 
   // ── Fare matrix (pricing) ────────────────────────────────────────────────────
   async getFareMatrix(): Promise<FareMatrix> {
-    const { data, error } = await supabase.from('fare_matrix').select('*').limit(1).maybeSingle();
+    const { data, error } = await supabase.from('fare_matrix').select('*').order('id').limit(1).maybeSingle();
     if (error) throw error;
     return (
       data || {
@@ -188,7 +196,8 @@ export class AdminService {
       peak_hours_enabled: Boolean(values.peak_hours_enabled),
     };
 
-    const { data: existing } = await supabase.from('fare_matrix').select('id').limit(1).maybeSingle();
+    // Same row the booking trigger (migration 068) prices rides from.
+    const { data: existing } = await supabase.from('fare_matrix').select('id').order('id').limit(1).maybeSingle();
     const query = existing?.id
       ? supabase.from('fare_matrix').update(payload).eq('id', existing.id)
       : supabase.from('fare_matrix').insert(payload);
@@ -203,18 +212,13 @@ export class AdminService {
 
   // ── Aggregate stats for the dashboard ────────────────────────────────────────
   async getStats(): Promise<AdminStats> {
-    const [usersRes, bookingsRes, franchiseRes] = await Promise.all([
-      supabase.from('users').select('user_type,status,verification_status,current_status'),
-      supabase.from('bookings').select('status,total_fare,created_at'),
-      supabase.from('franchise_applications').select('status'),
+    const [users, bookings, franchises] = await Promise.all([
+      fetchAllRows<any>(() => supabase.from('users').select('id,user_type,status,verification_status,current_status').order('id')),
+      fetchAllRows<any>(() => supabase.from('bookings').select('id,status,total_fare,created_at').order('id')),
+      fetchAllRows<any>(() => supabase.from('franchise_applications').select('id,status').order('id')),
     ]);
 
-    const users = usersRes.data || [];
-    const bookings = bookingsRes.data || [];
-    const franchises = franchiseRes.data || [];
-
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    const startOfToday = phtStartOfDay();
 
     const completed = bookings.filter((b: any) => b.status === 'completed');
     const revenue = completed.reduce((sum: number, b: any) => sum + num(b.total_fare), 0);
@@ -244,17 +248,16 @@ export class AdminService {
 
   // ── Analytics for the reports screen ─────────────────────────────────────────
   async getAnalytics(): Promise<Analytics> {
-    const [bookingsRes, usersRes] = await Promise.all([
-      supabase
+    const [bookings, users] = await Promise.all([
+      fetchAllRows<any>(() => supabase
         .from('bookings')
-        .select('status,total_fare,created_at,pickup_location,dropoff_location,driver_id'),
-      supabase
+        .select('id,status,total_fare,created_at,pickup_location,dropoff_location,driver_id')
+        .order('id')),
+      fetchAllRows<any>(() => supabase
         .from('users')
-        .select('id,name,rating,total_trips,total_earnings,user_type,current_status'),
+        .select('id,name,rating,total_trips,total_earnings,user_type,current_status')
+        .order('id')),
     ]);
-
-    const bookings = bookingsRes.data || [];
-    const users = usersRes.data || [];
     const now = new Date();
 
     const activeDrivers = users.filter(
@@ -310,8 +313,7 @@ export class AdminService {
       );
     }
 
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
+    const startOfToday = phtStartOfDay(now);
     const weekAgo = new Date(now);
     weekAgo.setDate(now.getDate() - 7);
     const monthAgo = new Date(now);
@@ -385,17 +387,14 @@ export class AdminService {
   // ── System health: real metrics + DB latency ────────────────────────────────
   async getHealth() {
     const t0 = Date.now();
-    const [usersRes, bookingsRes, franchiseRes] = await Promise.all([
-      supabase.from('users').select('user_type,current_status,status'),
-      supabase.from('bookings').select('status'),
-      supabase.from('franchise_applications').select('status'),
+    let reachable = true;
+    const safe = (p: Promise<any[]>) => p.catch(() => { reachable = false; return [] as any[]; });
+    const [users, bookings, franchises] = await Promise.all([
+      safe(fetchAllRows<any>(() => supabase.from('users').select('id,user_type,current_status,status').order('id'))),
+      safe(fetchAllRows<any>(() => supabase.from('bookings').select('id,status').order('id'))),
+      safe(fetchAllRows<any>(() => supabase.from('franchise_applications').select('id,status').order('id'))),
     ]);
     const latency = Date.now() - t0;
-
-    const users = usersRes.data || [];
-    const bookings = bookingsRes.data || [];
-    const franchises = franchiseRes.data || [];
-    const reachable = !usersRes.error && !bookingsRes.error;
 
     return {
       latency,

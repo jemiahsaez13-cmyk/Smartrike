@@ -6,6 +6,12 @@ import {
   isValidPassword,
   normalizeEmail,
   PASSWORD_REQUIREMENTS,
+  isValidDriverPlateNumber,
+  isValidDriverLicenseNumber,
+  normalizePlateNumber,
+  normalizeDriverLicenseNumber,
+  PLATE_NUMBER_FORMAT,
+  LICENSE_NUMBER_FORMAT,
 } from '@/utils/validationUtils';
 
 type AttemptType = 'login' | 'password-reset';
@@ -118,19 +124,94 @@ export class AuthService {
     return user;
   }
 
+  // Maps Supabase signup failures to a message that says exactly what went
+  // wrong. The generic authError() is tuned for OTP/login flows and would, for
+  // example, report a captcha "token" failure as a wrong verification code.
+  private signupError(error: any): Error {
+    const message = String(error?.message || '').toLowerCase();
+    const code = String(error?.code || '').toLowerCase();
+    const status = Number(error?.status || 0);
+    const reasons: string[] = Array.isArray(error?.reasons) ? error.reasons : [];
+
+    if (code === 'email_exists' || code === 'user_already_exists' || message.includes('already registered') || message.includes('already exists')) {
+      return new Error('This email is already registered. Sign in instead, or use "Forgot password" if you cannot remember it.');
+    }
+    if (code === 'over_email_send_rate_limit' || message.includes('email rate limit')) {
+      return new Error('Too many sign-ups were made in a short time, so the verification email could not be sent. Please try again after a while (up to an hour).');
+    }
+    if (status === 429 || code.includes('rate_limit') || message.includes('rate limit') || message.includes('security purposes')) {
+      const secs = /after (\d+) seconds/.exec(message)?.[1];
+      return new Error(secs
+        ? `Too many sign-up attempts. Please wait ${secs} seconds and try again.`
+        : 'Too many sign-up attempts from this device or network. Please wait a few minutes and try again.');
+    }
+    if (code === 'signup_disabled' || message.includes('signups not allowed') || message.includes('signup is disabled')) {
+      return new Error('New account registration is currently turned off. Please contact the Smart Trike administrator.');
+    }
+    if (code === 'email_address_invalid' || code === 'email_address_not_authorized' || (message.includes('email address') && message.includes('invalid'))) {
+      return new Error('This email address cannot be used. Please use a real, active email address (e.g. Gmail or Yahoo).');
+    }
+    if (code === 'weak_password' || message.includes('password should') || message.includes('weak password')) {
+      if (reasons.includes('pwned') || message.includes('pwned') || message.includes('leaked')) {
+        return new Error('This password has appeared in a known data breach. Please choose a different password.');
+      }
+      return new Error(`Weak password. ${PASSWORD_REQUIREMENTS}`);
+    }
+    if (code.includes('captcha') || message.includes('captcha')) {
+      return new Error('Security check failed. Please try again.');
+    }
+    if (code === 'unexpected_failure' || message.includes('database error')) {
+      // The handle_new_user trigger failed while saving the profile row.
+      return new Error('Your account could not be saved on the server. Please double-check your details (name, license number, plate number) and try again. If it keeps happening, contact support.');
+    }
+    if (status === 0 || message.includes('failed to fetch') || message.includes('network')) {
+      return new Error('No internet connection or the server is unreachable. Check your connection and try again.');
+    }
+    if (status >= 500) {
+      return new Error('The server is having problems right now. Please try again in a few minutes.');
+    }
+    return new Error(error?.message || 'Account creation failed. Please try again.');
+  }
+
+  // Mirrors the screen's checks so a failed signup always names the wrong field,
+  // and keeps values inside the users table column limits (VARCHAR 50/255) that
+  // would otherwise surface only as a vague "Database error saving new user".
+  private assertValidDriverDetails(userData: any) {
+    const license = String(userData?.license_number || '').trim();
+    const plate = String(userData?.vehicle_details?.plate_number || '').trim();
+
+    if (!license) throw new Error('License number is required for driver accounts.');
+    if (!isValidDriverLicenseNumber(license)) throw new Error(`Invalid license number. ${LICENSE_NUMBER_FORMAT}`);
+    if (!plate) throw new Error('Vehicle plate number is required for driver accounts.');
+    if (!isValidDriverPlateNumber(plate)) throw new Error(`Invalid plate number. ${PLATE_NUMBER_FORMAT}`);
+  }
+
   async signUp(email: string, password: string, userData: any) {
     const normalizedEmail = normalizeEmail(email);
     this.assertValidEmail(normalizedEmail);
     this.assertValidPassword(password);
 
+    const name = String(userData?.name || '').trim();
+    if (!name) throw new Error('Please enter your name.');
+    if (name.length > 255) throw new Error('Name is too long (maximum 255 characters).');
+
+    const isDriver = userData?.user_type === 'driver';
+    if (isDriver) this.assertValidDriverDetails(userData);
+
     // Only public signup roles are accepted. The database trigger repeats this
     // enforcement so a modified client cannot create an administrator.
     const safeUserData = {
-      name: String(userData?.name || '').trim(),
-      user_type: userData?.user_type === 'driver' ? 'driver' : 'passenger',
-      ...(userData?.license_number ? { license_number: String(userData.license_number).trim() } : {}),
-      ...(userData?.toda_membership ? { toda_membership: String(userData.toda_membership).trim() } : {}),
-      ...(userData?.vehicle_details ? { vehicle_details: userData.vehicle_details } : {}),
+      name,
+      user_type: isDriver ? 'driver' : 'passenger',
+      ...(isDriver
+        ? {
+            license_number: normalizeDriverLicenseNumber(String(userData.license_number)),
+            vehicle_details: {
+              ...userData.vehicle_details,
+              plate_number: normalizePlateNumber(String(userData.vehicle_details.plate_number)),
+            },
+          }
+        : {}),
     };
 
     // 1. Create the Auth User. The profile row in `public.users` is created
@@ -143,20 +224,14 @@ export class AuthService {
       options: { data: safeUserData },
     });
 
-    if (authError) {
-      // Keep the response actionable without confirming whether an address is
-      // registered; Supabase intentionally obscures duplicate signups.
-      const duplicate = String(authError.message || '').toLowerCase().includes('already');
-      if (duplicate) {
-        throw new Error('Unable to create this account. Check your details or sign in instead.');
-      }
-      throw this.authError(authError, 'Account creation failed. Please try again.');
-    }
+    if (authError) throw this.signupError(authError);
 
-    if (!authData.user) throw new Error('User creation failed. Please try again.');
+    if (!authData.user) throw new Error('Account creation failed: the server returned no user. Please try again.');
 
+    // With email confirmation on, Supabase returns a user with no identities
+    // instead of an error when the address is already registered.
     if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
-      throw new Error('Unable to create this account. Check your details or sign in instead.');
+      throw new Error('This email is already registered. Sign in instead, or use "Forgot password" if you cannot remember it.');
     }
 
     // Preserve the original registration behavior when the project confirms
@@ -183,7 +258,9 @@ export class AuthService {
     // available to both passengers and still-pending drivers.
     const user = await this.fetchProfileWithRetry(authData.user.id);
     if (!user) {
-      throw new Error('Account created, but your profile could not be loaded. Please sign in.');
+      // The auth account already exists, so retrying signup would now say
+      // "already registered" - point the user at sign-in instead.
+      throw new Error('Your account was created, but your profile is still loading. Please go to Sign In and log in with the email and password you just used.');
     }
 
     return { user, session, needsEmailConfirmation: false as const };
@@ -245,10 +322,20 @@ export class AuthService {
     }
     
     if (user.status !== 'active') {
-      throw new Error(`Account status: ${user.status}. Please contact support.`);
+      // The password was correct, so Supabase already stored a session. Drop
+      // it, or the next app launch would restore it and skip this check.
+      await supabase.auth.signOut({ scope: 'local' });
+      throw new Error(this.inactiveMessage(user.status));
     }
-    
+
     return { user, session: data.session };
+  }
+
+  private inactiveMessage(status: string): string {
+    if (status === 'suspended') {
+      return 'Your account has been suspended by the TODA administrator. Please contact the FEDTODAB office to appeal.';
+    }
+    return 'Your account is inactive. Please contact the FEDTODAB office to reactivate it.';
   }
 
   async signOut() {
@@ -331,7 +418,13 @@ export class AuthService {
     
     const user = await this.userRepo.findByAuthId(session.user.id);
     if (!user) return null;
-    
+
+    // A restored session must not bypass a suspension made after sign-in.
+    if (user.status !== 'active') {
+      await supabase.auth.signOut({ scope: 'local' });
+      return null;
+    }
+
     return { user, session };
   }
 }

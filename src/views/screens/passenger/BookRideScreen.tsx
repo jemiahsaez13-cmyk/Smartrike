@@ -429,8 +429,9 @@ export const BookRideScreen = () => {
           distanceKm: estimate?.distance,
         });
         navigation.navigate('ConfirmBooking');
-      } catch {
-        await notify('Booking Failed', 'Unable to create booking. Please try again.');
+      } catch (error: any) {
+        const message = typeof error === 'string' ? error : error?.message;
+        await notify('Booking Failed', message || 'Unable to create booking. Please check your connection and try again.');
       }
     };
 

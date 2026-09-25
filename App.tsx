@@ -6,6 +6,8 @@ import { store } from './src/controllers/store';
 import { AppNavigator } from './src/views/navigation/AppNavigator';
 import { ConfirmHost } from './src/views/components/common/ConfirmHost';
 import { theme } from './src/views/styles/theme';
+// Registers the background GPS task; must be imported at startup.
+import './src/models/services/backgroundLocationTask';
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);

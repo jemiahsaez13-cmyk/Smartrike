@@ -5,7 +5,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus } from '@/controllers/slices/driverSlice';
+import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
+import { setUser } from '@/controllers/slices/authSlice';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { Driver } from '@/models/types';
@@ -129,18 +130,46 @@ export const DriverDashboard = () => {
     return () => stopWatchingLocation();
   }, [isOnline, user?.id, startWatchingLocation, stopWatchingLocation]);
 
+  // Re-reads the driver's own profile so an admin's approval (or rejection)
+  // shows up without logging out and back in.
+  const refreshProfile = useCallback(async (applyStatus: boolean, isActive: () => boolean) => {
+    if (!user?.id) return;
+    const version = statusVersion.current;
+    try {
+      const profile = await new UserRepository().findById(user.id);
+      if (!profile || !isActive()) return;
+      dispatch(setUser(profile));
+      if (applyStatus && version === statusVersion.current && !statusLock.current) {
+        dispatch(restoreDriverStatus((profile as Driver).current_status));
+      }
+    } catch {
+      /* keep the last known profile */
+    }
+  }, [dispatch, user?.id]);
+
   useFocusEffect(useCallback(() => {
     let active = true;
-    const version = statusVersion.current;
-    if (user?.id && !statusLock.current) {
-      new UserRepository().findById(user.id).then(profile => {
-        if (active && version === statusVersion.current && !statusLock.current && profile) {
-          dispatch(restoreDriverStatus((profile as Driver).current_status));
+    if (!statusLock.current) void refreshProfile(true, () => active);
+    // A trip that was cancelled by the passenger or already completed must not
+    // linger as an "Active Trip" card.
+    if (currentTrip?.id) {
+      new BookingRepository().findById(currentTrip.id).then((fresh) => {
+        if (active && fresh && (fresh.status === 'cancelled' || fresh.status === 'completed')) {
+          dispatch(clearCurrentTrip());
         }
       }).catch(() => undefined);
     }
     return () => { active = false; };
-  }, [dispatch, user?.id]));
+  }, [dispatch, refreshProfile, currentTrip?.id]));
+
+  // While awaiting admin approval, check periodically so the switch unlocks
+  // as soon as the driver is verified.
+  useEffect(() => {
+    if (isVerified || !user?.id) return;
+    let active = true;
+    const poll = setInterval(() => { void refreshProfile(false, () => active); }, 30000);
+    return () => { active = false; clearInterval(poll); };
+  }, [isVerified, user?.id, refreshProfile]);
 
   const toggleStatus = async () => {
     if (!user?.id || statusLock.current || currentTrip || currentStatus === 'on-trip') return;

@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Text, Surface, IconButton } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppSelector, useAppDispatch } from '@/controllers/store';
-import { acceptBooking, removeIncomingRequest } from '@/controllers/slices/driverSlice';
+import { acceptBooking, declineIncomingRequest } from '@/controllers/slices/driverSlice';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '@/views/components/common/Button';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
@@ -30,12 +30,12 @@ export const BookingRequestScreen = () => {
       navigation.navigate('DriverTrip');
       void notify('Ride Accepted!', 'Head to the pickup location.');
     } catch (error: any) {
-      await notify('Error', error || 'Failed to accept ride');
+      await notify('Could not accept ride', typeof error === 'string' ? error : error?.message || 'Failed to accept ride. Please try again.');
     }
   };
 
   const handleReject = (bookingId: string) => {
-    dispatch(removeIncomingRequest(bookingId));
+    dispatch(declineIncomingRequest(bookingId));
   };
 
   if (incomingRequests.length === 0) {
@@ -72,7 +72,7 @@ export const BookingRequestScreen = () => {
                   <Text style={styles.passengerName}>New Ride Request</Text>
                 </View>
               </View>
-              <Text style={[styles.fareAmount, typography.currency]}>₱{request.total_fare.toFixed(2)}</Text>
+              <Text style={[styles.fareAmount, typography.currency]}>₱{Number(request.total_fare || 0).toFixed(2)}</Text>
             </View>
 
             <View style={styles.divider} />

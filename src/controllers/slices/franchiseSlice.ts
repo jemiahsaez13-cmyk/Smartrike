@@ -189,6 +189,20 @@ export const reviewChangeOfUnit = createAsyncThunk(
   }
 );
 
+export const resubmitDocument = createAsyncThunk(
+  'franchise/resubmitDocument',
+  async (
+    payload: { id: string; documentName: string; fileUrl: string; fileName: string | null },
+    { rejectWithValue }
+  ) => {
+    try {
+      return await service.resubmitDocument(payload.id, payload.documentName, payload.fileUrl, payload.fileName);
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
 const upsert = (list: FranchiseApplication[], item: FranchiseApplication) => {
   const idx = list.findIndex((a) => a.id === item.id);
   if (idx >= 0) list[idx] = item;
@@ -203,6 +217,7 @@ const franchiseSlice = createSlice({
     builder
       .addCase(fetchMyApplication.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchMyApplication.fulfilled, (state, action) => {
         state.loading = false;
@@ -244,6 +259,10 @@ const franchiseSlice = createSlice({
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })
       .addCase(reviewFranchisePayment.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
+        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
+      })
+      .addCase(resubmitDocument.fulfilled, (state, action) => {
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })

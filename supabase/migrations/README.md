@@ -222,3 +222,28 @@ backfill, status updates, read persistence and driver/passenger RLS isolation.
 `scripts/test-notification-ownership.cjs` covers client badge updates, duplicate
 handling and account switching. Migration 067 has not been applied to the live
 project because this environment has no Supabase management login.
+
+
+## Security and workflow fixes (068)
+
+Apply `068_security_and_workflow_fixes.sql` after 067. It is required by the
+app changes shipped with it (announcements, admin delete/invite, MTOP document
+re-upload) and closes several server-side gaps:
+
+- Users can no longer edit their own `status`, `rating`, trip totals,
+  earnings or `toda_membership`, or change a verified license/plate; only
+  active verified drivers can go online.
+- Bookings are re-priced on insert from `fare_matrix` (Asia/Manila peak
+  hours), limited to one active ride per passenger, and follow a fixed status
+  flow per role (pending→accepted→in-transit→completed; passenger may cancel
+  before pickup). The assigned driver is notified when a passenger cancels.
+- Notification inserts are limited to ride participants, new-request alerts to
+  drivers, and admins. Announcements use the new `broadcast_ref` column.
+- `admin_invites` + `handle_new_user`: the admin role is granted only to
+  invited emails; sign-up values are clipped to column sizes.
+- `admin_delete_user(uuid)` removes the Auth login and the profile.
+- MTOP fees are set server-side, drivers cannot mark their own payment
+  verified, and `resubmit_mtop_document(...)` replaces a rejected document.
+
+The end of the file has an optional, commented-out cleanup for Auth logins
+orphaned by the old profile-only delete. Preview before running it.

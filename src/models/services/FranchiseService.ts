@@ -40,7 +40,10 @@ export class FranchiseService {
       .eq('driver_id', driverId)
       .order('created_at', { ascending: false })
       .limit(1);
-    if (error || !data || data.length === 0) return null;
+    // Surface load failures: returning null here made the screen show the
+    // "Apply" form on a network error, which led to duplicate applications.
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
     return this.withDerivedRecordStatus(data[0]);
   }
 
@@ -219,6 +222,18 @@ export class FranchiseService {
       .maybeSingle();
     if (todaError) throw todaError;
     if (!toda) throw new Error('The selected TODA is not registered in the app.');
+    if (application.driver_id) {
+      const { data: open, error: openError } = await supabase
+        .from('franchise_applications')
+        .select('id')
+        .eq('driver_id', application.driver_id)
+        .not('status', 'in', '(issued,rejected)')
+        .limit(1);
+      if (openError) throw openError;
+      if (open && open.length > 0) {
+        throw new Error('You already have an MTOP application in progress. Wait for it to be decided before submitting another.');
+      }
+    }
     const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('franchise_applications')
@@ -336,6 +351,32 @@ export class FranchiseService {
       // Mark payment as awaiting so the admin knows a visit is scheduled
       payment_review_status: 'pending_review',
     });
+  }
+
+  /**
+   * Replaces one document the admin rejected, while the application is still
+   * in document review. Server-side (migration 068) only a rejected document
+   * of the caller's own unverified application can be replaced.
+   */
+  async resubmitDocument(
+    id: string,
+    documentName: string,
+    fileUrl: string,
+    fileName: string | null
+  ): Promise<FranchiseApplication> {
+    if (!/^data:(image\/(jpeg|jpg|png|webp)|application\/pdf);base64,/i.test(fileUrl) || fileUrl.length > 3_500_000) {
+      throw new Error('Choose a clear photo or PDF under 2.5 MB.');
+    }
+    const { data, error } = await supabase.rpc('resubmit_mtop_document', {
+      p_application_id: id,
+      p_document_name: documentName,
+      p_file_url: fileUrl,
+      p_file_name: fileName,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The document could not be re-uploaded.');
+    return this.withDerivedRecordStatus(row as FranchiseApplication);
   }
 
   async reviewPayment(id: string, decision: 'verified' | 'rejected', reason?: string): Promise<FranchiseApplication> {

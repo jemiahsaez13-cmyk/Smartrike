@@ -1,5 +1,14 @@
 import { supabase } from '@/config/supabase';
 import { Driver, Booking } from '@/models/types';
+import { fetchAllRows } from '@/utils/supabaseUtils';
+
+// RFC 4122 v4 id. `crypto.randomUUID` does not exist on Hermes (Android), so
+// it cannot be used here.
+const uuidV4 = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 
 // ─── Announcement types ───────────────────────────────────────────────────────
 
@@ -115,14 +124,16 @@ export class AnnouncementService {
     if (!title.trim()) throw new Error('Title is required.');
     if (!body.trim()) throw new Error('Message body is required.');
 
-    // Resolve target user IDs
-    let query = supabase.from('users').select('id');
-    if (audience !== 'all') query = (query as any).eq('user_type', audience);
-    const { data: users, error: userErr } = await query;
-    if (userErr) throw userErr;
-    if (!users || users.length === 0) throw new Error('No users found for the selected audience.');
+    // Resolve target user IDs (paged: Supabase returns at most 1000 rows per
+    // request, so larger audiences used to be silently cut off).
+    const users = await fetchAllRows<{ id: string }>(() => {
+      let query = supabase.from('users').select('id').eq('status', 'active').order('id');
+      if (audience !== 'all') query = query.eq('user_type', audience);
+      return query;
+    });
+    if (users.length === 0) throw new Error('No users found for the selected audience.');
 
-    const broadcastId = crypto.randomUUID();
+    const broadcastId = uuidV4();
     const now = new Date().toISOString();
 
     const rows = (users as { id: string }[]).map((u) => ({
@@ -131,14 +142,18 @@ export class AnnouncementService {
       title: title.trim(),
       body: body.trim(),
       read: false,
-      // Store broadcast metadata in the booking_id column (repurposed as a
-      // general reference field) as JSON so we can reconstruct history.
+      // Broadcast metadata lives in its own text column (migration 068).
+      // booking_id is a UUID foreign key, so the old approach of storing this
+      // string there made every announcement insert fail.
       // Format: "broadcast:<uuid>|audience:<audience>|category:<category>|by:<sentBy>|count:<n>"
-      booking_id: `broadcast:${broadcastId}|audience:${audience}|category:${category}|by:${sentBy ?? ''}|count:${users.length}`,
+      broadcast_ref: `broadcast:${broadcastId}|audience:${audience}|category:${category}|by:${sentBy ?? ''}|count:${users.length}`,
     }));
 
-    const { error: insertErr } = await supabase.from('notifications').insert(rows);
-    if (insertErr) throw insertErr;
+    // Insert in chunks so a large audience stays under request-size limits.
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error: insertErr } = await supabase.from('notifications').insert(rows.slice(i, i + 500));
+      if (insertErr) throw insertErr;
+    }
 
     return {
       id: broadcastId,
@@ -158,9 +173,9 @@ export class AnnouncementService {
   async getHistory(limit = 50): Promise<Announcement[]> {
     const { data, error } = await supabase
       .from('notifications')
-      .select('id, title, body, booking_id, created_at')
+      .select('id, title, body, broadcast_ref, created_at')
       .eq('type', 'announcement')
-      .not('booking_id', 'is', null)
+      .not('broadcast_ref', 'is', null)
       .order('created_at', { ascending: false })
       .limit(limit * 10); // over-fetch then dedupe in JS
 
@@ -170,7 +185,7 @@ export class AnnouncementService {
     const results: Announcement[] = [];
 
     for (const row of (data ?? []) as any[]) {
-      const meta = this._parseMeta(row.booking_id ?? '');
+      const meta = this._parseMeta(row.broadcast_ref ?? '');
       if (!meta) continue;
       if (seen.has(meta.broadcastId)) continue;
       seen.add(meta.broadcastId);

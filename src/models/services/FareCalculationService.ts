@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase';
 import { Location } from '@/models/types';
+import { phtHourOfDay } from '@/utils/dateUtils';
 
 /** LGU/TODA capacity ceiling for one tricycle booking. */
 export const MAX_TRICYCLE_PASSENGERS = 5;
@@ -10,6 +11,7 @@ export class FareCalculationService {
     const { data, error } = await supabase
       .from('fare_matrix')
       .select('*')
+      .order('id')
       .limit(1)
       .maybeSingle();
 
@@ -22,8 +24,9 @@ export class FareCalculationService {
       peak_hours_enabled: false,
     };
 
-    const now = new Date();
-    const currentHour = now.getHours() + now.getMinutes() / 60;
+    // Peak hours follow Philippine time (the database recomputes the fare the
+    // same way), not whatever timezone the phone is set to.
+    const currentHour = phtHourOfDay();
     const isPeakHour = currentHour >= 6.5 && currentHour < 9;
 
     return {

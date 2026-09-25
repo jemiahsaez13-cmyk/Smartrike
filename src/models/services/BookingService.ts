@@ -4,6 +4,23 @@ import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculati
 import { NotificationService } from './NotificationService';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
+import { REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+
+// Parses a timestamp as UTC when it arrives without a timezone suffix.
+const toMs = (value: unknown): number => {
+  const s = String(value);
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s.replace(' ', 'T') + 'Z';
+  return new Date(iso).getTime();
+};
+
+/**
+ * A request nobody accepted within REQUEST_FRESHNESS_MINUTES is hidden from
+ * drivers, so the passenger's search must end at the same point.
+ */
+export const isStalePendingBooking = (booking: Pick<Booking, 'status' | 'created_at'> | null | undefined): boolean =>
+  !!booking
+  && booking.status === 'pending'
+  && Date.now() - toMs(booking.created_at) >= REQUEST_FRESHNESS_MINUTES * 60 * 1000;
 
 export class BookingService {
   bookingRepo = new BookingRepository();
@@ -24,14 +41,30 @@ export class BookingService {
       distanceKm?: number;
     } = {}
   ): Promise<Booking> {
+    // One ride at a time. An expired search is closed first so it never blocks
+    // a new booking.
+    const active = await this.bookingRepo.findActiveByPassenger(passengerId);
+    if (active) {
+      if (isStalePendingBooking(active)) {
+        await this.bookingRepo.cancel(active.id);
+      } else {
+        throw new Error(active.status === 'pending'
+          ? 'You are already waiting for a driver. Cancel that request before booking another ride.'
+          : 'You already have an ongoing ride. Finish it before booking another.');
+      }
+    }
+
     const passengerCount = Math.floor(options.passengerCount ?? 1);
     if (passengerCount < 1 || passengerCount > MAX_TRICYCLE_PASSENGERS) {
       throw new Error(`A tricycle can carry 1 to ${MAX_TRICYCLE_PASSENGERS} passengers.`);
     }
     const rideType = options.rideType ?? 'standard';
-    const distance = options.distanceKm && options.distanceKm > 0
+    const rawDistance = options.distanceKm && options.distanceKm > 0
       ? options.distanceKm
       : await this.fareService.calculateDistance(pickup, dropoff);
+    // The column stores 2 decimals and the server re-prices from that value
+    // (migration 068), so price from the same rounded number.
+    const distance = Math.round(rawDistance * 100) / 100;
     const { baseFare, perKmRate, multiplier } = await this.fareService.getFareConfig();
     const totalFare = this.fareService.calculateFareForPassengers(
       distance,
@@ -85,6 +118,8 @@ export class BookingService {
   }
 
   async acceptBooking(bookingId: string, driverId: string): Promise<Booking> {
+    const ongoing = await this.bookingRepo.findActiveByDriver(driverId);
+    if (ongoing) throw new Error('Finish your current trip before accepting another ride.');
     const booking = await this.bookingRepo.assignDriver(bookingId, driverId);
     await this.userRepo.updateDriverStatus(driverId, 'on-trip');
     // Best-effort: notifying the passenger must never roll back the accept.
@@ -175,7 +210,8 @@ export class BookingService {
 
   async cancelBooking(bookingId: string): Promise<Booking> {
     // Only mutate the passenger-owned booking. Driver availability is released
-    // by the database trigger, never by a passenger writing another profile.
+    // and the driver is notified by database triggers (migration 068), never
+    // by a passenger writing another user's rows.
     return this.bookingRepo.cancel(bookingId);
   }
 }

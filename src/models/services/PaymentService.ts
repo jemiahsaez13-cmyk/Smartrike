@@ -1,6 +1,6 @@
 import { TransactionRepository } from '@/models/repositories/TransactionRepository';
 import { Transaction } from '@/models/types';
-import { getWeekRange, getMonthRange, isToday } from '@/utils/dateUtils';
+import { isTodayPHT, phtStartOfWeek, phtStartOfMonth } from '@/utils/dateUtils';
 
 const repo = new TransactionRepository();
 
@@ -45,16 +45,15 @@ export class PaymentService {
   }> {
     const allTransactions = await repo.findByDriver(driverId, 500);
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const { start: weekStart } = getWeekRange();
-    const { start: monthStart } = getMonthRange();
+    // Philippine time, matching the dashboard's daily goal (driverSlice), so
+    // "today" means the same thing on every screen and every device.
+    const weekStart = phtStartOfWeek();
+    const monthStart = phtStartOfMonth();
 
     const sum = (txns: Transaction[]) => txns.reduce((acc, t) => acc + (t.amount ?? 0), 0);
 
     return {
-      today: sum(allTransactions.filter(t => t.created_at && isToday(t.created_at))),
+      today: sum(allTransactions.filter(t => t.created_at && isTodayPHT(t.created_at))),
       thisWeek: sum(allTransactions.filter(t => t.created_at && new Date(t.created_at) >= weekStart)),
       thisMonth: sum(allTransactions.filter(t => t.created_at && new Date(t.created_at) >= monthStart)),
       allTime: sum(allTransactions),

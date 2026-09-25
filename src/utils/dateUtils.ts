@@ -85,3 +85,25 @@ export function phtDayKey(date: Date | string): string {
 export function isTodayPHT(date: Date | string): boolean {
   return phtDayKey(date) === phtDayKey(new Date());
 }
+
+/** Midnight (PHT) that starts the Philippine calendar day containing `date`. */
+export function phtStartOfDay(date: Date = new Date()): Date {
+  return new Date(`${phtDayKey(date)}T00:00:00+08:00`);
+}
+
+/** Midnight (PHT) of the Sunday that starts the Philippine week of `date`. */
+export function phtStartOfWeek(date: Date = new Date()): Date {
+  const dayOfWeek = new Date(date.getTime() + PHT_OFFSET_MS).getUTCDay();
+  return new Date(phtStartOfDay(date).getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+}
+
+/** Midnight (PHT) of the first day of the Philippine month of `date`. */
+export function phtStartOfMonth(date: Date = new Date()): Date {
+  return new Date(`${phtDayKey(date).slice(0, 7)}-01T00:00:00+08:00`);
+}
+
+/** Fractional hour of day (0–24) in Philippine time. */
+export function phtHourOfDay(date: Date = new Date()): number {
+  const d = new Date(date.getTime() + PHT_OFFSET_MS);
+  return d.getUTCHours() + d.getUTCMinutes() / 60;
+}

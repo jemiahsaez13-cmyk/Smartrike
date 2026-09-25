@@ -1,6 +1,9 @@
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/config/supabase';
 import * as ExpoLocation from 'expo-location';
 import { Location } from '@/models/types';
+import { DRIVER_LOCATION_TASK, DRIVER_ID_STORAGE_KEY } from './backgroundLocationTask';
 
 // Default position (Boac, Marinduque) used when device location is unavailable
 // e.g. on web or when the user denies the permission. Keeps the booking flow
@@ -15,6 +18,11 @@ export class LocationService {
   // Holds the active watchPositionAsync subscription so it can be stopped later.
   // Kept here (not in Redux) because the subscription object is non-serializable.
   private watchSub: { remove: () => void } | null = null;
+  // Bumped on every start/stop so a watch that resolves after it was already
+  // cancelled (fast online→offline toggles) is removed instead of leaking.
+  private watchToken = 0;
+  /** True while the background task (not the foreground watch) posts GPS to the server. */
+  backgroundActive = false;
 
   async getCurrentPosition(): Promise<Location> {
     try {
@@ -77,12 +85,23 @@ export class LocationService {
   // Begins streaming the device position to `callback` every ~5s, after ensuring
   // foreground permission. Any previous watch is stopped first so we never leak
   // two subscriptions. Returns false if permission was denied.
-  async startWatching(callback: (location: Location) => void): Promise<boolean> {
+  async startWatching(callback: (location: Location) => void, driverId?: string): Promise<boolean> {
+    this.stopForegroundWatch();
+    const token = ++this.watchToken;
     try {
       const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return false;
-      this.stopWatching();
-      this.watchSub = await this.watchPosition(callback);
+      if (status !== 'granted' || token !== this.watchToken) return false;
+      if (driverId) await this.startBackgroundUpdates(driverId);
+      if (token !== this.watchToken) {
+        await this.stopBackgroundUpdates();
+        return false;
+      }
+      const sub = await this.watchPosition(callback);
+      if (token !== this.watchToken) {
+        try { sub.remove(); } catch { /* web */ }
+        return false;
+      }
+      this.watchSub = sub;
       return true;
     } catch (e) {
       // expo-location can be flaky on web; location streaming is non-critical.
@@ -91,7 +110,70 @@ export class LocationService {
     }
   }
 
+  // Keeps posting the driver's position while the app is in the background.
+  // Best-effort: if the OS refuses (e.g. iOS without background permission),
+  // the foreground watch still covers the time the app is open.
+  // Start/stop calls are queued so a stop can never interleave with a start.
+  private backgroundQueue: Promise<void> = Promise.resolve();
+  private enqueue(op: () => Promise<void>): Promise<void> {
+    this.backgroundQueue = this.backgroundQueue.then(op, op);
+    return this.backgroundQueue;
+  }
+
+  private startBackgroundUpdates(driverId: string): Promise<void> {
+    return this.enqueue(() => this.doStartBackgroundUpdates(driverId));
+  }
+
+  private stopBackgroundUpdates(): Promise<void> {
+    return this.enqueue(() => this.doStopBackgroundUpdates());
+  }
+
+  private async doStartBackgroundUpdates(driverId: string): Promise<void> {
+    if (Platform.OS === 'web') return;
+    try {
+      await AsyncStorage.setItem(DRIVER_ID_STORAGE_KEY, driverId);
+      const running = await ExpoLocation.hasStartedLocationUpdatesAsync(DRIVER_LOCATION_TASK).catch(() => false);
+      if (!running) {
+        await ExpoLocation.startLocationUpdatesAsync(DRIVER_LOCATION_TASK, {
+          accuracy: ExpoLocation.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 10,
+          pausesUpdatesAutomatically: false,
+          showsBackgroundLocationIndicator: true,
+          foregroundService: {
+            notificationTitle: 'Smart Trike — you are on duty',
+            notificationBody: 'Sharing your location with passengers while you are online.',
+            notificationColor: '#3B634E',
+          },
+        });
+      }
+      this.backgroundActive = true;
+    } catch (e) {
+      this.backgroundActive = false;
+      console.warn('Background location unavailable; using foreground updates only:', e);
+    }
+  }
+
+  private async doStopBackgroundUpdates(): Promise<void> {
+    this.backgroundActive = false;
+    if (Platform.OS === 'web') return;
+    try {
+      await AsyncStorage.removeItem(DRIVER_ID_STORAGE_KEY);
+      if (await ExpoLocation.hasStartedLocationUpdatesAsync(DRIVER_LOCATION_TASK)) {
+        await ExpoLocation.stopLocationUpdatesAsync(DRIVER_LOCATION_TASK);
+      }
+    } catch (e) {
+      console.warn('stopBackgroundUpdates skipped:', e);
+    }
+  }
+
   stopWatching(): void {
+    this.watchToken += 1;
+    void this.stopBackgroundUpdates();
+    this.stopForegroundWatch();
+  }
+
+  private stopForegroundWatch(): void {
     if (this.watchSub) {
       // expo-location's web build throws on .remove() (it calls a removed
       // LocationEventEmitter.removeSubscription). Guard it so cleanup never

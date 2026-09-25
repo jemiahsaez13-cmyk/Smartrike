@@ -15,6 +15,8 @@ interface DriverState {
   currentStatus: 'online' | 'offline' | 'on-trip';
   currentTrip: Booking | null;
   incomingRequests: Booking[];
+  /** Requests this driver declined; kept out of the queue on every re-sync. */
+  declinedRequestIds: string[];
   completedTrips: Booking[];
   totalEarnings: number;
   dailyEarnings: number;
@@ -27,6 +29,7 @@ const initialState: DriverState = {
   currentStatus: 'offline',
   currentTrip: null,
   incomingRequests: [],
+  declinedRequestIds: [],
   completedTrips: [],
   totalEarnings: 0,
   dailyEarnings: 0,
@@ -91,6 +94,7 @@ const driverSlice = createSlice({
     },
     addIncomingRequest: (state, action: PayloadAction<Booking>) => {
       // Check if already in list to avoid duplicates
+      if (state.declinedRequestIds.includes(action.payload.id)) return;
       if (!state.incomingRequests.find(r => r.id === action.payload.id)) {
         state.incomingRequests.unshift(action.payload);
       }
@@ -98,11 +102,18 @@ const driverSlice = createSlice({
     removeIncomingRequest: (state, action: PayloadAction<string>) => {
       state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload);
     },
+    declineIncomingRequest: (state, action: PayloadAction<string>) => {
+      state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.payload);
+      if (!state.declinedRequestIds.includes(action.payload)) {
+        // Bounded: requests expire after REQUEST_FRESHNESS_MINUTES anyway.
+        state.declinedRequestIds = [action.payload, ...state.declinedRequestIds].slice(0, 200);
+      }
+    },
     // Reconcile the queue against the backend's current still-open requests.
     // Anything no longer pending (cancelled by the passenger, taken by another
     // driver, or already started) simply isn't in the payload, so it drops off.
     syncIncomingRequests: (state, action: PayloadAction<Booking[]>) => {
-      state.incomingRequests = action.payload;
+      state.incomingRequests = action.payload.filter(r => !state.declinedRequestIds.includes(r.id));
     },
     updateDailyEarnings: (state, action: PayloadAction<number>) => {
       state.dailyEarnings += action.payload;
@@ -132,6 +143,8 @@ const driverSlice = createSlice({
       .addCase(acceptBooking.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+        // Taken by another driver or cancelled: it is no longer available.
+        state.incomingRequests = state.incomingRequests.filter(r => r.id !== action.meta.arg.bookingId);
       })
       .addCase(startTrip.fulfilled, (state, action) => {
         if (state.currentTrip && action.payload?.id === state.currentTrip.id) {
@@ -151,10 +164,10 @@ const driverSlice = createSlice({
         // time, so every driver's quota flips on the same clock.
         state.dailyEarnings = action.payload
           .filter(b => b.completed_at && isTodayPHT(b.completed_at))
-          .reduce((sum, b) => sum + b.total_fare, 0);
+          .reduce((sum, b) => sum + Number(b.total_fare || 0), 0);
       });
   }
 });
 
-export const { restoreDriverStatus, setDriverInfo, addIncomingRequest, removeIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
+export const { restoreDriverStatus, setDriverInfo, addIncomingRequest, removeIncomingRequest, declineIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
 export default driverSlice.reducer;
