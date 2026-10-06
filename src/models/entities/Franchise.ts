@@ -32,7 +32,20 @@ export type FranchiseEventType =
   | 'termination'
   | 'change_of_unit';
 
-export type SuccessorRelationship = 'spouse' | 'unmarried_eldest_child';
+export type SuccessorRelationship = 'spouse' | 'child' | 'parent' | 'sibling' | 'other_relative';
+
+export const SUCCESSOR_RELATIONSHIP_LABEL: Record<SuccessorRelationship, string> = {
+  spouse: 'Spouse',
+  child: 'Child',
+  parent: 'Parent',
+  sibling: 'Sibling',
+  other_relative: 'Other relative',
+};
+
+/** Readable label for any stored relationship, including legacy values. */
+export const relationshipLabel = (value: string | null | undefined): string =>
+  !value ? '' : SUCCESSOR_RELATIONSHIP_LABEL[value as SuccessorRelationship]
+    ?? value.replace(/_/g, ' ');
 
 export type ChangeOfUnitStatus = 'pending' | 'approved' | 'rejected';
 
@@ -101,6 +114,8 @@ export interface FranchiseApplication {
   franchise_status?: FranchiseRecordStatus | null;
   original_holder_name?: string | null;
   current_holder_name?: string | null;
+  /** App account of the current holder after a succession (migration 070). */
+  current_holder_id?: string | null;
   issued_at?: string | null;
   expiry_date?: string | null;
   last_renewed_at?: string | null;
@@ -181,7 +196,10 @@ export interface FranchiseEvent {
   event_type: FranchiseEventType;
   from_holder: string | null;
   to_holder: string | null;
-  relationship: SuccessorRelationship | 'third_party' | null;
+  /** App account of the successor on a succession_transfer event. */
+  to_user_id?: string | null;
+  /** Legacy rows may still hold 'unmarried_eldest_child'. */
+  relationship: SuccessorRelationship | 'unmarried_eldest_child' | 'third_party' | null;
   reason: string | null;
   effective_date: string;
   agreement_number: string | null;

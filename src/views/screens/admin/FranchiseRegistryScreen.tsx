@@ -18,9 +18,10 @@ import {
   FranchiseEvent,
   FranchiseRecordStatus,
   FRANCHISE_RECORD_STATUS_LABEL,
+  SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
 } from '@/models/entities/Franchise';
-import { FranchiseService } from '@/models/services/FranchiseService';
+import { FranchiseService, SuccessorAccount } from '@/models/services/FranchiseService';
 import { FranchiseAgreementService } from '@/models/services/FranchiseAgreementService';
 import { ViolationService } from '@/models/services/AssociationService';
 import { confirm, notify } from '@/utils/confirm';
@@ -84,6 +85,10 @@ export const FranchiseRegistryScreen = () => {
   const [effectiveDate, setEffectiveDate] = useState(today());
   const [recipientName, setRecipientName] = useState('');
   const [relationship, setRelationship] = useState<SuccessorRelationship>('spouse');
+  const [successorOptions, setSuccessorOptions] = useState<SuccessorAccount[]>([]);
+  const [successor, setSuccessor] = useState<SuccessorAccount | null>(null);
+  const [successorOpen, setSuccessorOpen] = useState(false);
+  const [loadingSuccessors, setLoadingSuccessors] = useState(false);
   const [qualified, setQualified] = useState(false);
   const [reason, setReason] = useState('');
   const [violationType, setViolationType] = useState('');
@@ -123,6 +128,10 @@ export const FranchiseRegistryScreen = () => {
     setEffectiveDate(today());
     setRecipientName('');
     setRelationship('spouse');
+    setSuccessor(null);
+    setSuccessorOpen(false);
+    setSuccessorOptions([]);
+    if (nextAction === 'succession_transfer') loadSuccessors();
     setQualified(false);
     setReason('');
     setViolationType('');
@@ -132,6 +141,18 @@ export const FranchiseRegistryScreen = () => {
     setNewBodyNumber('');
     setOrNumber('');
     setCrNumber('');
+  };
+
+  const loadSuccessors = async () => {
+    setLoadingSuccessors(true);
+    try {
+      setSuccessorOptions(await franchiseService.getEligibleSuccessors());
+    } catch (error) {
+      console.error('Successor list failed:', error);
+      setSuccessorOptions([]);
+    } finally {
+      setLoadingSuccessors(false);
+    }
   };
 
   const closeModal = () => {
@@ -161,6 +182,12 @@ export const FranchiseRegistryScreen = () => {
           penalty,
         }, actor?.id);
       } else {
+        if (action === 'succession_transfer' && !successor) {
+          throw new Error('Select the successor’s driver account.');
+        }
+        const toHolder = action === 'succession_transfer'
+          ? successor?.name
+          : recipientName || undefined;
         const isAgreementAction = action === 'succession_transfer'
           || action === 'third_party_transfer'
           || action === 'termination';
@@ -172,8 +199,10 @@ export const FranchiseRegistryScreen = () => {
               eventType: action,
               effectiveDate,
               fromHolder: selected.current_holder_name || selected.driver_name,
-              toHolder: recipientName || undefined,
-              relationship: action === 'succession_transfer' ? relationship : action === 'third_party_transfer' ? 'third_party' : undefined,
+              toHolder,
+              relationship: action === 'succession_transfer'
+                ? SUCCESSOR_RELATIONSHIP_LABEL[relationship]
+                : action === 'third_party_transfer' ? 'third party' : undefined,
               reason: reason || undefined,
             }, agreementNumber!)
           : undefined;
@@ -182,7 +211,8 @@ export const FranchiseRegistryScreen = () => {
           eventType: action,
           effectiveDate,
           newExpiryDate: action === 'renewal' ? expiryDate : undefined,
-          toHolder: recipientName || undefined,
+          toHolder,
+          toUserId: action === 'succession_transfer' ? successor?.id : undefined,
           relationship: action === 'succession_transfer' ? relationship : action === 'third_party_transfer' ? 'third_party' : undefined,
           qualifiedRecipient: qualified,
           reason: reason || undefined,
@@ -369,11 +399,45 @@ export const FranchiseRegistryScreen = () => {
 
               {action === 'succession_transfer' ? (
                 <>
-                  <Field label="Eligible successor’s full name" value={recipientName} onChangeText={setRecipientName} />
-                  <Text style={styles.fieldLabel}>Relationship</Text>
-                  <View style={styles.choiceRow}>
-                    <Choice label="Spouse" active={relationship === 'spouse'} onPress={() => setRelationship('spouse')} />
-                    <Choice label="Unmarried eldest child" active={relationship === 'unmarried_eldest_child'} onPress={() => setRelationship('unmarried_eldest_child')} />
+                  <Text style={styles.fieldLabel}>Successor’s Smart Trike account</Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.dropdown]}
+                    onPress={() => setSuccessorOpen((open) => !open)}
+                    activeOpacity={0.76}
+                    accessibilityLabel="Select successor"
+                  >
+                    <Text style={[styles.dropdownText, !successor && { color: colors.textMuted }]} numberOfLines={1}>
+                      {successor ? successor.name : 'Select a driver account'}
+                    </Text>
+                    <MaterialCommunityIcons name={successorOpen ? 'chevron-up' : 'chevron-down'} size={22} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  {successorOpen ? (
+                    <View style={styles.dropdownList}>
+                      {loadingSuccessors ? <ActivityIndicator color={colors.primary} style={{ margin: spacing.md }} /> : null}
+                      {!loadingSuccessors && successorOptions.length === 0 ? (
+                        <Text style={styles.searchEmpty}>No eligible drivers. The successor needs an active driver account with no MTOP.</Text>
+                      ) : null}
+                      <ScrollView nestedScrollEnabled style={{ maxHeight: 240 }} keyboardShouldPersistTaps="handled">
+                        {successorOptions.map((account) => (
+                          <TouchableOpacity
+                            key={account.id}
+                            style={styles.accountResult}
+                            onPress={() => { setSuccessor(account); setSuccessorOpen(false); }}
+                            activeOpacity={0.76}
+                          >
+                            <Text style={styles.accountName}>{account.name}</Text>
+                            <Text style={styles.accountMeta}>{[account.email, account.phone].filter(Boolean).join(' · ')}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  ) : null}
+                  <Text style={styles.helper}>Only active driver accounts without an MTOP are listed. The MTOP and unit move to this driver.</Text>
+                  <Text style={styles.fieldLabel}>Relationship to current holder</Text>
+                  <View style={styles.choiceWrap}>
+                    {(Object.keys(SUCCESSOR_RELATIONSHIP_LABEL) as SuccessorRelationship[]).map((value) => (
+                      <Choice key={value} label={SUCCESSOR_RELATIONSHIP_LABEL[value]} active={relationship === value} onPress={() => setRelationship(value)} />
+                    ))}
                   </View>
                   <Field label="Effective date (YYYY-MM-DD)" value={effectiveDate} onChangeText={setEffectiveDate} />
                   <Text style={styles.helper}>Eligibility documents remain subject to TODA/LGU verification.</Text>
@@ -530,6 +594,14 @@ const styles = StyleSheet.create({
   choiceActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   choiceText: { ...typography.labelSmall, color: colors.textSecondary, textAlign: 'center' },
   choiceTextActive: { color: '#fff' },
+  choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  accountResult: { minHeight: 52, justifyContent: 'center', borderBottomWidth: 1, borderBottomColor: colors.borderLight, paddingVertical: spacing.sm },
+  accountName: { ...typography.label, color: colors.text },
+  accountMeta: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  searchEmpty: { ...typography.bodySmall, color: colors.textMuted, padding: spacing.md },
+  dropdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  dropdownText: { ...typography.body, color: colors.text, flex: 1 },
+  dropdownList: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, marginTop: -spacing.sm, marginBottom: spacing.md, backgroundColor: colors.surface },
   checkRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
   checkText: { ...typography.body, color: colors.text, flex: 1 },
   agreementNote: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },

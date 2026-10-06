@@ -6,14 +6,22 @@ import {
   FranchiseRecordStatus,
   FranchiseStatus,
   PublicDriverFranchise,
+  SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
   allDocumentsApproved,
 } from '@/models/entities/Franchise';
+import { User } from '@/models/entities/User';
+
+export type SuccessorAccount = Pick<User, 'id' | 'name' | 'email' | 'phone'> & {
+  license_number: string | null;
+};
 
 export interface RecordFranchiseEventInput {
   eventType: FranchiseEventType;
   effectiveDate?: string;
   toHolder?: string;
+  /** Successor's app account; required for succession_transfer. */
+  toUserId?: string;
   relationship?: SuccessorRelationship | 'third_party';
   reason?: string;
   qualifiedRecipient?: boolean;
@@ -87,6 +95,7 @@ export class FranchiseService {
     const effectiveDate = input.effectiveDate || new Date().toISOString().slice(0, 10);
     if (!validISODate(effectiveDate)) throw new Error('Use YYYY-MM-DD for the effective date.');
     const fromHolder = application.current_holder_name || application.driver_name;
+    let toHolder = input.toHolder?.trim() || null;
     const patch: Partial<FranchiseApplication> = {};
 
     if (input.eventType === 'renewal') {
@@ -99,12 +108,27 @@ export class FranchiseService {
       patch.renewal_year = new Date(`${effectiveDate}T00:00:00`).getFullYear();
       patch.expiry_date = input.newExpiryDate;
     } else if (input.eventType === 'succession_transfer') {
-      if (!input.toHolder?.trim()) throw new Error('Enter the eligible successor’s full name.');
-      if (input.relationship !== 'spouse' && input.relationship !== 'unmarried_eldest_child') {
-        throw new Error('Succession is limited to an eligible spouse or unmarried eldest child.');
+      if (!input.toUserId) throw new Error('Select the successor’s driver account.');
+      if (input.toUserId === application.driver_id) {
+        throw new Error('The successor must be a different driver from the current holder.');
       }
-      patch.current_holder_name = input.toHolder.trim();
-      patch.franchise_status = 'transferred';
+      if (!input.relationship || !(input.relationship in SUCCESSOR_RELATIONSHIP_LABEL)) {
+        throw new Error('Select the successor’s relationship to the current holder.');
+      }
+      // Re-check eligibility at save time: the list may be stale.
+      const eligible = await this.getEligibleSuccessors();
+      const successor = eligible.find((account) => account.id === input.toUserId);
+      if (!successor) {
+        throw new Error('The selected successor must be an active driver account without an MTOP.');
+      }
+      // The successor takes over the same MTOP and unit as its new owner.
+      toHolder = successor.name;
+      patch.driver_id = successor.id;
+      patch.driver_name = successor.name;
+      patch.license_number = successor.license_number || application.license_number;
+      patch.current_holder_name = successor.name;
+      patch.current_holder_id = successor.id;
+      patch.franchise_status = 'active';
     } else if (input.eventType === 'third_party_transfer') {
       if (!input.toHolder?.trim()) throw new Error('Enter the qualified buyer or transferee.');
       if (!input.qualifiedRecipient) throw new Error('Confirm that the third party meets TODA/LGU qualifications.');
@@ -130,7 +154,8 @@ export class FranchiseService {
         franchise_id: application.id,
         event_type: input.eventType,
         from_holder: fromHolder,
-        to_holder: input.toHolder?.trim() || null,
+        to_holder: toHolder,
+        to_user_id: input.eventType === 'succession_transfer' ? input.toUserId || null : null,
         relationship: input.relationship || null,
         reason: input.reason?.trim() || null,
         effective_date: effectiveDate,
@@ -146,6 +171,29 @@ export class FranchiseService {
       .single();
     if (error) throw error;
     return { application: this.withDerivedRecordStatus(updated), event: data as FranchiseEvent };
+  }
+
+  /**
+   * Active driver accounts that can receive a franchise by succession: no
+   * issued MTOP and no application still in progress (rejected ones are fine).
+   */
+  async getEligibleSuccessors(): Promise<SuccessorAccount[]> {
+    const [drivers, applications] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, name, email, phone, license_number')
+        .eq('user_type', 'driver')
+        .eq('status', 'active')
+        .order('name'),
+      supabase
+        .from('franchise_applications')
+        .select('driver_id')
+        .neq('status', 'rejected'),
+    ]);
+    if (drivers.error) throw drivers.error;
+    if (applications.error) throw applications.error;
+    const holders = new Set((applications.data ?? []).map((row: { driver_id: string }) => row.driver_id));
+    return ((drivers.data ?? []) as SuccessorAccount[]).filter((driver) => !holders.has(driver.id));
   }
 
   async updateRegistryDetails(
