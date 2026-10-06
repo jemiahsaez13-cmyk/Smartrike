@@ -247,3 +247,15 @@ re-upload) and closes several server-side gaps:
 
 The end of the file has an optional, commented-out cleanup for Auth logins
 orphaned by the old profile-only delete. Preview before running it.
+
+
+## Auto-verify drivers with MTOP + daily quota (069)
+
+Apply `069_auto_verify_driver_on_mtop_and_daily_quota.sql` after 068.
+
+- When an MTOP application becomes `approved` (payment verified) or `issued`,
+  the driver's `verification_status` is set to `verified` automatically, so the
+  admin no longer approves the account separately. Drivers who already hold an
+  approved/issued MTOP are backfilled.
+- Adds `users.daily_quota` (₱, 1–100,000). Drivers edit it from the Daily Goal
+  card on the dashboard or Earnings screen; NULL falls back to ₱800.

@@ -17,7 +17,7 @@ import { Card } from '@/views/components/common/Card';
 import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatDate, formatTime, getWeekRange, getMonthRange, isTodayPHT } from '@/utils/dateUtils';
-import { DRIVER_GOAL_DAILY } from '@/config/constants';
+import { DailyGoalCard } from '@/views/components/driver/DailyGoalCard';
 
 type Period = 'today' | 'week' | 'month' | 'all';
 
@@ -83,7 +83,6 @@ export const EarningsScreen = () => {
   const filtered = filterTrips(allTrips, period);
   const totalEarnings = filtered.reduce((sum, t) => sum + (t.total_fare ?? 0), 0);
   const todayEarnings = filterTrips(allTrips, 'today').reduce((s, t) => s + (t.total_fare ?? 0), 0);
-  const goalProgress = Math.min(100, (todayEarnings / DRIVER_GOAL_DAILY) * 100);
 
   if (loading) return <Loading message="Loading earnings..." />;
 
@@ -113,22 +112,7 @@ export const EarningsScreen = () => {
           showsVerticalScrollIndicator={false}
         >
           {/* Daily goal */}
-          <Card variant="elevated" padding="lg" style={styles.goalCard}>
-            <View style={styles.goalRow}>
-              <Text style={styles.goalTitle}>Daily Goal</Text>
-              <Text style={[styles.goalValue, typography.currency]}>
-                ₱{todayEarnings.toFixed(2)} / ₱{DRIVER_GOAL_DAILY.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${goalProgress}%` }]} />
-            </View>
-            <Text style={styles.goalNote}>
-              {goalProgress >= 100
-                ? 'Goal achieved! Great work today.'
-                : `₱${(DRIVER_GOAL_DAILY - todayEarnings).toFixed(2)} more to reach your daily goal.`}
-            </Text>
-          </Card>
+          <DailyGoalCard earnings={todayEarnings} style={styles.goalCard} />
 
           {/* Period filter */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
@@ -246,27 +230,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   goalCard: { marginBottom: 24 },
-  goalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  goalTitle: { ...typography.h3, color: colors.text },
-  goalValue: { ...typography.label, color: colors.primary, fontSize: 14 },
-  progressTrack: {
-    height: 8,
-    backgroundColor: colors.borderLight,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.secondary,
-    borderRadius: 4,
-  },
-  goalNote: { ...typography.bodySmall, color: colors.textSecondary },
   filterRow: { marginBottom: 24 },
   filterContent: { paddingRight: 8 },
   filterChip: {

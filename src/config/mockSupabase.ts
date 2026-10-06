@@ -24,6 +24,12 @@ const REQUIRED_MTOP_DOCS = ["Driver's License", 'Barangay Clearance', 'Community
 const mtopDocsApproved = (documents: any) => Array.isArray(documents) && REQUIRED_MTOP_DOCS.every((name) =>
   documents.some((doc: any) => doc.name === name && doc.uploaded && doc.file_url && doc.review_status === 'approved')
 );
+// Mirrors migration 069: an approved/issued MTOP verifies the driver's account.
+const verifyDriverForMtop = (app: any) => {
+  if (app?.status !== 'approved' && app?.status !== 'issued') return;
+  const driver = db.users.find((u) => u.id === app.driver_id && u.user_type === 'driver');
+  if (driver) driver.verification_status = 'verified';
+};
 
 // ---------------------------------------------------------------------------
 // Realtime channels
@@ -222,6 +228,7 @@ class QueryBuilder implements PromiseLike<Result> {
           }
         }
         Object.assign(row, this.payload);
+        if (this.table === 'franchise_applications') verifyDriverForMtop(row);
       });
       data = rows;
     } else if (this.op === 'upsert') {
@@ -597,6 +604,7 @@ export const mockSupabase: any = {
       if (!app || !me || me.user_type !== 'admin' || app.payment_review_status !== 'pending_review') return { data: null, error: { message: 'Payment is not pending review.' } };
       if (params.p_decision === 'verified') Object.assign(app, { status: 'approved', payment_status: 'paid', payment_review_status: 'verified', payment_verified_at: new Date().toISOString(), payment_verified_by: me.id, payment_rejection_reason: null });
       else Object.assign(app, { payment_review_status: 'rejected', payment_rejection_reason: params.p_reason });
+      verifyDriverForMtop(app);
       return { data: [clone(app)], error: null };
     }
     return { data: [], error: null };

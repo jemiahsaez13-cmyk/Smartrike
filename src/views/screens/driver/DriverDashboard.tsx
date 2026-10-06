@@ -16,8 +16,9 @@ import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 import { MessagesButton } from '@/views/components/common/MessagesButton';
+import { DailyGoalCard } from '@/views/components/driver/DailyGoalCard';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
-import { DRIVER_GOAL_DAILY, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import { REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 import { formatDistance } from '@/utils/locationUtils';
 import { notify } from '@/utils/confirm';
 
@@ -36,15 +37,6 @@ export const DriverDashboard = () => {
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
 
-  // Real goal progress + a status-appropriate message (no canned copy).
-  const goalPct = Math.min(100, ((dailyEarnings || 0) / DRIVER_GOAL_DAILY) * 100);
-  const remaining = Math.max(0, DRIVER_GOAL_DAILY - (dailyEarnings || 0));
-  const goalMessage =
-    remaining <= 0
-      ? 'Goal reached — great work today!'
-      : dailyEarnings > 0
-      ? `₱${remaining.toFixed(0)} more to hit today's goal.`
-      : 'Complete trips to start earning toward your goal.';
   // A brand-new driver has no rated trips — show "New", not the default 5.0.
   const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
 
@@ -308,16 +300,7 @@ export const DriverDashboard = () => {
           <StatBox label="Rating" value={ratingLabel} icon="star" color={colors.warning} />
         </View>
 
-        <Card variant="elevated" padding="lg" style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <Text style={styles.goalTitle}>Daily Goal</Text>
-            <Text style={[styles.goalValue, typography.currency]}>₱{(dailyEarnings || 0).toFixed(2)} / ₱{DRIVER_GOAL_DAILY.toFixed(2)}</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${goalPct}%` }]} />
-          </View>
-          <Text style={styles.goalSubtitle}>{goalMessage}</Text>
-        </Card>
+        <DailyGoalCard earnings={dailyEarnings} style={styles.goalCard} />
 
         {/* TODA Card */}
         {(user as any)?.toda_membership ? (
@@ -570,38 +553,6 @@ const styles = StyleSheet.create({
   },
   goalCard: {
     marginBottom: 24,
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  goalTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  goalValue: {
-    ...typography.label,
-    color: colors.primary,
-  },
-  progressBar: {
-    height: 10,
-    backgroundColor: colors.borderLight,
-    borderRadius: 5,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.success,
-    borderRadius: 5,
-  },
-  goalSubtitle: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
   },
   todaCard: {
     flexDirection: 'row',

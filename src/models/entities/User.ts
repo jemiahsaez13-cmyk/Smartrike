@@ -44,6 +44,8 @@ export interface Driver extends User {
   completed_trips: number;
   current_status: 'online' | 'offline' | 'on-trip';
   last_location_update: Date;
+  // Driver-chosen daily earnings goal; null falls back to DRIVER_GOAL_DAILY.
+  daily_quota?: number | null;
 }
 
 export interface VehicleDetails {
