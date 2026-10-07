@@ -1,3 +1,5 @@
+import { emailTemplates } from './email-templates.mjs';
+
 const required = (name) => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
@@ -53,12 +55,12 @@ const config = await patchConfig({
   password_required_characters: 'abcdefghijklmnopqrstuvwxyz:ABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789',
   security_update_password_require_reauthentication: true,
   mailer_notifications_password_changed_enabled: true,
-  mailer_subjects_confirmation: 'Your Smart Trike verification code',
-  mailer_templates_confirmation_content:
-    '<h2>Confirm your Smart Trike account</h2><p>Enter this verification code in the Smart Trike app:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">{{ .Token }}</p><p>This code expires in 10 minutes and can only be used once.</p><p>If you did not create this account, you can ignore this email.</p>',
-  mailer_subjects_recovery: 'Your Smart Trike password-reset code',
-  mailer_templates_recovery_content:
-    '<h2>Reset your Smart Trike password</h2><p>Enter this verification code in the Smart Trike app:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px">{{ .Token }}</p><p>This code expires in 10 minutes and can only be used once.</p><p>If you did not request a password reset, you can ignore this email.</p>',
+  mailer_subjects_confirmation: emailTemplates.confirmation.subject,
+  mailer_templates_confirmation_content: emailTemplates.confirmation.html,
+  mailer_subjects_recovery: emailTemplates.recovery.subject,
+  mailer_templates_recovery_content: emailTemplates.recovery.html,
+  mailer_subjects_reauthentication: emailTemplates.reauthentication.subject,
+  mailer_templates_reauthentication_content: emailTemplates.reauthentication.html,
 });
 
 const confirmationUsesCode = /\{\{\s*\.Token\s*\}\}/.test(

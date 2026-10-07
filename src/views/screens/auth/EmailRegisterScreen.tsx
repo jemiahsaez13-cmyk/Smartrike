@@ -131,7 +131,7 @@ export const EmailRegisterScreen = () => {
     }
   };
 
-  if (loading) return <Loading message="Creating your account..." />;
+  if (loading) return <Loading message="Sending verification code..." />;
 
   const roleOptions: { key: 'passenger' | 'driver'; label: string; icon: string }[] = [
     { key: 'passenger', label: 'Passenger', icon: 'account' },

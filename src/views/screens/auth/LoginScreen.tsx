@@ -57,6 +57,12 @@ export const LoginScreen = () => {
       await login(cleanEmail, password);
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Something went wrong during sign in.';
+      // Registered but never entered the emailed code: send a fresh one and
+      // finish verification, which is what creates the account.
+      if (msg.toLowerCase().includes('verify your email')) {
+        navigation.navigate('EmailVerification', { email: cleanEmail, sendCode: true });
+        return;
+      }
       notify('Sign in failed', msg);
     }
   };

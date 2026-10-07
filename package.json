@@ -10,7 +10,7 @@
     "build:apk": "eas build -p android --profile preview",
     "typecheck": "tsc --noEmit",
     "auth:bootstrap-admin": "node scripts/bootstrap-admin.mjs",
-    "auth:configure-email": "node scripts/configure-auth-email.mjs"
+    "auth:configure-email": "node --env-file=.env scripts/configure-auth-email.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",

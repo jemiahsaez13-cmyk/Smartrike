@@ -234,22 +234,9 @@ export class AuthService {
       throw new Error('This email is already registered. Sign in instead, or use "Forgot password" if you cannot remember it.');
     }
 
-    // Preserve the original registration behavior when the project confirms
-    // new email accounts server-side: hosted Auth can still return no session
-    // from signUp even though the database confirmation trigger has completed.
-    // An immediate password sign-in obtains that session without relying on an
-    // SMTP code that this deployment has not configured.
-    let session = authData.session;
-    if (!session) {
-      const { data: signInData } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
-      session = signInData?.session ?? null;
-    }
-
-    // If a future deployment explicitly enables email confirmation and SMTP,
-    // keep the existing code-verification route as a safe fallback.
+    // Email OTP is required (migration 076): Supabase has emailed a 6-digit
+    // code and the profile row is only created once that code is verified.
+    const session = authData.session;
     if (!session) {
       return { user: null, session: null, needsEmailConfirmation: true as const };
     }
@@ -278,12 +265,27 @@ export class AuthService {
       token: code.trim(),
       type: 'email',
     });
-    if (error) throw this.authError(error, 'Email verification failed.');
+    if (error) {
+      if (String(error?.message || '').toLowerCase().includes('database error')) {
+        // The profile trigger (migration 076) failed while creating the account.
+        throw new Error('Your email was verified, but your account could not be saved on the server. Please contact support.');
+      }
+      throw this.authError(error, 'Email verification failed.');
+    }
     if (!data?.user) throw new Error('Email verification failed. Request a new code and try again.');
+
+    // Verifying the code is what creates the profile row; confirm it exists
+    // so the user is not sent to sign in with an account that is not there.
+    const user = await this.fetchProfileWithRetry(data.user.id);
 
     // Verification completes registration, but users explicitly sign in from
     // the login screen afterwards. Remove the temporary verification session.
     await supabase.auth.signOut({ scope: 'local' });
+
+    if (!user) {
+      throw new Error('Your email was verified, but your account is still being set up. Please try signing in in a moment.');
+    }
+    return user;
   }
 
   async resendSignupCode(email: string) {

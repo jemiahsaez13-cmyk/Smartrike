@@ -28,6 +28,15 @@ export const EmailVerificationScreen = () => {
   const [loading, setLoading] = useState(false);
   const [resendIn, setResendIn] = useState(RESEND_SECONDS);
 
+  // Opened from sign-in for an unverified account: no code was just sent.
+  useEffect(() => {
+    if (!route.params?.sendCode) return;
+    authService.resendSignupCode(email).catch((sendError: any) => {
+      setError(sendError?.message || 'A verification code could not be sent.');
+      setResendIn(0);
+    });
+  }, []);
+
   useEffect(() => {
     if (resendIn <= 0) return;
     const timer = setTimeout(() => setResendIn((value) => value - 1), 1000);
@@ -42,8 +51,13 @@ export const EmailVerificationScreen = () => {
     setLoading(true);
     setError('');
     try {
-      await authService.verifySignupCode(email, code);
-      await notify('Email verified', 'Your account registration is complete. You can now sign in.');
+      const user = await authService.verifySignupCode(email, code);
+      await notify(
+        'Account created',
+        user.user_type === 'driver'
+          ? 'Your email is verified and your driver account has been created. You can now sign in.'
+          : 'Your email is verified and your account has been created. You can now sign in.'
+      );
       navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     } catch (verificationError: any) {
       setError(verificationError?.message || 'Email verification failed.');
