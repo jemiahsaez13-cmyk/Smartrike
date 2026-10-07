@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View,
+  KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,7 +22,8 @@ interface Props {
   onSetOnMap: () => void;
 }
 
-interface Pending { loc: Location; label: string; icon: string; }
+// `barangay` is set only when the place was picked from the barangay list.
+interface Pending { loc: Location; label: string; icon: string; barangay?: string; }
 
 export const LocationChooser: React.FC<Props> = ({
   visible, target, currentLocation, savedAddresses, popularPlaces,
@@ -32,6 +33,9 @@ export const LocationChooser: React.FC<Props> = ({
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
   const [resolving, setResolving] = useState(false);
+  // Purok / sitio / landmark for a barangay drop-off — a barangay alone is
+  // too broad for the driver to find the passenger's exact stop.
+  const [spot, setSpot] = useState('');
 
   const town = townIdx != null ? MARINDUQUE_TOWNS[townIdx] : null;
   const filteredBarangays = useMemo(() => {
@@ -40,12 +44,18 @@ export const LocationChooser: React.FC<Props> = ({
     return q ? town.barangays.filter((b) => b.toLowerCase().includes(q)) : town.barangays;
   }, [town, query]);
 
-  const reset = () => { setTownIdx(null); setQuery(''); setPending(null); };
+  const reset = () => { setTownIdx(null); setQuery(''); setPending(null); setSpot(''); };
+  const needsSpot = target === 'dropoff' && !!pending?.barangay;
+  const spotReady = !needsSpot || spot.trim().length >= 2;
   const close = () => { reset(); onClose(); };
 
   const confirm = () => {
-    if (!pending) return;
-    const loc = pending.loc;
+    if (!pending || !spotReady) return;
+    // The purok leads the address so it stays visible where the driver's
+    // screens truncate long addresses to one line.
+    const loc: Location = needsSpot
+      ? { ...pending.loc, details: spot.trim(), address: `${spot.trim()}, ${pending.loc.address}` }
+      : pending.loc;
     reset();
     onConfirm(loc);
   };
@@ -53,7 +63,8 @@ export const LocationChooser: React.FC<Props> = ({
   const pickBarangay = (brgy: string) => {
     if (!town) return;
     const coord = barangayLocation(town, brgy);
-    setPending({ loc: { ...coord, address: `${brgy}, ${town.name}, Marinduque` }, label: `${brgy}, ${town.name}`, icon: 'map-marker' });
+    setPending({ loc: { ...coord, address: `${brgy}, ${town.name}, Marinduque` }, label: `${brgy}, ${town.name}`, icon: 'map-marker', barangay: brgy });
+    setSpot('');
     setTownIdx(null);
     setQuery('');
   };
@@ -198,25 +209,44 @@ export const LocationChooser: React.FC<Props> = ({
         )}
 
         {/* Bottom confirm bar */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.footer}>
           {pending ? (
             <View style={styles.pendingRow}>
               <MaterialCommunityIcons name={pending.icon as any} size={18} color={colors.primary} />
               <Text style={styles.pendingText} numberOfLines={1}>{pending.loc.address}</Text>
             </View>
-          ) : (
+          ) : null}
+          {needsSpot ? (
+            <View style={styles.spotWrap}>
+              <Text style={styles.spotLabel}>Purok / sitio / landmark *</Text>
+              <TextInput
+                style={styles.spotInput}
+                value={spot}
+                onChangeText={setSpot}
+                placeholder="e.g. Purok 3, tapat ng kapilya"
+                placeholderTextColor={colors.textMuted}
+                maxLength={120}
+                returnKeyType="done"
+                onSubmitEditing={confirm}
+              />
+              <Text style={styles.spotHint}>Your driver sees this so they know exactly where to drop you off.</Text>
+            </View>
+          ) : null}
+          {pending ? null : (
             <Text style={styles.footerHint}>{resolving ? 'Locating…' : 'Pick a location above to continue'}</Text>
           )}
           <TouchableOpacity
-            style={[styles.confirmBtn, (!pending || resolving) && styles.confirmBtnDisabled]}
+            style={[styles.confirmBtn, (!pending || resolving || !spotReady) && styles.confirmBtnDisabled]}
             onPress={confirm}
-            disabled={!pending || resolving}
+            disabled={!pending || resolving || !spotReady}
             activeOpacity={0.85}
           >
             <MaterialCommunityIcons name="check" size={20} color="#fff" />
             <Text style={styles.confirmText}>Confirm {target === 'pickup' ? 'pickup' : 'destination'}</Text>
           </TouchableOpacity>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -271,6 +301,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 44,
   },
   pendingText: { flex: 1, ...typography.label, color: colors.text, fontSize: 14 },
+  spotWrap: { marginBottom: spacing.sm },
+  spotLabel: { ...typography.label, fontSize: 13, color: colors.text, marginBottom: 6 },
+  spotInput: {
+    height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface, paddingHorizontal: spacing.md, ...typography.body, color: colors.text, fontSize: 15,
+  },
+  spotHint: { ...typography.bodySmall, fontSize: 12, color: colors.textMuted, marginTop: 4 },
   footerHint: { ...typography.bodySmall, color: colors.textMuted, marginBottom: spacing.sm, textAlign: 'center' },
   confirmBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

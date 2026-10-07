@@ -33,6 +33,8 @@ export interface Location {
   longitude: number;
   address: string;
   place_id?: string;
+  /** Purok / sitio / landmark typed after picking a barangay; also leads `address`. */
+  details?: string;
 }
 
 export interface Rating {
