@@ -20,6 +20,8 @@ import {
   FRANCHISE_RECORD_STATUS_LABEL,
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
+  SuccessionRequest,
+  renewalStanding,
 } from '@/models/entities/Franchise';
 import { FranchiseService, SuccessorAccount } from '@/models/services/FranchiseService';
 import { FranchiseAgreementService } from '@/models/services/FranchiseAgreementService';
@@ -37,12 +39,15 @@ type RegistryAction =
   | 'third_party_transfer'
   | 'termination'
   | 'change_of_unit'
-  | 'violation';
+  | 'violation'
+  | 'succession_reject';
 
 const STATUS_COLOR: Record<FranchiseRecordStatus, { fg: string; bg: string }> = {
   active: { fg: colors.success, bg: colors.successLight },
   expired: { fg: colors.error, bg: colors.errorLight },
   pending_renewal: { fg: '#8A5A00', bg: colors.warningLight },
+  suspended: { fg: '#B42318', bg: '#FEF0C7' },
+  renewed: { fg: colors.textSecondary, bg: colors.surfaceAlt },
   terminated: { fg: colors.error, bg: colors.errorLight },
   transferred: { fg: colors.primary, bg: colors.primaryLight },
 };
@@ -99,15 +104,21 @@ export const FranchiseRegistryScreen = () => {
   const [newBodyNumber, setNewBodyNumber] = useState('');
   const [orNumber, setOrNumber] = useState('');
   const [crNumber, setCrNumber] = useState('');
+  // Driver-submitted succession requests (migration 074)
+  const [successionRequests, setSuccessionRequests] = useState<SuccessionRequest[]>([]);
+  const [activeRequest, setActiveRequest] = useState<SuccessionRequest | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [registry, lifecycleEvents] = await Promise.all([
+      const [registry, lifecycleEvents, requests] = await Promise.all([
         franchiseService.getRegistry(),
         franchiseService.getEvents(),
+        // Optional: keeps the registry usable before migration 074 is applied.
+        franchiseService.getPendingSuccessionRequests().catch(() => [] as SuccessionRequest[]),
       ]);
       setRecords(registry);
       setEvents(lifecycleEvents);
+      setSuccessionRequests(requests);
     } catch (error) {
       console.error('Registry load failed:', error);
     } finally {
@@ -121,6 +132,7 @@ export const FranchiseRegistryScreen = () => {
   const openAction = (record: FranchiseApplication, nextAction: RegistryAction) => {
     setSelected(record);
     setAction(nextAction);
+    setActiveRequest(null);
     setBodyNumber(record.body_number || '');
     setHolderName(record.current_holder_name || record.driver_name);
     setRecordStatus(record.franchise_status || 'active');
@@ -141,6 +153,29 @@ export const FranchiseRegistryScreen = () => {
     setNewBodyNumber('');
     setOrNumber('');
     setCrNumber('');
+  };
+
+  // Opens the succession form filled in from the driver's request.
+  const reviewRequest = (record: FranchiseApplication, request: SuccessionRequest) => {
+    openAction(record, 'succession_transfer');
+    setActiveRequest(request);
+    // Preselect the account the holder named; the admin confirms or changes it.
+    setSuccessor(request.successor_id
+      ? ({
+          id: request.successor_id,
+          name: request.successor_name,
+          email: request.successor_email,
+          phone: request.successor_phone,
+          license_number: null,
+        } as SuccessorAccount)
+      : null);
+    setRelationship(request.relationship);
+    setReason(request.reason);
+  };
+
+  const rejectRequest = (record: FranchiseApplication, request: SuccessionRequest) => {
+    openAction(record, 'succession_reject');
+    setActiveRequest(request);
   };
 
   const loadSuccessors = async () => {
@@ -172,6 +207,9 @@ export const FranchiseRegistryScreen = () => {
           currentHolderName: holderName,
           franchiseStatus: recordStatus,
         });
+      } else if (action === 'succession_reject') {
+        if (!activeRequest) throw new Error('Succession request not found. Refresh and try again.');
+        await franchiseService.reviewSuccession(activeRequest.id, 'rejected', { reason });
       } else if (action === 'violation') {
         await violationService.record({
           driver_id: selected.driver_id,
@@ -226,6 +264,11 @@ export const FranchiseRegistryScreen = () => {
           createdBy: actor?.id,
         });
 
+        // Close the driver's request once the transfer is on record.
+        if (action === 'succession_transfer' && activeRequest) {
+          await franchiseService.reviewSuccession(activeRequest.id, 'approved', { successorId: successor?.id });
+        }
+
         if (agreementText && agreementNumber) {
           await FranchiseAgreementService.shareAgreement(agreementText, agreementNumber);
         }
@@ -236,6 +279,8 @@ export const FranchiseRegistryScreen = () => {
       await load();
       await notify('Record saved', action === 'violation'
         ? 'The driver violation is now included in reports.'
+        : action === 'succession_reject'
+        ? 'The succession request was rejected and the driver was notified.'
         : 'The franchise registry has been updated.');
     } catch (error: any) {
       await notify('Unable to save', error?.message || 'Check the details and try again.');
@@ -285,6 +330,15 @@ export const FranchiseRegistryScreen = () => {
           </View>
         </View>
 
+        {successionRequests.length > 0 ? (
+          <View style={styles.requestBanner}>
+            <MaterialCommunityIcons name="account-switch-outline" size={20} color="#8A5A00" />
+            <Text style={styles.requestBannerText}>
+              {successionRequests.length} succession request{successionRequests.length === 1 ? '' : 's'} waiting for review
+            </Text>
+          </View>
+        ) : null}
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           {(['all', 'active', 'expired', 'pending_renewal', 'transferred', 'terminated'] as const).map((status) => (
             <TouchableOpacity
@@ -325,15 +379,69 @@ export const FranchiseRegistryScreen = () => {
                   <Text style={styles.identifierLabel}>PLATE</Text>
                   <Text style={styles.identifierValue}>{record.plate_number}</Text>
                 </View>
-                <View style={styles.identifier}>
-                  <Text style={styles.identifierLabel}>EXPIRY</Text>
-                  <Text style={styles.identifierValue}>{record.expiry_date || 'Not set'}</Text>
-                </View>
               </View>
+
+              {(() => {
+                const standing = renewalStanding(record);
+                const shortDate = (value: string | null) => value
+                  ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'Not set';
+                return (
+                  <View style={styles.identifierRow}>
+                    <View style={styles.identifier}>
+                      <Text style={styles.identifierLabel}>ISSUED</Text>
+                      <Text style={styles.identifierValue}>{shortDate(standing.issuedAt)}</Text>
+                    </View>
+                    <View style={styles.identifier}>
+                      <Text style={styles.identifierLabel}>EXPIRES</Text>
+                      <Text style={styles.identifierValue}>{shortDate(standing.expiryDate)}</Text>
+                    </View>
+                    <View style={styles.identifier}>
+                      <Text style={styles.identifierLabel}>RENEWED FOR</Text>
+                      <Text style={styles.identifierValue}>{standing.coveredYear ?? '—'}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
 
               {recent ? (
                 <Text style={styles.recentEvent}>Latest: {recent.event_type.replace(/_/g, ' ')} · {recent.effective_date}</Text>
               ) : null}
+
+              {(() => {
+                const request = successionRequests.find((item) => item.franchise_id === record.id);
+                if (!request) return null;
+                return (
+                  <View style={styles.requestCard}>
+                    <View style={styles.requestHead}>
+                      <MaterialCommunityIcons name="account-switch-outline" size={18} color="#8A5A00" />
+                      <Text style={styles.requestTitle}>Succession request</Text>
+                      <Text style={styles.requestDate}>
+                        {new Date(request.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                    </View>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Requested by: </Text>{request.requested_by_name}
+                    </Text>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Successor: </Text>{request.successor_name} ({SUCCESSOR_RELATIONSHIP_LABEL[request.relationship] ?? request.relationship})
+                    </Text>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Has app account: </Text>
+                      {request.successor_has_account
+                        ? `Yes · ${request.successor_email}`
+                        : `No${request.successor_phone ? ` · ${request.successor_phone}` : ''} — must sign up as a driver first`}
+                    </Text>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Reason: </Text>{request.reason}
+                    </Text>
+                    <View style={styles.requestActions}>
+                      <ActionChip label="Review & transfer" icon="check" onPress={() => reviewRequest(record, request)} />
+                      <ActionChip label="Reject" icon="close" onPress={() => rejectRequest(record, request)} danger />
+                    </View>
+                  </View>
+                );
+              })()}
 
               <View style={styles.actionWrap}>
                 <ActionChip label="Details" icon="pencil-outline" onPress={() => openAction(record, 'details')} />
@@ -397,6 +505,26 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
+              {action === 'succession_transfer' && activeRequest ? (
+                <View style={styles.requestCard}>
+                  <Text style={styles.requestLine}>
+                    <Text style={styles.requestKey}>Requested by: </Text>{activeRequest.requested_by_name}
+                  </Text>
+                  <Text style={styles.requestLine}>
+                    <Text style={styles.requestKey}>Successor (as typed): </Text>{activeRequest.successor_name}
+                  </Text>
+                  <Text style={styles.requestLine}>
+                    <Text style={styles.requestKey}>Has app account: </Text>
+                    {activeRequest.successor_has_account
+                      ? `Yes · ${activeRequest.successor_email}`
+                      : `No${activeRequest.successor_phone ? ` · ${activeRequest.successor_phone}` : ''}`}
+                  </Text>
+                  <Text style={styles.requestLine}>
+                    <Text style={styles.requestKey}>Reason: </Text>{activeRequest.reason}
+                  </Text>
+                </View>
+              ) : null}
+
               {action === 'succession_transfer' ? (
                 <>
                   <Text style={styles.fieldLabel}>Successor’s Smart Trike account</Text>
@@ -432,7 +560,13 @@ export const FranchiseRegistryScreen = () => {
                       </ScrollView>
                     </View>
                   ) : null}
-                  <Text style={styles.helper}>Only active driver accounts without an MTOP are listed. The MTOP and unit move to this driver.</Text>
+                  <Text style={styles.helper}>
+                    {activeRequest
+                      ? activeRequest.successor_has_account
+                        ? 'Confirm the account matches the name and email the holder typed. Only active driver accounts without an MTOP are listed.'
+                        : 'The holder said the successor had no account yet. Select their driver account once they have signed up.'
+                      : 'Only active driver accounts without an MTOP are listed. The MTOP and unit move to this driver.'}
+                  </Text>
                   <Text style={styles.fieldLabel}>Relationship to current holder</Text>
                   <View style={styles.choiceWrap}>
                     {(Object.keys(SUCCESSOR_RELATIONSHIP_LABEL) as SuccessorRelationship[]).map((value) => (
@@ -481,6 +615,22 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
+              {action === 'succession_reject' && activeRequest ? (
+                <>
+                  <View style={styles.requestCard}>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Requested by: </Text>{activeRequest.requested_by_name}
+                    </Text>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Successor: </Text>{activeRequest.successor_name}
+                      {activeRequest.successor_email ? ` · ${activeRequest.successor_email}` : ''}
+                    </Text>
+                  </View>
+                  <Field label="Reason for rejecting" value={reason} onChangeText={setReason} multiline />
+                  <Text style={styles.helper}>The driver sees this reason and can send a corrected request.</Text>
+                </>
+              ) : null}
+
               {action === 'violation' ? (
                 <>
                   <Field label="Violation type" value={violationType} onChangeText={setViolationType} placeholder="e.g. Overcharging" />
@@ -498,7 +648,7 @@ export const FranchiseRegistryScreen = () => {
               ) : null}
 
               <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} activeOpacity={0.82}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{action === 'violation' ? 'Record violation' : 'Save record'}</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{action === 'violation' ? 'Record violation' : action === 'succession_reject' ? 'Reject request' : action === 'succession_transfer' && activeRequest ? 'Approve & transfer' : 'Save record'}</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -516,6 +666,7 @@ const actionTitle = (action: RegistryAction): string => ({
   termination: 'Terminate franchise',
   change_of_unit: 'Change of Unit',
   violation: 'Record driver violation',
+  succession_reject: 'Reject succession request',
 })[action];
 
 const Field = ({ label, multiline = false, ...props }: {
@@ -610,4 +761,13 @@ const styles = StyleSheet.create({
   changeUnitBannerText: { ...typography.bodySmall, color: colors.text, flex: 1, lineHeight: 18 },
   saveBtn: { minHeight: 52, borderRadius: radius.md, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginTop: spacing.sm },
   saveText: { ...typography.button, color: '#fff' },
+  requestBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.warningLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  requestBannerText: { ...typography.label, fontSize: 13, color: '#8A5A00', flex: 1 },
+  requestCard: { backgroundColor: colors.warningLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md, marginBottom: spacing.sm },
+  requestHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  requestTitle: { ...typography.label, fontSize: 13, color: '#8A5A00', flex: 1 },
+  requestDate: { ...typography.labelSmall, fontSize: 11, color: '#8A5A00' },
+  requestLine: { ...typography.bodySmall, color: colors.text, marginTop: 2 },
+  requestKey: { ...typography.labelSmall, fontSize: 12, color: colors.textSecondary },
+  requestActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
 });

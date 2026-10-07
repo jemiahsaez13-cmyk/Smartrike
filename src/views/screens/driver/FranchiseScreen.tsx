@@ -17,7 +17,13 @@ import {
   anyDocumentRejected,
   FRANCHISE_RECORD_STATUS_LABEL,
   ChangeOfUnitStatus,
+  formatLongDate,
+  renewalStanding,
+  SUCCESSOR_RELATIONSHIP_LABEL,
+  SuccessorRelationship,
+  SuccessionRequest,
 } from '@/models/entities/Franchise';
+import { FranchiseService } from '@/models/services/FranchiseService';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { AdminMtopPaymentService } from '@/models/services/AdminMtopPaymentService';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
@@ -32,6 +38,7 @@ import { SUPPORT } from '@/config/constants';
 import { TodaAssociation } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
 
+const franchiseService = new FranchiseService();
 const todaService = new TodaService();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -685,7 +692,9 @@ export const FranchiseScreen = () => {
     }))
   );
   const accountPlate = String(driver?.vehicle_details?.plate_number || myApplication?.plate_number || '').trim().toUpperCase();
-  const [bodyNumber, setBodyNumber] = useState<string>(driver?.vehicle_details?.body_number || '');
+  // Read-only: a renewal keeps the body number of the franchise it renews; new
+  // applications get theirs from the administrator when the MTOP is issued.
+  const [bodyNumber, setBodyNumber] = useState<string>('');
   const [registeredTodas, setRegisteredTodas] = useState<TodaAssociation[]>([]);
   const [selectedToda, setSelectedToda] = useState('');
   const [showTodaPicker, setShowTodaPicker] = useState(false);
@@ -733,6 +742,62 @@ export const FranchiseScreen = () => {
   const [couCrImage, setCouCrImage]         = useState('');
   const [couUnitImage, setCouUnitImage]     = useState('');
   const [couSubmitting, setCouSubmitting]   = useState(false);
+
+  // Succession request (holder asks the admin to pass the MTOP on)
+  const [successionRequest, setSuccessionRequest] = useState<SuccessionRequest | null>(null);
+  const [showSuccessionModal, setShowSuccessionModal] = useState(false);
+  const [successorHasAccount, setSuccessorHasAccount] = useState<boolean | null>(null);
+  const [successorName, setSuccessorName] = useState('');
+  const [successorEmail, setSuccessorEmail] = useState('');
+  const [successorPhone, setSuccessorPhone] = useState('');
+  const [successionRelationship, setSuccessionRelationship] = useState<SuccessorRelationship>('child');
+  const [successionReason, setSuccessionReason] = useState('');
+  const [successionSubmitting, setSuccessionSubmitting] = useState(false);
+
+  const issuedFranchiseId = myApplication?.status === 'issued' ? myApplication.id : null;
+  useEffect(() => {
+    if (!issuedFranchiseId) {
+      setSuccessionRequest(null);
+      return;
+    }
+    let active = true;
+    franchiseService
+      .getLatestSuccessionRequest(issuedFranchiseId)
+      .then((request) => { if (active) setSuccessionRequest(request); })
+      .catch(() => { if (active) setSuccessionRequest(null); });
+    return () => { active = false; };
+  }, [issuedFranchiseId]);
+
+  const handleSuccessionSubmit = async () => {
+    if (!myApplication) return;
+    // Drop the sheet right away so it never blocks the screen while sending.
+    setShowSuccessionModal(false);
+    setSuccessionSubmitting(true);
+    try {
+      const request = await franchiseService.requestSuccession({
+        franchiseId: myApplication.id,
+        hasAccount: !!successorHasAccount,
+        successorName,
+        successorEmail,
+        successorPhone,
+        relationship: successionRelationship,
+        reason: successionReason,
+      });
+      setSuccessionRequest(request);
+      setSuccessorHasAccount(null);
+      setSuccessorName('');
+      setSuccessorEmail('');
+      setSuccessorPhone('');
+      setSuccessionReason('');
+      await notify('Request sent', `Your succession request to ${request.successor_name} was sent to the administrator for review.`);
+    } catch (error: any) {
+      await notify('Could not send request', error?.message || 'Please try again.');
+      // Reopen with the typed details intact so the driver can fix them.
+      setShowSuccessionModal(true);
+    } finally {
+      setSuccessionSubmitting(false);
+    }
+  };
 
   // Live payment methods — used by the payment summary card when
   // selected_payment_methods was not saved on the application yet.
@@ -924,9 +989,11 @@ export const FranchiseScreen = () => {
 
   const handleSubmit = async (type: FranchiseType) => {
     const normalizedPlate = accountPlate;
-    const normalizedBodyNumber = bodyNumber.trim().toUpperCase();
-    if (!accountLicenseNumber || !normalizedPlate || !normalizedBodyNumber || !selectedToda) {
-      void notify('Incomplete application', 'License Number, Plate Number, Tricycle Body Number, and TODA are required.');
+    const carriedBodyNumber = type === 'renewal'
+      ? (bodyNumber || myApplication?.body_number || '').trim().toUpperCase() || null
+      : null;
+    if (!accountLicenseNumber || !normalizedPlate || !selectedToda) {
+      void notify('Incomplete application', 'License Number, Plate Number, and TODA are required.');
       return;
     }
     if (!allUploaded) {
@@ -942,10 +1009,10 @@ export const FranchiseScreen = () => {
           license_number: accountLicenseNumber,
           toda: selectedToda,
           plate_number: normalizedPlate,
-          body_number: normalizedBodyNumber,
+          body_number: carriedBodyNumber,
           type,
           documents: docs,
-          fees: type === 'renewal' ? 1000 : 1500,
+          fees: 1500,
           remarks: null,
         })
       ).unwrap();
@@ -964,6 +1031,21 @@ export const FranchiseScreen = () => {
   };
 
   const handleRenew = async () => {
+    if (myApplication) {
+      const standing = renewalStanding(myApplication);
+      if (myApplication.franchise_status === 'terminated') {
+        void notify('MTOP terminated', 'This MTOP was terminated after 3 years without renewal. Submit a new franchise application instead.');
+        return;
+      }
+      if (!standing.dueThisYear) {
+        void notify('Already renewed', `Your MTOP is already renewed for ${standing.coveredYear}. The next renewal period is January 1 – March 31, ${(standing.coveredYear ?? new Date().getFullYear()) + 1}.`);
+        return;
+      }
+      if (standing.phase === 'closed') {
+        void notify('Renewal period closed', `MTOP renewal is only accepted from January 1 to March 31. The next renewal period opens January 1, ${standing.nextWindowYear}.`);
+        return;
+      }
+    }
     const yes = await confirm('Renew Franchise', 'You must upload new, updated copies of all MTOP requirements. Continue?', {
       confirmText: 'Continue',
       cancelText: 'Cancel',
@@ -1055,6 +1137,25 @@ export const FranchiseScreen = () => {
 
   // --- Active MTOP ---
   if (isActive && !renewalMode) {
+    const standing = renewalStanding(myApplication!);
+    const yearNow = new Date().getFullYear();
+    const renewalNotice = recordStatus === 'terminated'
+      ? { icon: 'close-octagon-outline', fg: colors.error, bg: colors.errorLight, title: 'MTOP terminated',
+          body: 'Terminated after 3 years without renewal. Submit a new franchise application to operate again.' }
+      : recordStatus === 'expired'
+      ? { icon: 'calendar-remove-outline', fg: colors.error, bg: colors.errorLight, title: 'MTOP expired',
+          body: `The 3-year term ended on ${formatLongDate(standing.expiryDate)}. Renew between January 1 and March 31 to start a new term. You cannot go online until then.` }
+      : recordStatus === 'suspended'
+      ? { icon: 'pause-octagon-outline', fg: '#B42318', bg: '#FEF0C7', title: 'MTOP suspended',
+          body: `Not renewed by March 31. You cannot go online until you renew (January 1 – March 31, ${standing.nextWindowYear}). ${3 - standing.missedYears > 0 ? `Termination after ${3 - standing.missedYears} more missed year${3 - standing.missedYears === 1 ? '' : 's'}.` : ''}` }
+      : standing.dueThisYear && standing.phase === 'regular'
+      ? { icon: 'calendar-clock', fg: colors.primary, bg: colors.primaryLight, title: `${yearNow} renewal is open`,
+          body: `Renewal period: January 1 – March 31, ${yearNow}. Deadline: March 31, ${yearNow}. February–March is the grace period; unrenewed MTOPs are suspended starting April 1.` }
+      : standing.dueThisYear && standing.phase === 'grace'
+      ? { icon: 'timer-sand', fg: '#9A6700', bg: colors.warningLight, title: 'Renewal grace period',
+          body: `Your ${yearNow} renewal is not yet filed. Deadline: March 31, ${yearNow}. Unrenewed MTOPs are suspended starting April 1.` }
+      : { icon: 'check-decagram-outline', fg: colors.primary, bg: colors.primaryLight, title: `Renewed for ${standing.coveredYear ?? yearNow}`,
+          body: `Next renewal: January 1 – March 31, ${(standing.coveredYear ?? yearNow) + 1} (February–March is the grace period).` + (standing.daysToExpiry !== null && standing.daysToExpiry <= 60 ? ` Your 3-year term ends ${formatLongDate(standing.expiryDate)}.` : '') };
     return (
       <View style={styles.container}>
         <Header subtitle={`Operational status: ${recordStatusLabel}`} />
@@ -1087,6 +1188,17 @@ export const FranchiseScreen = () => {
                 </View>
               </View>
 
+              <View style={styles.mtopGrid}>
+                <View style={styles.mtopItem}>
+                  <Text style={styles.mtopLabel}>DATE ISSUED</Text>
+                  <Text style={styles.mtopValue}>{formatLongDate(standing.issuedAt)}</Text>
+                </View>
+                <View style={styles.mtopItem}>
+                  <Text style={styles.mtopLabel}>EXPIRES</Text>
+                  <Text style={styles.mtopValue}>{formatLongDate(standing.expiryDate)}</Text>
+                </View>
+              </View>
+
               <View style={styles.mtopDivider} />
 
               <View style={styles.mtopFooter}>
@@ -1103,14 +1215,27 @@ export const FranchiseScreen = () => {
             </View>
           </Surface>
 
+          <View style={[styles.renewalBanner, { backgroundColor: renewalNotice.bg }]}>
+            <MaterialCommunityIcons name={renewalNotice.icon as any} size={20} color={renewalNotice.fg} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.renewalBannerTitle, { color: renewalNotice.fg }]}>{renewalNotice.title}</Text>
+              <Text style={styles.renewalBannerText}>{renewalNotice.body}</Text>
+            </View>
+          </View>
+
           {recordStatus !== 'terminated' && recordStatus !== 'transferred' ? (
             <Button
               variant="outline"
               onPress={handleRenew}
+              disabled={!standing.canRenew}
               style={styles.renewBtn}
             >
-              <MaterialCommunityIcons name="autorenew" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-              Renew Franchise
+              <MaterialCommunityIcons name="autorenew" size={18} color={standing.canRenew ? colors.primary : colors.textMuted} style={{ marginRight: 8 }} />
+              {standing.canRenew
+                ? `Renew for ${new Date().getFullYear()}`
+                : standing.dueThisYear
+                ? `Renewal opens Jan 1, ${standing.nextWindowYear}`
+                : `Renewed for ${standing.coveredYear}`}
             </Button>
           ) : null}
 
@@ -1159,6 +1284,183 @@ export const FranchiseScreen = () => {
               </>
             );
           })() : null}
+
+          {/* ── Succession ── */}
+          {recordStatus !== 'terminated' && recordStatus !== 'transferred' ? (() => {
+            const status = successionRequest?.status;
+            const tone = status === 'pending' ? colors.warning : status === 'rejected' ? colors.error : colors.success;
+            return (
+              <>
+                {status === 'pending' || status === 'rejected' ? (
+                  <View style={styles.couChipRow}>
+                    <View style={[styles.couChip, { backgroundColor: tone + '22' }]}>
+                      <MaterialCommunityIcons
+                        name={status === 'pending' ? 'clock-outline' : 'close-circle'}
+                        size={15}
+                        color={tone}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.couChipText, { color: tone }]}>
+                        {status === 'pending'
+                          ? `Succession to ${successionRequest!.successor_name}: Pending Review`
+                          : `Succession to ${successionRequest!.successor_name}: Rejected`}
+                      </Text>
+                    </View>
+                    {status === 'rejected' && successionRequest?.rejection_reason ? (
+                      <Text style={styles.couRejectReason}>Reason: {successionRequest.rejection_reason}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {status !== 'pending' ? (
+                  <TouchableOpacity
+                    style={styles.couBtn}
+                    onPress={() => setShowSuccessionModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="account-switch-outline" size={18} color={colors.accent} />
+                    <Text style={styles.couBtnText}>Request Succession</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </>
+            );
+          })() : null}
+
+          {/* ── Succession Modal ── */}
+          <Modal
+            visible={showSuccessionModal}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setShowSuccessionModal(false)}
+          >
+            <View style={couModalStyles.overlay}>
+              <View style={couModalStyles.sheet}>
+                <View style={couModalStyles.header}>
+                  <Text style={couModalStyles.title}>Request Succession</Text>
+                  <TouchableOpacity onPress={() => setShowSuccessionModal(false)} style={couModalStyles.closeBtn}>
+                    <MaterialCommunityIcons name="close" size={22} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView contentContainerStyle={couModalStyles.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <Text style={couModalStyles.hint}>
+                    Pass your MTOP to a family member. The administrator reviews the request, selects your successor's driver account, and records the transfer.
+                  </Text>
+
+                  <Text style={couModalStyles.label}>DOES YOUR SUCCESSOR HAVE A SMART TRIKE ACCOUNT?</Text>
+                  <View style={couModalStyles.typeRow}>
+                    {([true, false] as const).map((answer) => (
+                      <TouchableOpacity
+                        key={String(answer)}
+                        style={[couModalStyles.typeOption, successorHasAccount === answer && couModalStyles.typeOptionActive]}
+                        onPress={() => setSuccessorHasAccount(answer)}
+                      >
+                        <MaterialCommunityIcons
+                          name={answer ? 'account-check-outline' : 'account-off-outline'}
+                          size={20}
+                          color={successorHasAccount === answer ? '#fff' : colors.primary}
+                        />
+                        <Text style={[couModalStyles.typeOptionText, successorHasAccount === answer && { color: '#fff' }]}>
+                          {answer ? 'Yes' : 'No'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {successorHasAccount !== null ? (
+                    <>
+                      <Text style={couModalStyles.label}>SUCCESSOR'S FULL NAME</Text>
+                      <TextInput
+                        style={couModalStyles.input}
+                        value={successorName}
+                        onChangeText={setSuccessorName}
+                        placeholder="e.g. Juan Dela Cruz Jr."
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="words"
+                        maxLength={255}
+                      />
+                    </>
+                  ) : null}
+
+                  {successorHasAccount === true ? (
+                    <>
+                      <Text style={couModalStyles.label}>EMAIL THEY USE IN THE APP</Text>
+                      <TextInput
+                        style={couModalStyles.input}
+                        value={successorEmail}
+                        onChangeText={setSuccessorEmail}
+                        placeholder="e.g. juan.delacruz@gmail.com"
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="email-address"
+                        maxLength={255}
+                      />
+                    </>
+                  ) : null}
+
+                  {successorHasAccount === false ? (
+                    <>
+                      <Text style={couModalStyles.label}>CONTACT NUMBER <Text style={couModalStyles.labelOptional}>(optional)</Text></Text>
+                      <TextInput
+                        style={couModalStyles.input}
+                        value={successorPhone}
+                        onChangeText={setSuccessorPhone}
+                        placeholder="e.g. 0917 123 4567"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="phone-pad"
+                        maxLength={20}
+                      />
+                      <Text style={couModalStyles.hint}>
+                        Your successor must sign up as a driver in Smart Trike before the administrator can approve the transfer.
+                      </Text>
+                    </>
+                  ) : null}
+
+                  <Text style={couModalStyles.label}>RELATIONSHIP TO YOU</Text>
+                  <View style={[couModalStyles.typeRow, { flexWrap: 'wrap' }]}>
+                    {(Object.keys(SUCCESSOR_RELATIONSHIP_LABEL) as SuccessorRelationship[]).map((value) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[couModalStyles.typeOption, successionRelationship === value && couModalStyles.typeOptionActive]}
+                        onPress={() => setSuccessionRelationship(value)}
+                      >
+                        <Text style={[couModalStyles.typeOptionText, successionRelationship === value && { color: '#fff' }]}>
+                          {SUCCESSOR_RELATIONSHIP_LABEL[value]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={couModalStyles.label}>REASON</Text>
+                  <TextInput
+                    style={[couModalStyles.input, { minHeight: 90, textAlignVertical: 'top' }]}
+                    value={successionReason}
+                    onChangeText={setSuccessionReason}
+                    placeholder="e.g. Retirement due to health reasons"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    maxLength={500}
+                  />
+
+                  <Button
+                    variant="primary"
+                    onPress={handleSuccessionSubmit}
+                    loading={successionSubmitting}
+                    disabled={
+                      successorHasAccount === null
+                      || successorName.trim().length < 2
+                      || (successorHasAccount && !successorEmail.trim())
+                      || successionReason.trim().length < 3
+                      || successionSubmitting
+                    }
+                    style={couModalStyles.submitBtn}
+                  >
+                    Send Request
+                  </Button>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {/* ── Change of Unit Modal ── */}
           <Modal
@@ -1344,7 +1646,7 @@ export const FranchiseScreen = () => {
           </Modal>
 
           <Text style={styles.note}>
-            Keep your OR/CR and TODA membership updated. Renew before expiry to avoid penalties.
+            Renew every year from January 1 to March 31. One missed year suspends the MTOP; three missed years terminate it. Each term lasts 3 years from the date issued.
           </Text>
         </ScrollView>
       </View>
@@ -1636,7 +1938,7 @@ export const FranchiseScreen = () => {
 
   // --- New application, re-application, or renewal requirements form ---
   const formType: FranchiseType = renewalMode || myApplication?.type === 'renewal' ? 'renewal' : 'new';
-  const formFee = formType === 'renewal' ? 1000 : 1500;
+  const formFee = 1500;
   return (
     <View style={styles.container}>
       <Header subtitle={formType === 'renewal' ? 'Submit updated requirements for renewal' : 'Apply for a tricycle franchise'} />
@@ -1690,18 +1992,23 @@ export const FranchiseScreen = () => {
           </View>
           <Text style={styles.accountPlateHint}>Automatically taken from your driver account vehicle details.</Text>
           <Text style={styles.unitInputLabel}>TRICYCLE BODY NUMBER</Text>
-          <TextInput
-            style={styles.unitInput}
-            value={bodyNumber}
-            onChangeText={(value) => setBodyNumber(value.toUpperCase())}
-            placeholder="Enter TODA/LGU body number"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="characters"
-            maxLength={30}
-          />
-          <Text style={styles.unitInputHint}>
-            Enter the body number manually as shown in your TODA/LGU records. It is verified separately from the uploaded documents.
-          </Text>
+          {formType === 'renewal' && (bodyNumber || myApplication?.body_number) ? (
+            <>
+              <View style={styles.readOnlyUnitField}>
+                <MaterialCommunityIcons name="lock-outline" size={17} color={colors.textMuted} />
+                <Text style={styles.readOnlyUnitValue}>{bodyNumber || myApplication?.body_number}</Text>
+              </View>
+              <Text style={styles.accountPlateHint}>Same body number as your current franchise — it does not change on renewal.</Text>
+            </>
+          ) : (
+            <>
+              <View style={styles.readOnlyUnitField}>
+                <MaterialCommunityIcons name="account-tie-outline" size={17} color={colors.textMuted} />
+                <Text style={[styles.readOnlyUnitValue, { color: colors.textMuted }]}>To be assigned by the administrator</Text>
+              </View>
+              <Text style={styles.accountPlateHint}>The FEDTODAB office assigns your body number when your MTOP is issued, after payment is verified.</Text>
+            </>
+          )}
         </Card>
 
         <Text style={styles.sectionTitle}>Select TODA (Required)</Text>
@@ -1793,7 +2100,7 @@ export const FranchiseScreen = () => {
         <Button
           variant="primary"
           onPress={() => handleSubmit(formType)}
-          disabled={!allUploaded || !accountLicenseNumber || !accountPlate || !bodyNumber.trim() || !selectedToda || submitting}
+          disabled={!allUploaded || !accountLicenseNumber || !accountPlate || !selectedToda || submitting}
           loading={submitting}
         >
           {formType === 'renewal'
@@ -1936,8 +2243,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  renewalBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+  },
+  renewalBannerTitle: { ...typography.label, fontSize: 14 },
+  renewalBannerText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
   renewBtn: {
     height: 52,
+    marginTop: spacing.md,
     marginBottom: spacing.lg,
   },
   couBtn: {

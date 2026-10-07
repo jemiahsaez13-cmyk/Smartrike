@@ -8,6 +8,7 @@ import {
   PublicDriverFranchise,
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
+  SuccessionRequest,
   allDocumentsApproved,
 } from '@/models/entities/Franchise';
 import { User } from '@/models/entities/User';
@@ -64,11 +65,14 @@ export class FranchiseService {
     return data || [];
   }
 
-  /** Issued/registered franchises used by the association registry. */
+  /**
+   * Issued/registered franchises used by the association registry. Records
+   * superseded by a later renewal ('renewed') are history, not franchises.
+   */
   async getRegistry(): Promise<FranchiseApplication[]> {
     const rows = await this.getAll();
     return rows
-      .filter((row) => row.status === 'issued' || !!row.mtop_number)
+      .filter((row) => (row.status === 'issued' || !!row.mtop_number) && row.franchise_status !== 'renewed')
       .map((row) => this.withDerivedRecordStatus(row));
   }
 
@@ -174,6 +178,79 @@ export class FranchiseService {
   }
 
   /**
+   * The holder asks the admin to pass their MTOP to a successor, named by the
+   * email of the successor's driver account. Validated server-side.
+   */
+  async requestSuccession(input: {
+    franchiseId: string;
+    hasAccount: boolean;
+    successorName: string;
+    successorEmail?: string;
+    successorPhone?: string;
+    relationship: SuccessorRelationship;
+    reason: string;
+  }): Promise<SuccessionRequest> {
+    if (input.successorName.trim().length < 2) throw new Error('Enter your successor’s full name.');
+    if (input.hasAccount && !input.successorEmail?.trim()) {
+      throw new Error('Enter the email your successor uses in the Smart Trike app.');
+    }
+    if (input.reason.trim().length < 3) throw new Error('Give the reason for the succession.');
+    const { data, error } = await supabase.rpc('request_franchise_succession', {
+      p_franchise_id: input.franchiseId,
+      p_has_account: input.hasAccount,
+      p_successor_name: input.successorName.trim(),
+      p_successor_email: input.hasAccount ? input.successorEmail?.trim() || null : null,
+      p_successor_phone: input.successorPhone?.trim() || null,
+      p_relationship: input.relationship,
+      p_reason: input.reason.trim(),
+    });
+    if (error) throw new Error(error.message);
+    return data as SuccessionRequest;
+  }
+
+  /** Latest succession request the signed-in holder made for this MTOP. */
+  async getLatestSuccessionRequest(franchiseId: string): Promise<SuccessionRequest | null> {
+    const { data, error } = await supabase
+      .from('franchise_succession_requests')
+      .select('*')
+      .eq('franchise_id', franchiseId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return (data?.[0] as SuccessionRequest) ?? null;
+  }
+
+  /** Requests waiting for an admin decision, newest first. */
+  async getPendingSuccessionRequests(): Promise<SuccessionRequest[]> {
+    const { data, error } = await supabase
+      .from('franchise_succession_requests')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as SuccessionRequest[];
+  }
+
+  /**
+   * Approve after the transfer to the admin-selected account is recorded, or
+   * reject with a reason.
+   */
+  async reviewSuccession(
+    requestId: string,
+    decision: 'approved' | 'rejected',
+    options: { reason?: string; successorId?: string } = {}
+  ): Promise<SuccessionRequest> {
+    const { data, error } = await supabase.rpc('review_franchise_succession', {
+      p_request_id: requestId,
+      p_decision: decision,
+      p_reason: options.reason?.trim() || null,
+      p_successor_id: options.successorId || null,
+    });
+    if (error) throw new Error(error.message);
+    return data as SuccessionRequest;
+  }
+
+  /**
    * Active driver accounts that can receive a franchise by succession: no
    * issued MTOP and no application still in progress (rejected ones are fine).
    */
@@ -247,7 +324,8 @@ export class FranchiseService {
   private withDerivedRecordStatus(application: FranchiseApplication): FranchiseApplication {
     const hasExpired = !!application.expiry_date
       && new Date(`${application.expiry_date}T23:59:59`).getTime() < Date.now();
-    const protectedStatuses: FranchiseRecordStatus[] = ['terminated', 'transferred', 'pending_renewal'];
+    // Statuses the daily renewal cycle (migration 073) or an admin owns.
+    const protectedStatuses: FranchiseRecordStatus[] = ['terminated', 'transferred', 'suspended', 'renewed'];
     const current = application.franchise_status ?? (application.status === 'issued' ? 'active' : null);
     return {
       ...application,

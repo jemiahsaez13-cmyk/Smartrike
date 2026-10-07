@@ -23,7 +23,10 @@ export type FranchiseRecordStatus =
   | 'expired'
   | 'terminated'
   | 'pending_renewal'
-  | 'transferred';
+  | 'suspended'
+  | 'transferred'
+  /** Superseded by a later issued renewal of the same franchise (migration 073). */
+  | 'renewed';
 
 export type FranchiseEventType =
   | 'renewal'
@@ -186,8 +189,88 @@ export const FRANCHISE_RECORD_STATUS_LABEL: Record<FranchiseRecordStatus, string
   active: 'Active',
   expired: 'Expired',
   terminated: 'Terminated',
-  pending_renewal: 'Pending Renewal',
+  pending_renewal: 'Due for Renewal',
+  suspended: 'Suspended',
   transferred: 'Transferred',
+  renewed: 'Renewed',
+};
+
+// ── MTOP term and annual renewal rules (mirrors migration 073) ─────────────
+// A term runs 3 years from issuance. Every year the MTOP is renewed between
+// January 1 and March 31: January is the regular period, February–March the
+// grace period. One missed year suspends the MTOP; three terminate it.
+export const MTOP_TERM_YEARS = 3;
+export const RENEWAL_LAST_MONTH = 3; // March
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const toISODate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISODate = (value?: string | null): Date | null => {
+  if (!value) return null;
+  const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/** Expiry date (YYYY-MM-DD) of a term issued on `issuedAt`. */
+export const mtopExpiryFrom = (issuedAt: string): string => {
+  const d = parseISODate(issuedAt) ?? new Date();
+  d.setFullYear(d.getFullYear() + MTOP_TERM_YEARS);
+  return toISODate(d);
+};
+
+export const formatLongDate = (value?: string | null): string => {
+  const d = parseISODate(value);
+  return d ? d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '—';
+};
+
+export type RenewalPhase = 'regular' | 'grace' | 'closed';
+
+export interface RenewalStanding {
+  issuedAt: string | null;
+  expiryDate: string | null;
+  /** Whole days until expiry (negative once expired). */
+  daysToExpiry: number | null;
+  /** Latest year this franchise is renewed for (the issue year counts). */
+  coveredYear: number | null;
+  phase: RenewalPhase;
+  /** This year's renewal is still outstanding. */
+  dueThisYear: boolean;
+  /** The driver may file a renewal today. */
+  canRenew: boolean;
+  /** Renewal years that passed March 31 unrenewed. */
+  missedYears: number;
+  /** Next January 1 the renewal window opens, when it is closed now. */
+  nextWindowYear: number;
+}
+
+export const renewalStanding = (
+  app: Pick<FranchiseApplication, 'issued_at' | 'expiry_date' | 'renewal_year' | 'franchise_status'>,
+  today: Date = new Date()
+): RenewalStanding => {
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const issued = parseISODate(app.issued_at);
+  const expiryDate = app.expiry_date ? String(app.expiry_date).slice(0, 10) : app.issued_at ? mtopExpiryFrom(app.issued_at) : null;
+  const expiry = parseISODate(expiryDate);
+  const startOfToday = new Date(year, today.getMonth(), today.getDate());
+  const daysToExpiry = expiry ? Math.round((expiry.getTime() - startOfToday.getTime()) / 86_400_000) : null;
+  const coveredYear = app.renewal_year ?? (issued ? issued.getFullYear() : null);
+  const phase: RenewalPhase = month === 1 ? 'regular' : month <= RENEWAL_LAST_MONTH ? 'grace' : 'closed';
+  const dueThisYear = coveredYear !== null && coveredYear < year;
+  const missedYears = coveredYear === null
+    ? 0
+    : Math.max(0, year - coveredYear - (month <= RENEWAL_LAST_MONTH ? 1 : 0));
+  const blocked = app.franchise_status === 'terminated' || app.franchise_status === 'transferred' || app.franchise_status === 'renewed';
+  return {
+    issuedAt: app.issued_at ? String(app.issued_at).slice(0, 10) : null,
+    expiryDate,
+    daysToExpiry,
+    coveredYear,
+    phase,
+    dueThisYear,
+    canRenew: phase !== 'closed' && dueThisYear && !blocked,
+    missedYears,
+    nextWindowYear: phase === 'closed' ? year + 1 : year,
+  };
 };
 
 export interface FranchiseEvent {
@@ -213,6 +296,31 @@ export interface FranchiseEvent {
   /** CR number of the new unit (from LTO). */
   cr_number?: string | null;
   created_by: string | null;
+  created_at: string;
+}
+
+/** Driver-requested succession, reviewed by an admin (migration 074). */
+export type SuccessionRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SuccessionRequest {
+  id: string;
+  franchise_id: string;
+  requested_by: string;
+  requested_by_name: string;
+  /** Holder's answer to "Does your successor have a Smart Trike account?" */
+  successor_has_account: boolean;
+  /** Matched account when the holder answered yes; set by the admin on approval. */
+  successor_id: string | null;
+  /** Name as typed by the holder. */
+  successor_name: string;
+  successor_email: string | null;
+  successor_phone: string | null;
+  relationship: SuccessorRelationship;
+  reason: string;
+  status: SuccessionRequestStatus;
+  rejection_reason: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
 }
 

@@ -40,7 +40,7 @@ const TITLES: Record<ManagementReportFilters['type'], string> = {
 };
 
 const emptyCounts = (): Record<FranchiseRecordStatus, number> => ({
-  active: 0, expired: 0, pending_renewal: 0, terminated: 0, transferred: 0,
+  active: 0, expired: 0, pending_renewal: 0, suspended: 0, terminated: 0, transferred: 0, renewed: 0,
 });
 
 const inDateRange = (date: string, from?: string, to?: string): boolean => {
