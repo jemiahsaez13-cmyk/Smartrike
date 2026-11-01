@@ -7,7 +7,11 @@ export interface User {
   name: string;
   profile_photo_url: string | null;
   created_at: Date;
-  status: 'active' | 'inactive' | 'suspended';
+  status: 'active' | 'inactive' | 'suspended' | 'deactivated';
+  // Set only by admin_deactivate_user (migration 077); never reversible.
+  deactivated_at?: string | null;
+  deactivated_by?: string | null;
+  deactivation_reason?: string | null;
   rating: number;
   total_trips: number;
   // Primary address captured during profile setup.

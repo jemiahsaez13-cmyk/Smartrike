@@ -10,6 +10,8 @@ function load(file, dependencies) {
   return exports;
 }
 let row, failure;
+const constants = { REQUEST_FRESHNESS_MINUTES: 20, NO_DRIVER_CANCELLATION_REASON: 'No driver accepted in time' };
+const cancel = { bookingId: 'ride', reason: 'Emergency' };
 const db = { from(table) {
   assert.equal(table, 'bookings'); // Cancellation must not write another user's profile.
   let patch, filters = [];
@@ -19,7 +21,7 @@ const db = { from(table) {
     if (match && patch) Object.assign(row, patch);
     return { data: match ? { ...row } : null, error: null };
   };
-  const query = { update(p) { patch = p; assert.deepEqual(JSON.parse(JSON.stringify(p)), { status: 'cancelled' }); return query; },
+  const query = { update(p) { patch = p; assert.deepEqual(JSON.parse(JSON.stringify(p)), { status: 'cancelled', cancellation_reason: 'Emergency' }); return query; },
     select() { return query; }, eq(key, value) { filters.push(r => r[key] === value); return query; },
     in(key, values) { filters.push(r => values.includes(r[key])); return query; }, maybeSingle: run, single: run };
   return query;
@@ -29,11 +31,12 @@ const { BookingService } = load('src/models/services/BookingService.ts', {
   '@/models/repositories/BookingRepository': { BookingRepository },
   '@/models/repositories/UserRepository': { UserRepository: class { updateDriverStatus() { throw Error('Passenger cannot update driver'); } } },
   './FareCalculationService': { FareCalculationService: class {} }, './NotificationService': { NotificationService: class {} }, '@/config/supabase': { supabase: db },
-  '@/config/constants': { REQUEST_FRESHNESS_MINUTES: 20 },
+  '@/config/constants': constants,
 });
 const slice = load('src/controllers/slices/bookingSlice.ts', {
   '@reduxjs/toolkit': toolkit, '@/models/services/BookingService': { BookingService, isStalePendingBooking: () => false },
   '@/models/repositories/BookingRepository': { BookingRepository }, '@/models/services/ActivityLogService': { ActivityLogService: { logActivity() {} } },
+  '@/config/constants': constants,
 });
 (async () => {
   for (const method of ['cash', 'online']) {
@@ -43,7 +46,7 @@ const slice = load('src/controllers/slices/bookingSlice.ts', {
       const store = toolkit.configureStore({ reducer: slice.default });
       store.dispatch(slice.createBooking.fulfilled(original, 'create', {}));
       store.dispatch(slice.fetchActiveBooking.pending('old-refresh', 'passenger'));
-      await store.dispatch(slice.cancelBooking('ride')).unwrap();
+      await store.dispatch(slice.cancelBooking(cancel)).unwrap();
       assert.equal(row.status, 'cancelled');
       assert.equal(row.payment_method, method);
       assert.equal(store.getState().currentBooking, null);
@@ -51,18 +54,18 @@ const slice = load('src/controllers/slices/bookingSlice.ts', {
       store.dispatch(slice.fetchActiveBooking.fulfilled(original, 'old-refresh', 'passenger'));
       assert.equal(store.getState().currentBooking, null, 'late realtime/poll/restore must not revive cancelled ride');
       assert.equal(store.getState().searchingForDriver, false);
-      await store.dispatch(slice.cancelBooking('ride')).unwrap(); // idempotent retry
+      await store.dispatch(slice.cancelBooking(cancel)).unwrap(); // idempotent retry
       console.log(`PASS ${method} ${status}: persisted cancellation, preserved payment, stale callbacks ignored, retry safe`);
     }
   }
   row = { id: 'ride', status: 'in-transit', payment_method: 'cash' };
-  await assert.rejects(new BookingService().cancelBooking('ride'), /already started/);
+  await assert.rejects(new BookingService().cancelBooking('ride', 'Emergency'), /already started/);
   assert.equal(row.status, 'in-transit');
   row = { id: 'ride', status: 'accepted', payment_method: 'online' };
   const store = toolkit.configureStore({ reducer: slice.default });
   store.dispatch(slice.createBooking.fulfilled({ ...row }, 'create', {}));
   failure = { message: 'Permission denied' };
-  await assert.rejects(store.dispatch(slice.cancelBooking('ride')).unwrap());
+  await assert.rejects(store.dispatch(slice.cancelBooking(cancel)).unwrap());
   assert.equal(store.getState().currentBooking.status, 'accepted');
   assert.equal(store.getState().error, 'Permission denied');
   failure = null;
@@ -70,7 +73,7 @@ const slice = load('src/controllers/slices/bookingSlice.ts', {
   store.dispatch(slice.fetchActiveBooking.fulfilled(null, 'refresh', 'passenger'));
   assert.equal(store.getState().currentBooking, null, 'server absence clears stale homepage ride');
   store.dispatch(slice.createBooking.fulfilled({ id: 'new', status: 'pending', payment_method: 'cash' }, 'new-create', {}));
-  store.dispatch(slice.cancelBooking.fulfilled({ id: 'old', status: 'cancelled', payment_method: 'online' }, 'old-cancel', 'old'));
+  store.dispatch(slice.cancelBooking.fulfilled({ id: 'old', status: 'cancelled', payment_method: 'online' }, 'old-cancel', { bookingId: 'old', reason: 'Emergency' }));
   assert.equal(store.getState().currentBooking.id, 'new');
   assert.equal(store.getState().currentBooking.payment_method, 'cash');
   console.log('PASS pickup race blocked, failed cancellation retained with error, empty refresh clears homepage, old cancellation preserves new ride/payment');

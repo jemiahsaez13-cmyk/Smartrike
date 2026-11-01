@@ -4,7 +4,7 @@ import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculati
 import { NotificationService } from './NotificationService';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
-import { REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import { NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 
 // Parses a timestamp as UTC when it arrives without a timezone suffix.
 const toMs = (value: unknown): number => {
@@ -46,7 +46,7 @@ export class BookingService {
     const active = await this.bookingRepo.findActiveByPassenger(passengerId);
     if (active) {
       if (isStalePendingBooking(active)) {
-        await this.bookingRepo.cancel(active.id);
+        await this.bookingRepo.cancel(active.id, NO_DRIVER_CANCELLATION_REASON);
       } else {
         throw new Error(active.status === 'pending'
           ? 'You are already waiting for a driver. Cancel that request before booking another ride.'
@@ -208,10 +208,10 @@ export class BookingService {
     return await this.bookingRepo.submitDriverRating(bookingId, rating);
   }
 
-  async cancelBooking(bookingId: string): Promise<Booking> {
+  async cancelBooking(bookingId: string, reason: string): Promise<Booking> {
     // Only mutate the passenger-owned booking. Driver availability is released
     // and the driver is notified by database triggers (migration 068), never
     // by a passenger writing another user's rows.
-    return this.bookingRepo.cancel(bookingId);
+    return this.bookingRepo.cancel(bookingId, reason);
   }
 }

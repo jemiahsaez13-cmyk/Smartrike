@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,8 +10,11 @@ import {
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { AdminService } from '@/models/services/AdminService';
+import { ConductService, ConductSummary } from '@/models/services/ConductService';
+import { CONDUCT_WINDOW_DAYS } from '@/config/constants';
+import { formatDate } from '@/utils/dateUtils';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { supabase } from '@/config/supabase';
 import { confirm, notify } from '@/utils/confirm';
@@ -22,8 +25,9 @@ import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
 
 const adminService = new AdminService();
+const conductService = new ConductService();
 
-type Filter = 'all' | 'driver' | 'passenger' | 'admin' | 'pending' | 'suspended';
+type Filter = 'all' | 'driver' | 'passenger' | 'admin' | 'pending' | 'suspended' | 'flagged' | 'deactivated';
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -32,18 +36,22 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'admin', label: 'Admins' },
   { key: 'pending', label: 'Pending' },
   { key: 'suspended', label: 'Suspended' },
+  { key: 'flagged', label: 'Flagged' },
+  { key: 'deactivated', label: 'Deactivated' },
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const UserManagementScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const currentUser = useAppSelector((state) => state.auth.user);
   const [users, setUsers] = useState<User[]>([]);
+  const [conduct, setConduct] = useState<Map<string, ConductSummary>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>((route.params?.filter as Filter) ?? 'all');
   const [selected, setSelected] = useState<User | null>(null);
   const [working, setWorking] = useState(false);
 
@@ -54,10 +62,27 @@ export const UserManagementScreen = () => {
   const [invitePhone, setInvitePhone] = useState('');
   const [inviting, setInviting] = useState(false);
 
+  // Permanent deactivation form
+  const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
+  const [deactivateReason, setDeactivateReason] = useState('');
+
+  // Opened again from the Violations review list with a filter preset.
+  useEffect(() => {
+    if (route.params?.filter) setFilter(route.params.filter as Filter);
+  }, [route.params?.filter]);
+
   const load = useCallback(async () => {
     try {
-      const data = await adminService.getAllUsers();
+      const [data, weekly] = await Promise.all([
+        adminService.getAllUsers(),
+        // Advisory only: the user list still loads if the tally cannot.
+        conductService.getWeeklySummaries().catch((e) => {
+          console.warn('weekly conduct tally unavailable:', e);
+          return null;
+        }),
+      ]);
       setUsers(data);
+      if (weekly) setConduct(weekly.summaries);
     } catch (e: any) {
       console.error('Failed to load users:', e);
     } finally {
@@ -98,6 +123,10 @@ export const UserManagementScreen = () => {
         ? u.user_type === 'driver' && d.verification_status === 'pending'
         : filter === 'suspended'
         ? u.status === 'suspended'
+        : filter === 'flagged'
+        ? !!conduct.get(u.id)?.flagged || !!conduct.get(u.id)?.repeatedCancellations
+        : filter === 'deactivated'
+        ? u.status === 'deactivated'
         : true;
     return matchesQuery && matchesFilter;
   });
@@ -220,6 +249,51 @@ export const UserManagementScreen = () => {
     }
   };
 
+  const openDeactivate = async (user: User) => {
+    // Close the action sheet first; only one modal can show at a time.
+    setSelected(null);
+    await new Promise((r) => setTimeout(r, 300));
+    setDeactivateReason('');
+    setDeactivateTarget(user);
+  };
+
+  const submitDeactivate = async () => {
+    const user = deactivateTarget;
+    const reason = deactivateReason.trim();
+    if (!user) return;
+    if (reason.length < 5) {
+      notify('Reason required', 'Describe the confirmed violations that justify the deactivation.');
+      return;
+    }
+    setDeactivateTarget(null);
+    await new Promise((r) => setTimeout(r, 300));
+    const ok = await confirm(
+      'Permanently deactivate?',
+      `${user.name} will be signed out and can never use this account again. This cannot be undone. Their rides, payments and violation records are kept.`,
+      { confirmText: 'Deactivate', destructive: true }
+    );
+    if (!ok) return;
+
+    setWorking(true);
+    try {
+      const updated = await adminService.deactivateUser(user.id, reason);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, ...updated } : u)));
+      void ActivityLogService.logActivity({
+        user_id: currentUser?.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        entity_id: user.id,
+        description: `Admin permanently deactivated ${user.user_type} ${user.name}. Reason: ${reason}`,
+        severity: 'error',
+      });
+      notify('Account deactivated', `${user.name}'s account has been permanently deactivated.`);
+    } catch (e: any) {
+      notify('Deactivation failed', e?.message || 'Could not deactivate the account.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const deleteAccount = async (user: User) => {
     if (user.id === currentUser?.id) {
       notify('Not allowed', 'You cannot delete your own account.');
@@ -333,7 +407,10 @@ export const UserManagementScreen = () => {
           const isDriver = user.user_type === 'driver';
           const roleLabel = user.user_type.charAt(0).toUpperCase() + user.user_type.slice(1);
           const statusColor =
-            user.status === 'active' ? colors.success : user.status === 'suspended' ? colors.error : colors.warning;
+            user.status === 'active' ? colors.success
+            : user.status === 'suspended' || user.status === 'deactivated' ? colors.error
+            : colors.warning;
+          const weekly = conduct.get(user.id);
           return (
             <Card key={user.id} variant="elevated" padding="md" style={styles.userCard}>
               <View style={styles.userInfo}>
@@ -361,6 +438,12 @@ export const UserManagementScreen = () => {
                       color={d.verification_status === 'verified' ? colors.success : d.verification_status === 'rejected' ? colors.error : colors.warning}
                     />
                     <Text style={styles.verifyText}>{d.verification_status}</Text>
+                  </View>
+                )}
+                {(weekly?.flagged || weekly?.repeatedCancellations) && (
+                  <View style={styles.flagChip}>
+                    <MaterialCommunityIcons name="flag" size={12} color={colors.error} />
+                    <Text style={styles.flagChipText}>Flagged</Text>
                   </View>
                 )}
                 <View style={styles.statusRow}>
@@ -430,6 +513,34 @@ export const UserManagementScreen = () => {
                   )}
                 </View>
 
+                {(() => {
+                  const weekly = conduct.get(selected.id);
+                  if (!weekly?.flagged && !weekly?.repeatedCancellations) return null;
+                  return (
+                    <View style={styles.flagBanner}>
+                      <MaterialCommunityIcons name="flag" size={18} color={colors.error} />
+                      <Text style={styles.flagBannerText}>
+                        Flagged for review · last {CONDUCT_WINDOW_DAYS} days:
+                        {weekly.flagged ? ` ${weekly.confirmedViolations} confirmed violations.` : ''}
+                        {weekly.repeatedCancellations ? ` ${weekly.invalidCancellations} cancellations without a valid reason.` : ''}
+                        {' '}Review the records before imposing a restriction.
+                      </Text>
+                    </View>
+                  );
+                })()}
+
+                {selected.status === 'deactivated' && (
+                  <View style={styles.deactivatedBox}>
+                    <Text style={styles.deactivatedTitle}>
+                      Permanently deactivated{selected.deactivated_at ? ` · ${formatDate(selected.deactivated_at)}` : ''}
+                    </Text>
+                    {!!selected.deactivation_reason && (
+                      <Text style={styles.deactivatedReason}>{selected.deactivation_reason}</Text>
+                    )}
+                    <Text style={styles.deactivatedNote}>Ride, payment and violation records are kept.</Text>
+                  </View>
+                )}
+
                 {selected.user_type === 'driver' && (
                   <TouchableOpacity
                     style={styles.actionRow}
@@ -444,25 +555,25 @@ export const UserManagementScreen = () => {
                     <Text style={styles.actionLabel}>View Driver Profile (rating & reviews)</Text>
                   </TouchableOpacity>
                 )}
-                {selected.user_type !== 'admin' && (
+                {selected.user_type !== 'admin' && selected.status !== 'deactivated' && (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => sendWarning(selected)}>
                     <MaterialCommunityIcons name="alert-outline" size={20} color={colors.warning} />
                     <Text style={[styles.actionLabel, { color: colors.warning }]}>Issue Warning</Text>
                   </TouchableOpacity>
                 )}
-                {selected.user_type === 'driver' && (selected as any).verification_status !== 'verified' && (
+                {selected.user_type === 'driver' && selected.status !== 'deactivated' && (selected as any).verification_status !== 'verified' && (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyVerification(selected, 'verified')}>
                     <MaterialCommunityIcons name="check-decagram" size={20} color={colors.text} />
                     <Text style={styles.actionLabel}>Verify Driver</Text>
                   </TouchableOpacity>
                 )}
-                {selected.user_type === 'driver' && (selected as any).verification_status !== 'rejected' && (
+                {selected.user_type === 'driver' && selected.status !== 'deactivated' && (selected as any).verification_status !== 'rejected' && (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyVerification(selected, 'rejected')}>
                     <MaterialCommunityIcons name="close-octagon-outline" size={20} color={colors.text} />
                     <Text style={styles.actionLabel}>Reject Driver Verification</Text>
                   </TouchableOpacity>
                 )}
-                {selected.status !== 'suspended' ? (
+                {selected.status === 'deactivated' ? null : selected.status !== 'suspended' ? (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyStatus(selected, 'suspended')}>
                     <MaterialCommunityIcons name="account-cancel-outline" size={20} color={colors.error} />
                     <Text style={[styles.actionLabel, { color: colors.error }]}>Suspend Account</Text>
@@ -474,7 +585,14 @@ export const UserManagementScreen = () => {
                   </TouchableOpacity>
                 )}
 
-                {selected.id !== currentUser?.id && (
+                {selected.user_type !== 'admin' && selected.status !== 'deactivated' && selected.id !== currentUser?.id && (
+                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => openDeactivate(selected)}>
+                    <MaterialCommunityIcons name="account-off-outline" size={20} color={colors.error} />
+                    <Text style={[styles.actionLabel, { color: colors.error }]}>Permanently Deactivate</Text>
+                  </TouchableOpacity>
+                )}
+
+                {selected.id !== currentUser?.id && selected.status !== 'deactivated' && (
                   <TouchableOpacity style={[styles.actionRow, styles.actionRowLast]} disabled={working} onPress={() => deleteAccount(selected)}>
                     <MaterialCommunityIcons name="trash-can-outline" size={20} color={colors.error} />
                     <Text style={[styles.actionLabel, { color: colors.error }]}>Delete Account</Text>
@@ -486,6 +604,46 @@ export const UserManagementScreen = () => {
                 </TouchableOpacity>
               </>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Permanent deactivation form */}
+      <Modal visible={!!deactivateTarget} transparent animationType="slide" onRequestClose={() => setDeactivateTarget(null)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setDeactivateTarget(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.inviteHeader}>
+              <View style={[styles.inviteIcon, { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="account-off" size={22} color={colors.error} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName}>Permanently Deactivate</Text>
+                <Text style={styles.sheetEmail} numberOfLines={1}>{deactivateTarget?.name}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.inviteLabel}>REASON (REQUIRED)</Text>
+            <RNTextInput
+              style={[styles.inviteInput, styles.reasonInput]}
+              placeholder="e.g. Repeated confirmed violations: fake bookings on May 2, 4 and 6"
+              placeholderTextColor={colors.textMuted}
+              value={deactivateReason}
+              onChangeText={setDeactivateReason}
+              multiline
+              maxLength={500}
+            />
+
+            <Text style={styles.inviteHint}>
+              Use this only after confirming repeated or serious violations. The account can never be reactivated or deleted, and its ride, payment and violation records are kept for accountability.
+            </Text>
+
+            <TouchableOpacity style={[styles.inviteSubmit, { backgroundColor: colors.error }]} onPress={submitDeactivate} activeOpacity={0.85}>
+              <Text style={styles.inviteSubmitText}>Continue</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setDeactivateTarget(null)}>
+              <Text style={styles.closeText}>Cancel</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -629,6 +787,14 @@ const styles = StyleSheet.create({
   roleText: { ...typography.labelSmall, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   verifyChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.surfaceAlt, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm },
   verifyText: { ...typography.labelSmall, fontSize: 10, color: colors.textSecondary, textTransform: 'capitalize' },
+  flagChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: colors.errorLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm },
+  flagChipText: { ...typography.labelSmall, fontSize: 10, color: colors.error },
+  flagBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.errorLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
+  flagBannerText: { ...typography.bodySmall, flex: 1, fontSize: 13, color: colors.error, lineHeight: 19 },
+  deactivatedBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, gap: 4 },
+  deactivatedTitle: { ...typography.label, fontSize: 14, color: colors.error },
+  deactivatedReason: { ...typography.body, fontSize: 13, color: colors.text },
+  deactivatedNote: { ...typography.bodySmall, fontSize: 12, color: colors.textMuted },
   statusRow: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' },
   statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
   statusText: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, textTransform: 'capitalize' },
@@ -678,6 +844,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
   },
+  reasonInput: { height: 96, paddingTop: spacing.md, textAlignVertical: 'top' },
   inviteHint: { ...typography.bodySmall, color: colors.textMuted, fontSize: 12, marginTop: spacing.md, lineHeight: 18 },
   inviteSubmit: { height: 52, borderRadius: radius.md, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginTop: spacing.lg },
   inviteSubmitText: { ...typography.button, color: '#fff', fontSize: 15 },

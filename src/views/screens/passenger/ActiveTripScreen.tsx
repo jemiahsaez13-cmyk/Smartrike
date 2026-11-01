@@ -32,13 +32,14 @@ import { colors, layout, radius, spacing, shadows, typography } from '@/views/st
 import { LinearGradient } from 'expo-linear-gradient';
 import { LocationService } from '@/models/services/LocationService';
 import { estimateETA, formatDistance, formatETA, haversineDistance } from '@/utils/locationUtils';
-import { confirm, notify } from '@/utils/confirm';
+import { notify } from '@/utils/confirm';
 import { Location } from '@/models/types';
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { PublicDriverFranchise, FRANCHISE_RECORD_STATUS_LABEL } from '@/models/entities/Franchise';
 import { DirectionsService } from '@/models/services/DirectionsService';
 import MapView, { AnimatedMarker, AnimatedRegion, Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 import { PassengerRidePaymentModal } from '@/views/components/payment/PassengerRidePaymentModal';
+import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 
 const { height } = Dimensions.get('window');
@@ -94,6 +95,7 @@ export const ActiveTripScreen = () => {
   const [followDriver, setFollowDriver] = useState(true);
   const [driverHeading, setDriverHeading] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelVisible, setCancelVisible] = useState(false);
   // Report-driver sheet (opened from the rating modal or on its own).
   const [reportVisible, setReportVisible] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -403,18 +405,13 @@ export const ActiveTripScreen = () => {
     navigation.navigate('Chat', { bookingId: currentBooking.id, otherName: driverName });
   };
 
-  const handleCancel = async () => {
+  const handleCancel = async (reason: string) => {
     if (cancelling) return;
     if (!currentBooking?.id) return;
-    const yes = await confirm('Cancel Ride', 'Cancel this booking? Your driver will be notified.', {
-      confirmText: 'Cancel Ride',
-      cancelText: 'Keep Ride',
-      destructive: true,
-    });
-    if (!yes) return;
     setCancelling(true);
     try {
-      await dispatch(cancelBooking(currentBooking.id)).unwrap();
+      await dispatch(cancelBooking({ bookingId: currentBooking.id, reason })).unwrap();
+      setCancelVisible(false);
       navigation.navigate('PassengerDashboard');
     } catch (error) {
       await notify('Could not cancel ride', typeof error === 'string' ? error : 'Please check your connection and try again. Your ride has not been cancelled.');
@@ -867,7 +864,7 @@ export const ActiveTripScreen = () => {
           <Button
             variant="outline"
             icon="close-circle-outline"
-            onPress={handleCancel}
+            onPress={() => setCancelVisible(true)}
             loading={cancelling}
             disabled={cancelling}
             style={styles.cancelBtn}
@@ -944,6 +941,14 @@ export const ActiveTripScreen = () => {
           </Surface>
         </View>
       </Modal>
+
+      <CancelReasonSheet
+        visible={cancelVisible}
+        busy={cancelling}
+        subtitle="Your driver will be notified."
+        onConfirm={handleCancel}
+        onClose={() => setCancelVisible(false)}
+      />
 
       {/* ── Report Driver Modal ─────────────────────────────────────── */}
       <Modal visible={reportVisible} transparent animationType="fade" onRequestClose={closeReport}>

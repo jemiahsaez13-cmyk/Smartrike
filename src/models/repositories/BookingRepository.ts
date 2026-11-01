@@ -38,11 +38,12 @@ export class BookingRepository {
     return data;
   }
 
-  async cancel(id: string): Promise<Booking> {
+  async cancel(id: string, reason?: string | null): Promise<Booking> {
     // The status predicate is checked by the database at write time, so a
     // concurrent pickup cannot be cancelled using an earlier cached status.
+    // The server stamps who cancelled and whether the reason is valid.
     const { data, error } = await supabase.from('bookings')
-      .update({ status: 'cancelled' })
+      .update({ status: 'cancelled', cancellation_reason: reason?.trim() || null })
       .eq('id', id)
       .in('status', ['pending', 'accepted'])
       .select()

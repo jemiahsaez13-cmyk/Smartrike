@@ -182,6 +182,28 @@ export const getDriverDailyGoal = (user: any): number => {
 export const REQUEST_FRESHNESS_MINUTES = 20;
 export const DRIVER_RATING_DEFAULT = 4.8;
 
+// Reasons a passenger picks when cancelling. The server decides validity from
+// the same list (migration 077 is_valid_cancellation_reason); anything else,
+// including "Other", counts as a cancellation without a valid reason.
+export const CANCELLATION_REASONS = [
+  { label: 'Driver is taking too long', valid: true },
+  { label: 'Driver asked me to cancel', valid: true },
+  { label: 'Emergency', valid: true },
+  { label: 'Wrong pickup or drop-off location', valid: true },
+  { label: 'Changed my mind', valid: false },
+  { label: 'Found another ride', valid: false },
+  { label: 'Other', valid: false },
+] as const;
+
+/** Reason the app records when it closes a search nobody accepted in time. */
+export const NO_DRIVER_CANCELLATION_REASON = 'No driver accepted in time';
+
+// Three confirmed violations (or invalid cancellations) within a rolling
+// 7-day window flag the user for admin review. Nothing is restricted
+// automatically; the admin decides.
+export const CONDUCT_FLAG_THRESHOLD = 3;
+export const CONDUCT_WINDOW_DAYS = 7;
+
 export const NOTIFICATION_TYPES = {
   BOOKING_REQUEST: 'booking_request',
   BOOKING_ACCEPTED: 'booking_accepted',

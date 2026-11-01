@@ -174,6 +174,14 @@ export const ProfileScreen = () => {
             onPress={() => navigation.navigate('EditProfile')}
             last={user?.user_type === 'admin'}
           />
+          {user?.user_type !== 'admin' && (
+            <MenuItem
+              icon="shield-alert-outline"
+              label="Violations & Restrictions"
+              value="Notices and account standing"
+              onPress={() => navigation.navigate('MyViolations')}
+            />
+          )}
           {user?.user_type === 'admin' && (
             <MenuItem
               icon="cash-register"

@@ -337,6 +337,9 @@ export class AuthService {
     if (status === 'suspended') {
       return 'Your account has been suspended by the TODA administrator. Please contact the FEDTODAB office to appeal.';
     }
+    if (status === 'deactivated') {
+      return 'Your account has been permanently deactivated by the TODA administrator after confirmed violations.';
+    }
     return 'Your account is inactive. Please contact the FEDTODAB office to reactivate it.';
   }
 

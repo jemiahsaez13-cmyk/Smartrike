@@ -18,7 +18,8 @@ export interface InventoryItem {
   updated_at: string;
 }
 
-export type ViolationStatus = 'open' | 'resolved' | 'dismissed';
+/** open → confirmed → resolved, or open → dismissed (migration 077). */
+export type ViolationStatus = 'open' | 'confirmed' | 'resolved' | 'dismissed';
 
 export interface DriverViolation {
   report_id?: string | null;

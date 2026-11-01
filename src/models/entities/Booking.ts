@@ -24,6 +24,11 @@ export interface Booking {
   passenger_rating: Rating | null;
   driver_rating: Rating | null;
   notes: string | null;
+  // Stamped by the server when the ride is cancelled (migration 077).
+  cancelled_by?: 'passenger' | 'driver' | 'system' | 'admin' | null;
+  cancellation_reason?: string | null;
+  cancellation_valid?: boolean | null;
+  cancelled_at?: Date | null;
 }
 
 export type BookingStatus = 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled';

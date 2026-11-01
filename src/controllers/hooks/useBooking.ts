@@ -58,8 +58,8 @@ export const useBooking = () => {
   );
 
   const cancel = useCallback(
-    async (bookingId: string) => {
-      return dispatch(cancelBooking(bookingId)).unwrap();
+    async (bookingId: string, reason: string) => {
+      return dispatch(cancelBooking({ bookingId, reason })).unwrap();
     },
     [dispatch]
   );

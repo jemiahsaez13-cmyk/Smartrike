@@ -14,7 +14,8 @@ import { colors, layout, radius, spacing, shadows, typography } from '@/views/st
 import { LinearGradient } from 'expo-linear-gradient';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { isStalePendingBooking } from '@/models/services/BookingService';
-import { REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import { NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
 
 const realtimeService = new RealtimeService();
 const bookingRepo = new BookingRepository();
@@ -25,6 +26,7 @@ export const ConfirmBookingScreen = () => {
   const dispatch = useAppDispatch();
   const [elapsed, setElapsed] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelVisible, setCancelVisible] = useState(false);
 
   // Radar pulse
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -91,7 +93,8 @@ export const ConfirmBookingScreen = () => {
       if (expiring.current || !isStalePendingBooking(currentBooking)) return;
       expiring.current = true;
       try {
-        await dispatch(cancelBooking(currentBooking.id)).unwrap();
+        await dispatch(cancelBooking({ bookingId: currentBooking.id, reason: NO_DRIVER_CANCELLATION_REASON })).unwrap();
+        setCancelVisible(false);
         navigation.navigate('PassengerDashboard');
         void notify('No driver available', `No driver accepted your request within ${REQUEST_FRESHNESS_MINUTES} minutes, so it was cancelled. Please try booking again.`);
       } catch {
@@ -111,15 +114,21 @@ export const ConfirmBookingScreen = () => {
     }
   }, [currentBooking?.status, navigation]);
 
-  const handleCancel = async () => {
+  const openCancel = () => {
     if (cancelling) return;
     if (!currentBooking?.id) {
       navigation.navigate('PassengerDashboard');
       return;
     }
+    setCancelVisible(true);
+  };
+
+  const handleCancel = async (reason: string) => {
+    if (cancelling || !currentBooking?.id) return;
     setCancelling(true);
     try {
-      await dispatch(cancelBooking(currentBooking.id)).unwrap();
+      await dispatch(cancelBooking({ bookingId: currentBooking.id, reason })).unwrap();
+      setCancelVisible(false);
       navigation.navigate('PassengerDashboard');
     } catch (error) {
       await notify('Could not cancel ride', typeof error === 'string' ? error : 'Please check your connection and try again. Your ride has not been cancelled.');
@@ -225,7 +234,7 @@ export const ConfirmBookingScreen = () => {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Button variant="outline" onPress={handleCancel} loading={cancelling} disabled={cancelling} style={styles.cancelBtn}>
+          <Button variant="outline" onPress={openCancel} loading={cancelling} disabled={cancelling} style={styles.cancelBtn}>
             Cancel Booking
           </Button>
           <View style={styles.tipRow}>
@@ -234,6 +243,14 @@ export const ConfirmBookingScreen = () => {
           </View>
         </View>
       </LinearGradient>
+
+      <CancelReasonSheet
+        visible={cancelVisible}
+        busy={cancelling}
+        subtitle="No driver has accepted yet. Your request will be withdrawn."
+        onConfirm={handleCancel}
+        onClose={() => setCancelVisible(false)}
+      />
     </View>
   );
 };

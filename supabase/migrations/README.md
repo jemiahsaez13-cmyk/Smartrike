@@ -259,3 +259,20 @@ Apply `069_auto_verify_driver_on_mtop_and_daily_quota.sql` after 068.
   approved/issued MTOP are backfilled.
 - Adds `users.daily_quota` (₱, 1–100,000). Drivers edit it from the Daily Goal
   card on the dashboard or Earnings screen; NULL falls back to ₱800.
+
+
+## Cancellation reasons, confirmed violations, deactivation (077)
+
+Apply `077_conduct_monitoring_and_deactivation.sql` after 076. The app build
+that asks for a cancellation reason writes the new booking columns, so apply
+this migration before shipping that build.
+
+- `bookings` gains `cancelled_by`, `cancellation_reason`, `cancellation_valid`
+  and `cancelled_at`. The server sets validity from the reason
+  (`is_valid_cancellation_reason`) and locks the details once written.
+- `driver_violations.status` adds `confirmed` (open → confirmed → resolved, or
+  open → dismissed). Passengers can read their own violation rows.
+- `users.status` adds `deactivated` with `deactivated_at`, `deactivated_by` and
+  `deactivation_reason`. Only `admin_deactivate_user(uuid, text)` can set it; it
+  cannot be reversed from the app, and `admin_delete_user` refuses deactivated
+  accounts so their records are kept.

@@ -425,6 +425,24 @@ const BookingCard = ({ booking: b, expanded, onToggle }: BookingCardProps) => {
               <Text style={styles.notesText}>{b.notes}</Text>
             </View>
           ) : null}
+
+          {b.status === 'cancelled' && b.cancelled_by ? (
+            <View style={[
+              styles.notesBox,
+              !!b.notes && { marginTop: spacing.xs },
+              b.cancellation_valid === false && { backgroundColor: colors.errorLight },
+            ]}>
+              <MaterialCommunityIcons
+                name={b.cancellation_valid === false ? 'alert-circle-outline' : 'close-circle-outline'}
+                size={14}
+                color={b.cancellation_valid === false ? colors.error : colors.textMuted}
+              />
+              <Text style={[styles.notesText, b.cancellation_valid === false && { color: colors.error }]}>
+                Cancelled by {b.cancelled_by}: {b.cancellation_reason || 'No reason given'}
+                {b.cancellation_valid === false ? ' · not a valid reason' : ''}
+              </Text>
+            </View>
+          ) : null}
         </View>
       )}
     </Card>

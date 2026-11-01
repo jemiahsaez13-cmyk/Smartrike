@@ -433,10 +433,29 @@ export const mockSupabase: any = {
       const me = currentProfile();
       if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can delete accounts.' } };
       if (me.id === params?.p_user_id) return { data: null, error: { message: 'You cannot delete your own account.' } };
+      if (db.users.some((u) => u.id === params?.p_user_id && u.status === 'deactivated')) {
+        return { data: null, error: { message: 'Deactivated accounts are kept with their ride and violation records and cannot be deleted.' } };
+      }
       const before = db.users.length;
       db.users = db.users.filter((u) => u.id !== params?.p_user_id);
       if (db.users.length === before) return { data: null, error: { message: 'That account no longer exists.' } };
       return { data: null, error: null };
+    }
+    if (fn === 'admin_deactivate_user') {
+      const me = currentProfile();
+      if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can deactivate accounts.' } };
+      if (me.id === params?.p_user_id) return { data: null, error: { message: 'You cannot deactivate your own account.' } };
+      if (String(params?.p_reason ?? '').trim().length < 5) return { data: null, error: { message: 'Give the reason for the deactivation.' } };
+      const target = db.users.find((u) => u.id === params?.p_user_id && u.user_type !== 'admin' && u.status !== 'deactivated');
+      if (!target) return { data: null, error: { message: 'Only a driver or passenger account that is not yet deactivated can be deactivated.' } };
+      Object.assign(target, {
+        status: 'deactivated',
+        deactivated_at: new Date().toISOString(),
+        deactivated_by: me.id,
+        deactivation_reason: String(params.p_reason).trim(),
+        current_status: 'offline',
+      });
+      return { data: clone(target), error: null };
     }
     if (fn === 'resubmit_mtop_document') {
       const app = db.franchise_applications.find((row) => row.id === params?.p_application_id);

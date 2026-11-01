@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { BookingService, isStalePendingBooking } from '@/models/services/BookingService';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
+import { NO_DRIVER_CANCELLATION_REASON } from '@/config/constants';
 import { Booking, Location, Rating } from '@/models/types';
 
 const bookingService = new BookingService();
@@ -16,7 +17,7 @@ export const fetchActiveBooking = createAsyncThunk(
       const active = await bookingRepo.findActiveByPassenger(passengerId);
       // A search no driver answered in time is closed instead of restored.
       if (isStalePendingBooking(active)) {
-        await bookingRepo.cancel(active!.id).catch(() => undefined);
+        await bookingRepo.cancel(active!.id, NO_DRIVER_CANCELLATION_REASON).catch(() => undefined);
         return null;
       }
       return active;
@@ -162,14 +163,17 @@ export const submitDriverRating = createAsyncThunk(
   }
 );
 
-export const cancelBooking = createAsyncThunk('booking/cancel', async (bookingId: string, { rejectWithValue }) => {
+export const cancelBooking = createAsyncThunk('booking/cancel', async (
+  { bookingId, reason }: { bookingId: string; reason: string },
+  { rejectWithValue }
+) => {
   try {
-    const result = await bookingService.cancelBooking(bookingId);
+    const result = await bookingService.cancelBooking(bookingId, reason);
     void ActivityLogService.logActivity({
       action_type: 'booking_cancelled',
       entity_type: 'booking',
       entity_id: bookingId,
-      description: 'A booking was cancelled.',
+      description: `A booking was cancelled. Reason: ${reason}.`,
       severity: 'warning',
     });
     return result;
@@ -237,12 +241,13 @@ const bookingSlice = createSlice({
       })
       .addCase(cancelBooking.fulfilled, (state, action) => {
         state.activeRequestId = undefined;
-        if (state.currentBooking?.id === action.meta.arg) {
+        const { bookingId } = action.meta.arg;
+        if (state.currentBooking?.id === bookingId) {
           state.currentBooking = null;
           state.searchingForDriver = false;
         }
-        state.activeBookings = state.activeBookings.filter(b => b.id !== action.meta.arg);
-        state.bookingHistory = state.bookingHistory.map(b => b.id === action.meta.arg ? action.payload : b);
+        state.activeBookings = state.activeBookings.filter(b => b.id !== bookingId);
+        state.bookingHistory = state.bookingHistory.map(b => b.id === bookingId ? action.payload : b);
       })
       .addCase(fetchActiveBooking.pending, (state, action) => {
         state.activeRequestId = action.meta.requestId;

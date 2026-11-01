@@ -16,6 +16,8 @@ import { useAppSelector } from '@/controllers/store';
 import { DriverViolation, ViolationStatus } from '@/models/entities/Association';
 import { ViolationService } from '@/models/services/AssociationService';
 import { AdminService } from '@/models/services/AdminService';
+import { ConductService, ConductSummary, InvalidCancellation } from '@/models/services/ConductService';
+import { CONDUCT_WINDOW_DAYS } from '@/config/constants';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
@@ -23,6 +25,7 @@ import { User } from '@/models/types';
 
 const violationService = new ViolationService();
 const adminService = new AdminService();
+const conductService = new ConductService();
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -31,12 +34,14 @@ type Filter = 'all' | ViolationStatus;
 const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: 'all',       label: 'All' },
   { key: 'open',      label: 'Open' },
+  { key: 'confirmed', label: 'Confirmed' },
   { key: 'resolved',  label: 'Resolved' },
   { key: 'dismissed', label: 'Dismissed' },
 ];
 
 const STATUS_META: Record<ViolationStatus, { label: string; color: string; bg: string; icon: string }> = {
   open:      { label: 'Open',      color: colors.error,   bg: colors.errorLight,   icon: 'alert-circle-outline' },
+  confirmed: { label: 'Confirmed', color: '#8A5A00',      bg: colors.warningLight, icon: 'alert-decagram-outline' },
   resolved:  { label: 'Resolved',  color: colors.success, bg: colors.successLight, icon: 'check-circle-outline' },
   dismissed: { label: 'Dismissed', color: colors.textMuted, bg: colors.surfaceAlt, icon: 'close-circle-outline' },
 };
@@ -52,7 +57,9 @@ const PRESET_VIOLATIONS = [
   'Other',
 ];
 
-const PASSENGER_VIOLATIONS = ['No-show at pickup', 'Rude or abusive behavior', 'Unsafe conduct', 'Refused to pay the fare', 'Fake / prank booking', 'Other'];
+const REPEATED_CANCELLATION = 'Repeated cancellation without valid reason';
+
+const PASSENGER_VIOLATIONS = ['No-show at pickup', 'Rude or abusive behavior', 'Unsafe conduct', 'Refused to pay the fare', 'Fake / prank booking', REPEATED_CANCELLATION, 'Other'];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -75,6 +82,8 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
+  const [conduct, setConduct] = useState<Map<string, ConductSummary>>(new Map());
+  const [cancellations, setCancellations] = useState<InvalidCancellation[]>([]);
 
   // Add violation form
   const [formVisible, setFormVisible] = useState(false);
@@ -91,11 +100,23 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
 
   // ─── Load ────────────────────────────────────────────────────────
+  // The weekly tally is advisory: if it cannot load, the list still does.
+  const loadConduct = useCallback(async () => {
+    try {
+      const result = await conductService.getWeeklySummaries();
+      setConduct(result.summaries);
+      setCancellations(result.cancellations);
+    } catch (error) {
+      console.warn('weekly conduct tally unavailable:', error);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const [v, allUsers] = await Promise.all([
         violationService.list(),
         adminService.getAllUsers(),
+        loadConduct(),
       ]);
       setViolations(v);
       setUsers(allUsers as User[]);
@@ -105,7 +126,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [loadConduct]);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,6 +137,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
 
   // ─── Derived stats ───────────────────────────────────────────────
   const countOpen      = violations.filter((v) => v.status === 'open').length;
+  const countConfirmed = violations.filter((v) => v.status === 'confirmed').length;
   const countResolved  = violations.filter((v) => v.status === 'resolved').length;
   const countDismissed = violations.filter((v) => v.status === 'dismissed').length;
 
@@ -123,16 +145,32 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
     ? violations
     : violations.filter((v) => v.status === filter);
 
+  const needsReview = Array.from(conduct.values()).filter((c) => c.flagged || c.repeatedCancellations);
+  const userById = (id: string) => users.find((u) => u.id === id);
+
   // ─── Form helpers ────────────────────────────────────────────────
-  const openForm = () => {
-    setSubjectRole('driver');
-    setSelectedUserId('');
-    setViolationType('');
+  const openForm = (prefill?: { role: 'driver' | 'passenger'; userId: string; type: string; description: string }) => {
+    setSubjectRole(prefill?.role ?? 'driver');
+    setSelectedUserId(prefill?.userId ?? '');
+    setViolationType(prefill?.type ?? '');
     setCustomType('');
-    setDescription('');
+    setDescription(prefill?.description ?? '');
     setPenalty('');
     setIncidentDate(today());
     setFormVisible(true);
+  };
+
+  // Pre-fills a violation from the passenger's invalid cancellations this week.
+  const recordRepeatedCancellations = (summary: ConductSummary) => {
+    const lines = cancellations
+      .filter((c) => c.passenger_id === summary.userId)
+      .map((c) => `• ${formatDate(c.cancelled_at)}: ${c.cancellation_reason || 'No reason given'}`);
+    openForm({
+      role: 'passenger',
+      userId: summary.userId,
+      type: REPEATED_CANCELLATION,
+      description: `${summary.invalidCancellations} cancellations without a valid reason in the last ${CONDUCT_WINDOW_DAYS} days:\n${lines.join('\n')}`,
+    });
   };
 
   const selectedUser = eligibleUsers.find((d) => d.id === selectedUserId);
@@ -171,6 +209,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
       newViolation.driver_name = subjectRole === 'driver' ? newViolation.subject_name : undefined;
       setViolations((prev) => [newViolation, ...prev]);
       setFormVisible(false);
+      void loadConduct();
       await notify('Violation recorded', `${newViolation.violation_type} has been logged for ${newViolation.subject_name}.`);
     } catch (error: any) {
       await notify('Could not save', error?.message || 'Check the fields and try again.');
@@ -183,11 +222,14 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
   const changeStatus = async (v: DriverViolation, status: ViolationStatus) => {
     if (v.status === status) return;
     const label = STATUS_META[status].label;
+    const who = v.subject_name ?? v.driver_name ?? 'this user';
     const okay = await confirm(
       `Mark as ${label}?`,
-      status === 'resolved'
-        ? `Confirm that the violation by ${v.subject_name ?? v.driver_name ?? 'this user'} has been resolved.`
-        : `Dismiss the violation by ${v.subject_name ?? v.driver_name ?? 'this user'}? This does not erase the record.`,
+      status === 'confirmed'
+        ? `Confirm that ${who} committed this violation? Confirmed violations count toward the ${CONDUCT_WINDOW_DAYS}-day review flag.`
+        : status === 'resolved'
+        ? `Confirm that the violation by ${who} has been resolved.`
+        : `Dismiss the violation by ${who}? This does not erase the record.`,
       { confirmText: label, destructive: status === 'dismissed' }
     );
     if (!okay) return;
@@ -197,6 +239,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
       setViolations((prev) =>
         prev.map((item) => (item.id === v.id ? { ...item, status } : item))
       );
+      void loadConduct();
     } catch (error: any) {
       await notify('Update failed', error?.message || 'Please try again.');
     } finally {
@@ -216,7 +259,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
           <Text style={styles.headerTitle}>Violations</Text>
           <Text style={styles.headerSub}>Driver and passenger records & resolution</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={openForm} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => openForm()} activeOpacity={0.8}>
           <MaterialCommunityIcons name="plus" size={20} color="#fff" />
           <Text style={styles.addBtnText}>Record</Text>
         </TouchableOpacity>
@@ -236,9 +279,53 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
         {/* Summary stats */}
         <View style={styles.statsRow}>
           <StatCard icon="alert-circle" label="Open" value={countOpen} color={colors.error} bg={colors.errorLight} />
+          <StatCard icon="alert-decagram" label="Confirmed" value={countConfirmed} color="#8A5A00" bg={colors.warningLight} />
           <StatCard icon="check-circle" label="Resolved" value={countResolved} color={colors.success} bg={colors.successLight} />
           <StatCard icon="close-circle" label="Dismissed" value={countDismissed} color={colors.textMuted} bg={colors.surfaceAlt} />
         </View>
+
+        {/* Users who crossed the weekly threshold — review only, no auto-restriction */}
+        {needsReview.length > 0 && (
+          <View style={styles.reviewBox}>
+            <View style={styles.reviewHeader}>
+              <MaterialCommunityIcons name="flag" size={16} color={colors.error} />
+              <Text style={styles.reviewTitle}>NEEDS ADMIN REVIEW · LAST {CONDUCT_WINDOW_DAYS} DAYS</Text>
+            </View>
+            {needsReview.map((c) => {
+              const u = userById(c.userId);
+              return (
+                <View key={c.userId} style={styles.reviewRow}>
+                  <View style={styles.reviewCopy}>
+                    <Text style={styles.reviewName} numberOfLines={1}>
+                      {u?.name ?? 'User'}{u ? ` · ${u.user_type === 'driver' ? 'Driver' : 'Passenger'}` : ''}
+                    </Text>
+                    {c.flagged && <Text style={styles.reviewMeta}>{c.confirmedViolations} confirmed violations</Text>}
+                    {c.repeatedCancellations && (
+                      <Text style={styles.reviewMeta}>{c.invalidCancellations} cancellations without a valid reason</Text>
+                    )}
+                  </View>
+                  {c.repeatedCancellations && (
+                    <TouchableOpacity style={styles.reviewBtn} onPress={() => recordRepeatedCancellations(c)} activeOpacity={0.8}>
+                      <Text style={styles.reviewBtnText}>Record</Text>
+                    </TouchableOpacity>
+                  )}
+                  {c.flagged && (
+                    <TouchableOpacity
+                      style={styles.reviewBtn}
+                      onPress={() => navigation.navigate('UserManagement', { filter: 'flagged' })}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.reviewBtnText}>Review</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            <Text style={styles.reviewHint}>
+              Flags are for review only. No restriction is applied until you act on the account.
+            </Text>
+          </View>
+        )}
 
         {/* Filter chips */}
         <ScrollView
@@ -252,6 +339,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
             const count =
               key === 'all' ? violations.length
               : key === 'open' ? countOpen
+              : key === 'confirmed' ? countConfirmed
               : key === 'resolved' ? countResolved
               : countDismissed;
             return (
@@ -290,6 +378,7 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
             <ViolationCard
               key={v.id}
               violation={v}
+              flagged={!!conduct.get((v.driver_id || v.passenger_id) ?? '')?.flagged}
               busy={statusBusy === v.id}
               onChangeStatus={changeStatus}
             />
@@ -524,11 +613,12 @@ const StatCard = ({
 
 interface ViolationCardProps {
   violation: DriverViolation;
+  flagged: boolean;
   busy: boolean;
   onChangeStatus: (v: DriverViolation, status: ViolationStatus) => void;
 }
 
-const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProps) => {
+const ViolationCard = ({ violation: v, flagged, busy, onChangeStatus }: ViolationCardProps) => {
   const meta = STATUS_META[v.status];
   return (
     <Card variant="elevated" padding="md" style={styles.card}>
@@ -542,6 +632,12 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
             {v.subject_name ?? v.driver_name ?? 'User'}
           </Text>
           <Text style={styles.cardDate}>{v.passenger_id ? 'Passenger' : 'Driver'} / {formatDate(v.incident_date)}</Text>
+          {flagged && (
+            <View style={styles.flagPill}>
+              <MaterialCommunityIcons name="flag" size={10} color={colors.error} />
+              <Text style={styles.flagPillText}>FLAGGED THIS WEEK</Text>
+            </View>
+          )}
         </View>
         <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
           <MaterialCommunityIcons name={meta.icon as any} size={12} color={meta.color} />
@@ -591,10 +687,21 @@ const ViolationCard = ({ violation: v, busy, onChangeStatus }: ViolationCardProp
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.resolveBtn}
-            onPress={() => onChangeStatus(v, 'resolved')}
+            onPress={() => onChangeStatus(v, 'confirmed')}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons name="check" size={15} color="#fff" />
+            <Text style={styles.resolveBtnText}>Confirm Violation</Text>
+          </TouchableOpacity>
+        </View>
+      ) : v.status === 'confirmed' ? (
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.resolveBtn}
+            onPress={() => onChangeStatus(v, 'resolved')}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="check-all" size={15} color="#fff" />
             <Text style={styles.resolveBtnText}>Mark Resolved</Text>
           </TouchableOpacity>
         </View>
@@ -675,6 +782,37 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
+
+  // Weekly review flags
+  reviewBox: {
+    marginHorizontal: spacing.screen,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.errorLight,
+    gap: spacing.sm,
+  },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  reviewTitle: { ...typography.labelSmall, fontSize: 10, fontWeight: '800', letterSpacing: 1, color: colors.error },
+  reviewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm,
+  },
+  reviewCopy: { flex: 1, minWidth: 0 },
+  reviewName: { ...typography.label, fontSize: 14, color: colors.text },
+  reviewMeta: { ...typography.bodySmall, fontSize: 12, color: colors.error, marginTop: 1 },
+  reviewBtn: {
+    minHeight: 36, paddingHorizontal: spacing.md, borderRadius: radius.md,
+    backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center',
+  },
+  reviewBtnText: { ...typography.label, fontSize: 12, color: '#fff' },
+  reviewHint: { ...typography.bodySmall, fontSize: 11, color: colors.textSecondary },
+  flagPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start',
+    marginTop: 4, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: radius.sm, backgroundColor: colors.errorLight,
+  },
+  flagPillText: { ...typography.labelSmall, fontSize: 9, fontWeight: '800', color: colors.error, letterSpacing: 0.5 },
 
   // Filter chips
   filterScroll: { marginTop: spacing.sm },
