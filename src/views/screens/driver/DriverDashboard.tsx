@@ -36,6 +36,7 @@ export const DriverDashboard = () => {
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
+  const documentsStatus = (user as any)?.driver_documents_status as string | null | undefined;
 
   // A brand-new driver has no rated trips — show "New", not the default 5.0.
   const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
@@ -256,6 +257,28 @@ export const DriverDashboard = () => {
       </LinearGradient>
 
       <View style={styles.body}>
+        {!isVerified && documentsStatus && (
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('DriverDocuments')}>
+            <Card variant="elevated" padding="md" style={[styles.applicationCard, documentsStatus === 'rejected' && styles.applicationCardRejected]}>
+              <MaterialCommunityIcons
+                name={documentsStatus === 'rejected' ? 'alert-circle-outline' : 'file-document-check-outline'}
+                size={24}
+                color={documentsStatus === 'rejected' ? colors.error : colors.primary}
+              />
+              <View style={styles.applicationText}>
+                <Text style={styles.applicationTitle}>
+                  {documentsStatus === 'rejected' ? 'Some documents were rejected' : 'Driver application under review'}
+                </Text>
+                <Text style={styles.applicationSub}>
+                  {documentsStatus === 'rejected'
+                    ? 'Upload new photos so the administrator can approve you.'
+                    : 'View your submitted documents and their review status.'}
+                </Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />
+            </Card>
+          </TouchableOpacity>
+        )}
         {incomingRequests.length > 0 && (
           <TouchableOpacity onPress={() => navigation.navigate('BookingRequests')} activeOpacity={0.9}>
             <LinearGradient colors={gradients.accent} style={styles.requestAlert} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -487,6 +510,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 0,
   },
+  applicationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  applicationCardRejected: { backgroundColor: colors.errorLight },
+  applicationText: { flex: 1, minWidth: 0 },
+  applicationTitle: { ...typography.label, fontSize: 15, color: colors.text },
+  applicationSub: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   body: {
     paddingTop: spacing.lg,
     paddingHorizontal: spacing.screen,

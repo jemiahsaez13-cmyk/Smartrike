@@ -1,3 +1,5 @@
+import { DriverDocumentsStatus } from './DriverDocument';
+
 export interface User {
   id: string;
   auth_id: string;
@@ -50,6 +52,8 @@ export interface Driver extends User {
   last_location_update: Date;
   // Driver-chosen daily earnings goal; null falls back to DRIVER_GOAL_DAILY.
   daily_quota?: number | null;
+  // Summary of the registration documents (migration 078), set by triggers.
+  driver_documents_status?: DriverDocumentsStatus | null;
 }
 
 export interface VehicleDetails {

@@ -22,6 +22,7 @@ import { OnlinePaymentSettingsScreen } from '@/views/screens/driver/OnlinePaymen
 import { RidePaymentVerificationScreen } from '@/views/screens/driver/RidePaymentVerificationScreen';
 import { DriverTodaScreen } from '@/views/screens/driver/DriverTodaScreen';
 import { MyViolationsScreen } from '@/views/screens/shared/MyViolationsScreen';
+import { DriverDocumentsScreen } from '@/views/screens/driver/DriverDocumentsScreen';
 import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
 
 const Stack = createNativeStackNavigator();
@@ -72,5 +73,6 @@ export const DriverNavigator = () => (
     <Stack.Screen name="RidePaymentVerification" component={RidePaymentVerificationScreen} />
     <Stack.Screen name="DriverToda" component={DriverTodaScreen} />
     <Stack.Screen name="MyViolations" component={MyViolationsScreen} />
+    <Stack.Screen name="DriverDocuments" component={DriverDocumentsScreen} />
   </Stack.Navigator>
 );

@@ -11,12 +11,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Text, TextInput } from 'react-native-paper';
 import { AuthService } from '@/models/services/AuthService';
+import { DriverDocumentService } from '@/models/services/DriverDocumentService';
 import { Button } from '@/views/components/common/Button';
 import { Input } from '@/views/components/common/Input';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
 import { notify } from '@/utils/confirm';
 
 const authService = new AuthService();
+const documentService = new DriverDocumentService();
 const RESEND_SECONDS = 60;
 
 export const EmailVerificationScreen = () => {
@@ -51,12 +53,27 @@ export const EmailVerificationScreen = () => {
     setLoading(true);
     setError('');
     try {
-      const user = await authService.verifySignupCode(email, code);
+      // A failed upload never blocks the account: after sign-in the driver is
+      // asked for the documents again before reaching the dashboard.
+      let documentsSent = false;
+      const draft = DriverDocumentService.getDraft(email);
+      const user = await authService.verifySignupCode(email, code, async (profile) => {
+        if (profile.user_type !== 'driver' || !draft) return;
+        try {
+          await documentService.submit(draft);
+          documentsSent = true;
+        } catch (uploadError) {
+          console.warn('driver documents not uploaded during sign-up:', uploadError);
+        }
+      });
+      DriverDocumentService.clearDraft(email);
       await notify(
         'Account created',
-        user.user_type === 'driver'
-          ? 'Your email is verified and your driver account has been created. You can now sign in.'
-          : 'Your email is verified and your account has been created. You can now sign in.'
+        user.user_type !== 'driver'
+          ? 'Your email is verified and your account has been created. You can now sign in.'
+          : documentsSent
+          ? 'Your email is verified and your documents were sent to the FEDTODAB administrator for review. You can now sign in.'
+          : 'Your email is verified and your driver account has been created. Sign in to upload your documents for review.'
       );
       navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     } catch (verificationError: any) {

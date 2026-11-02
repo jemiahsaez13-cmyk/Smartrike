@@ -253,7 +253,12 @@ export class AuthService {
     return { user, session, needsEmailConfirmation: false as const };
   }
 
-  async verifySignupCode(email: string, code: string) {
+  /**
+   * `whileSignedIn` runs with the short-lived verification session, after the
+   * profile exists and before it is signed out (used to upload driver
+   * documents picked on the registration form).
+   */
+  async verifySignupCode(email: string, code: string, whileSignedIn?: (user: any) => Promise<void>) {
     const normalizedEmail = normalizeEmail(email);
     this.assertValidEmail(normalizedEmail);
     if (!/^\d{6}$/.test(code.trim())) {
@@ -277,6 +282,7 @@ export class AuthService {
     // Verifying the code is what creates the profile row; confirm it exists
     // so the user is not sent to sign in with an account that is not there.
     const user = await this.fetchProfileWithRetry(data.user.id);
+    if (user && whileSignedIn) await whileSignedIn(user);
 
     // Verification completes registration, but users explicitly sign in from
     // the login screen afterwards. Remove the temporary verification session.

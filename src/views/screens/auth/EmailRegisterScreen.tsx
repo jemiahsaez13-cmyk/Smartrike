@@ -12,6 +12,9 @@ import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
+import { DriverDocumentPicker } from '@/views/components/driver/DriverDocumentPicker';
+import { DriverDocumentService } from '@/models/services/DriverDocumentService';
+import { DRIVER_DOCUMENT_TYPES, DriverDocumentType } from '@/models/entities/DriverDocument';
 import {
   isValidEmail,
   isValidPassword,
@@ -27,7 +30,7 @@ import {
 
 type Field =
   | 'firstName' | 'lastName' | 'email' | 'password' | 'confirmPassword'
-  | 'licenseNumber' | 'plateNumber';
+  | 'licenseNumber' | 'plateNumber' | 'homeAddress';
 
 export const EmailRegisterScreen = () => {
   const [firstName, setFirstName] = useState('');
@@ -41,6 +44,9 @@ export const EmailRegisterScreen = () => {
   const [plateNumber, setPlateNumber] = useState('');
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
+  const [homeAddress, setHomeAddress] = useState('');
+  const [documents, setDocuments] = useState<Partial<Record<DriverDocumentType, string>>>({});
+  const [missingDocs, setMissingDocs] = useState<DriverDocumentType[]>([]);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -89,6 +95,7 @@ export const EmailRegisterScreen = () => {
         ['licenseNumber', !!licenseNumber.trim() && !isValidDriverLicenseNumber(licenseNumber), 'Invalid license number', `"${licenseNumber.trim()}" is not a valid license number. ${LICENSE_NUMBER_FORMAT}`],
         ['plateNumber', !plateNumber.trim(), 'Plate number required', 'Enter your vehicle plate number.'],
         ['plateNumber', !!plateNumber.trim() && !isValidDriverPlateNumber(plateNumber), 'Invalid plate number', `"${plateNumber.trim()}" is not a valid plate number. ${PLATE_NUMBER_FORMAT}`],
+        ['homeAddress', homeAddress.trim().length < 10, 'Address required', 'Enter your complete residential address: house no., street, purok/sitio, barangay and municipality.'],
       );
     }
     const failed = checks.find(([, bad]) => bad);
@@ -100,9 +107,23 @@ export const EmailRegisterScreen = () => {
     }
     setErrors({});
 
+    if (userType === 'driver') {
+      const missing = DRIVER_DOCUMENT_TYPES.filter((d) => !documents[d.type]);
+      setMissingDocs(missing.map((d) => d.type));
+      if (missing.length) {
+        notify('Documents required', `Upload a clear photo of: ${missing.map((d) => d.label).join(', ')}.`);
+        return;
+      }
+    }
+
     if (!agreedToTerms) {
       notify('Almost there', 'Please agree to the terms and conditions to continue.');
       return;
+    }
+
+    // Uploaded right after the email code creates the account.
+    if (userType === 'driver') {
+      DriverDocumentService.holdDraft(cleanEmail, { homeAddress: homeAddress.trim(), documents });
     }
 
     try {
@@ -112,6 +133,7 @@ export const EmailRegisterScreen = () => {
         ...(userType === 'driver'
           ? {
               license_number: normalizeDriverLicenseNumber(licenseNumber),
+              home_address: homeAddress.trim(),
               vehicle_details: {
                 plate_number: normalizePlateNumber(plateNumber),
                 make: vehicleMake.trim(),
@@ -306,11 +328,31 @@ export const EmailRegisterScreen = () => {
                     containerStyle={styles.nameField}
                   />
                 </View>
+                <Input
+                  label="Complete residential address"
+                  placeholder="House no., street, purok/sitio, barangay, municipality"
+                  value={homeAddress}
+                  onChangeText={edit('homeAddress', setHomeAddress)}
+                  errorText={errors.homeAddress}
+                  autoCapitalize="words"
+                  multiline
+                  left={<TextInput.Icon icon="home-outline" color={colors.textMuted} />}
+                />
+
+                <Text style={styles.sectionLabel}>REQUIRED DOCUMENTS</Text>
+                <DriverDocumentPicker
+                  values={documents}
+                  invalid={missingDocs}
+                  onChange={(type, uri) => {
+                    setDocuments((prev) => ({ ...prev, [type]: uri }));
+                    setMissingDocs((prev) => prev.filter((t) => t !== type));
+                  }}
+                />
                 {/* TODA membership is assigned by the administrator from the
                     registered TODA list (the app matches members by TODA name),
                     so it is not typed in at sign-up. */}
                 <Text style={styles.passwordHint}>
-                  Your TODA will be assigned by the FEDTODAB administrator when your account is approved.
+                  The FEDTODAB administrator reviews these documents before you can accept bookings, and assigns your TODA when your account is approved.
                 </Text>
               </View>
             )}
