@@ -604,7 +604,7 @@ export const UserManagementScreen = () => {
                     }}
                   >
                     <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.text} />
-                    <Text style={styles.actionLabel}>View Driver Profile (rating & reviews)</Text>
+                    <Text style={styles.actionLabel}>View Driver Profile (details, photos, reviews)</Text>
                   </TouchableOpacity>
                 )}
                 {selected.user_type !== 'admin' && selected.status !== 'deactivated' && (

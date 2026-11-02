@@ -23,6 +23,7 @@ import { formatDate } from '@/utils/dateUtils';
 import { useAppSelector, useAppDispatch } from '@/controllers/store';
 import { submitRating } from '@/controllers/slices/bookingSlice';
 import { notify } from '@/utils/confirm';
+import { AdminDriverDetails } from '@/views/components/admin/AdminDriverDetails';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,8 @@ export const DriverProfileScreen = () => {
   const me = useAppSelector((s) => s.auth.user);
   const dispatch = useAppDispatch();
   const isPassenger = me?.user_type !== 'driver';
+  // Admins see every account detail and uploaded photo, even before verification.
+  const isAdmin = me?.user_type === 'admin';
 
   const [driver, setDriver] = useState<Partial<Driver> | null>(driverSnapshot ?? null);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
@@ -312,6 +315,8 @@ export const DriverProfileScreen = () => {
         {/* Spacer to account for header */}
         <View style={{ height: HEADER_MAX + 12 }} />
 
+        {isAdmin && driverId ? <AdminDriverDetails driverId={driverId} driver={driver as any} /> : null}
+
         {/* ── Vehicle card ── */}
         <Surface style={styles.card} elevation={1}>
           <Text style={styles.cardTitle}>Vehicle</Text>
@@ -459,7 +464,8 @@ export const DriverProfileScreen = () => {
           )}
         </Surface>
 
-        {/* ── Safety badges ── */}
+        {/* ── Safety badges (only once the account is actually verified) ── */}
+        {(driver as Driver)?.verification_status === 'verified' && (
         <Surface style={styles.card} elevation={1}>
           <Text style={styles.cardTitle}>Safety & Verification</Text>
           <View style={styles.badgeGrid}>
@@ -478,6 +484,7 @@ export const DriverProfileScreen = () => {
             ))}
           </View>
         </Surface>
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </Animated.ScrollView>
