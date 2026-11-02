@@ -337,3 +337,22 @@ but the ID photo upload fails).
   submitted or the ride is completed.
 - `protect_booking_financial_fields` (040) also locks the discount columns
   against direct client updates.
+
+
+## Body numbers per route, inactive body numbers (082)
+
+Apply `082_body_number_routes_and_release.sql` after 081, before shipping the
+build with the route picker and "Release body no." (issuing without a route,
+and the rest of the app, keep working on a database without 082).
+
+- `franchise_applications.route_id` → `toda_routes`: picked by the admin with
+  the body number at MTOP issuance (required when the TODA has routes). A
+  renewal keeps the route of the unit it renews. Drivers cannot set it.
+- `body_number_released_at` / `_by` / `_release_reason`: a terminated or
+  transferred unit keeps blocking its body number until an admin runs
+  `release_body_number(uuid, text)` with a reason. Every record of that number
+  in the TODA is stamped and kept as history.
+- `idx_franchise_body_number` (072) now ignores released records, so a
+  released number can be issued again. Refused while an active or open MTOP
+  still holds the number.
+- `enforce_mtop_workflow` is the 074 version plus these rules.

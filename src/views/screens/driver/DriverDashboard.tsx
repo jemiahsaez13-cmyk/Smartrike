@@ -8,7 +8,8 @@ import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { setUser } from '@/controllers/slices/authSlice';
 import { fetchMyApplication } from '@/controllers/slices/franchiseSlice';
-import { assignedBodyNumber } from '@/models/entities/Franchise';
+import { assignedBodyNumber, assignedRouteId, routeLabel } from '@/models/entities/Franchise';
+import { TodaService } from '@/models/services/TodaService';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { Driver } from '@/models/types';
@@ -39,7 +40,22 @@ export const DriverDashboard = () => {
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
   const documentsStatus = (user as any)?.driver_documents_status as string | null | undefined;
-  const bodyNumber = assignedBodyNumber(useAppSelector(state => state.franchise.myApplication));
+  const myApplication = useAppSelector(state => state.franchise.myApplication);
+  const bodyNumber = assignedBodyNumber(myApplication);
+  // C2: the TODA route assigned with the body number (migration 082).
+  const routeId = assignedRouteId(myApplication);
+  const [routeName, setRouteName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!routeId) {
+      setRouteName(null);
+      return;
+    }
+    let active = true;
+    new TodaService().getRoute(routeId)
+      .then((route) => { if (active) setRouteName(routeLabel(route)); })
+      .catch(() => { if (active) setRouteName(null); });
+    return () => { active = false; };
+  }, [routeId]);
 
   // A brand-new driver has no rated trips — show "New", not the default 5.0.
   const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
@@ -343,7 +359,9 @@ export const DriverDashboard = () => {
             <View style={styles.todaCardText}>
               <Text style={styles.todaCardLabel}>MY TODA</Text>
               <Text style={styles.todaCardName}>{(user as any).toda_membership || 'Not assigned yet'}</Text>
-              {bodyNumber ? <Text style={styles.todaCardMeta}>Body No. {bodyNumber}</Text> : null}
+              {bodyNumber ? (
+                <Text style={styles.todaCardMeta}>Body No. {bodyNumber}{routeName ? ` · Route: ${routeName}` : ''}</Text>
+              ) : null}
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
           </TouchableOpacity>

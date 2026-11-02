@@ -18,7 +18,13 @@ import {
   summarizeDocuments,
   mtopExpiryFrom,
   renewalStanding,
+  nextBodyNumber,
+  routeLabel,
+  SuccessionRequest,
+  relationshipLabel,
 } from '@/models/entities/Franchise';
+import { FranchiseService } from '@/models/services/FranchiseService';
+import { TodaRoute } from '@/models/entities/Toda';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing, typography, radius, shadows, gradients } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
@@ -29,6 +35,7 @@ import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { TodaService } from '@/models/services/TodaService';
 
 const todaService = new TodaService();
+const franchiseService = new FranchiseService();
 
 // Amber text on white needs a darker shade than the theme's fill amber.
 const AMBER_TEXT = '#9A6700';
@@ -181,7 +188,11 @@ export const FranchiseManagementScreen = () => {
   const dispatch = useAppDispatch();
   const { applications, loading } = useAppSelector((state) => state.franchise);
   const currentUser = useAppSelector((state) => state.auth.user);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'issued'>('all');
+  // B13: one place for every request type. Change of Unit and Succession
+  // filters show only those requests (third-party transfers and terminations
+  // are recorded directly by the admin in the Registry, not requested).
+  const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'cou' | 'succession' | 'issued'>('all');
+  const [successionRequests, setSuccessionRequests] = useState<SuccessionRequest[]>([]);
   // Derive the document-review modal target from the store so it auto-updates.
   const [reviewAppId, setReviewAppId] = useState<string | null>(null);
   const reviewApp = applications.find((a) => a.id === reviewAppId) ?? null;
@@ -196,6 +207,10 @@ export const FranchiseManagementScreen = () => {
   const [billingApp, setBillingApp] = useState<FranchiseApplication | null>(null);
   // Body numbers typed by the admin before issuing, keyed by application id.
   const [bodyDrafts, setBodyDrafts] = useState<Record<string, string>>({});
+  // B5: TODA route picked with the body number, keyed by application id, and
+  // each TODA's routes keyed by lower-case TODA name.
+  const [routeDrafts, setRouteDrafts] = useState<Record<string, string>>({});
+  const [todaRoutes, setTodaRoutes] = useState<Record<string, TodaRoute[]>>({});
 
   // Change of Unit review state
   const [couActionBusy, setCouActionBusy] = useState<string | null>(null); // app id
@@ -205,6 +220,38 @@ export const FranchiseManagementScreen = () => {
   useEffect(() => {
     dispatch(fetchAllApplications());
   }, [dispatch]);
+
+  // Pending succession requests (reviewed in the Registry). Refreshed with the
+  // application list; optional so the screen works before migration 074.
+  useEffect(() => {
+    let active = true;
+    franchiseService.getPendingSuccessionRequests()
+      .then((rows) => { if (active) setSuccessionRequests(rows); })
+      .catch(() => { if (active) setSuccessionRequests([]); });
+    return () => { active = false; };
+  }, [applications]);
+
+  // Load the routes of every TODA with an application waiting for issuance.
+  useEffect(() => {
+    const missing = Array.from(new Set(
+      applications
+        .filter((a) => a.status === 'approved' && a.type !== 'renewal')
+        .map((a) => (a.toda ?? '').trim().toLowerCase())
+        .filter((key) => key && !(key in todaRoutes))
+    ));
+    if (missing.length === 0) return;
+    let active = true;
+    Promise.all(missing.map(async (key) => {
+      try {
+        return [key, await todaService.listRoutesByTodaName(key)] as const;
+      } catch {
+        return [key, [] as TodaRoute[]] as const;
+      }
+    })).then((entries) => {
+      if (active) setTodaRoutes((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+    });
+    return () => { active = false; };
+  }, [applications, todaRoutes]);
 
   // Keep the admin queue current while this screen is open. New renewal
   // submissions appear without requiring the administrator to refresh.
@@ -300,6 +347,8 @@ export const FranchiseManagementScreen = () => {
     const next = NEXT[app.status];
     if (!next) return;
     let bodyNumber = '';
+    let routeId: string | null = null;
+    let routeName = '';
     if (next.status === 'issued') {
       bodyNumber = (bodyDrafts[app.id] ?? app.body_number ?? '').trim().toUpperCase();
       if (!bodyNumber) {
@@ -313,11 +362,24 @@ export const FranchiseManagementScreen = () => {
         && a.driver_id !== app.driver_id
         && a.toda === app.toda
         && a.status !== 'rejected'
+        // B7: a released number (terminated unit) can be issued again.
+        && !a.body_number_released_at
         && (a.body_number || '').trim().toUpperCase() === bodyNumber
       );
       if (clash) {
         await notify('Body number already used', `Body number ${bodyNumber} is already assigned to ${clash.driver_name} in ${app.toda}. Enter a different body number.`);
         return;
+      }
+      // B5: a new unit runs on one of the TODA's routes (when it has any).
+      // A renewal keeps the route of the unit it renews.
+      if (app.type !== 'renewal') {
+        const routes = todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? [];
+        routeId = routeDrafts[app.id] ?? app.route_id ?? null;
+        if (routes.length > 0 && !routes.some((r) => r.id === routeId)) {
+          await notify('Route required', `Choose the ${app.toda} route this tricycle will serve.`);
+          return;
+        }
+        routeName = routeLabel(routes.find((r) => r.id === routeId)) ?? '';
       }
       // B4: a new unit needs a free slot in the TODA's approved capacity. A
       // renewal replaces its own record, so it does not add a unit.
@@ -338,7 +400,7 @@ export const FranchiseManagementScreen = () => {
       }
       const okay = await confirm(
         'Issue MTOP',
-        `Issue the MTOP permit to ${app.driver_name} with tricycle body number ${bodyNumber}? Confirm only when the permit is ready for release.`,
+        `Issue the MTOP permit to ${app.driver_name} with tricycle body number ${bodyNumber}${routeName ? ` on route ${routeName}` : ''}? Confirm only when the permit is ready for release.`,
         { confirmText: 'Issue MTOP' }
       );
       if (!okay) return;
@@ -346,6 +408,8 @@ export const FranchiseManagementScreen = () => {
     const patch: Partial<FranchiseApplication> = { ...next.patch };
     if (next.status === 'issued') {
       patch.body_number = bodyNumber;
+      // Sent only when chosen, so issuing still works before migration 082.
+      if (routeId) patch.route_id = routeId;
       const year = new Date().getFullYear();
       patch.mtop_number = app.mtop_number || `MTOP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
       patch.franchise_status = 'active';
@@ -361,6 +425,7 @@ export const FranchiseManagementScreen = () => {
       await dispatch(advanceApplication({ id: app.id, status: next.status, patch })).unwrap();
       if (next.status === 'issued') {
         setBodyDrafts(({ [app.id]: _done, ...rest }) => rest);
+        setRouteDrafts(({ [app.id]: _done, ...rest }) => rest);
       }
     } catch (error: any) {
       const message = String(typeof error === 'string' ? error : error?.message || '');
@@ -513,7 +578,9 @@ export const FranchiseManagementScreen = () => {
   // All issued franchises that have a pending COU request.
   const pendingCouApps = applications.filter((a) => a.cou_status === 'pending');
 
+  const requestFilter = filter === 'cou' || filter === 'succession';
   const filtered = applications.filter((a) => {
+    if (requestFilter) return false;
     if (filter === 'pending') return a.status !== 'issued' && a.status !== 'rejected';
     if (filter === 'renewals') return a.type === 'renewal';
     if (filter === 'issued') return a.status === 'issued';
@@ -604,12 +671,68 @@ export const FranchiseManagementScreen = () => {
           <FilterChip label="All" count={counts.all} active={filter === 'all'} onPress={() => setFilter('all')} />
           <FilterChip label="Pending" count={counts.pending} active={filter === 'pending'} onPress={() => setFilter('pending')} />
           <FilterChip label="Renewals" count={counts.renewals} active={filter === 'renewals'} onPress={() => setFilter('renewals')} />
+          <FilterChip label="Change of Unit" count={pendingCouApps.length} active={filter === 'cou'} onPress={() => setFilter('cou')} />
+          <FilterChip label="Succession" count={successionRequests.length} active={filter === 'succession'} onPress={() => setFilter('succession')} />
           <FilterChip label="Issued" count={counts.issued} active={filter === 'issued'} onPress={() => setFilter('issued')} />
         </ScrollView>
 
         <View style={styles.body}>
+          {/* ── Succession requests (B13 overview; reviewed in the Registry) ── */}
+          {(filter === 'all' || filter === 'succession') && successionRequests.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={[styles.sectionIcon, { backgroundColor: colors.warningLight }]}>
+                  <MaterialCommunityIcons name="account-switch-outline" size={16} color={AMBER_TEXT} />
+                </View>
+                <Text style={styles.sectionTitle}>Succession Requests</Text>
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>{successionRequests.length}</Text>
+                </View>
+              </View>
+              {successionRequests.map((request) => {
+                const unit = applications.find((a) => a.id === request.franchise_id);
+                return (
+                  <View key={request.id} style={styles.requestRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.requestName} numberOfLines={1}>
+                        {request.requested_by_name} → {request.successor_name}
+                      </Text>
+                      <Text style={styles.requestMeta} numberOfLines={2}>
+                        {[
+                          relationshipLabel(request.relationship),
+                          unit?.mtop_number,
+                          unit?.body_number ? `Body ${unit.body_number}` : null,
+                          formatDate(request.created_at),
+                        ].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.btnSoft, { marginTop: 0, paddingHorizontal: 16 }]}
+                      onPress={() => navigation.navigate('FranchiseRegistry')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.btnSoftText}>Review</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {requestFilter && (filter === 'cou' ? pendingCouApps.length === 0 : successionRequests.length === 0) ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <MaterialCommunityIcons name="inbox-outline" size={34} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No pending requests</Text>
+              <Text style={styles.emptyText}>
+                {filter === 'cou' ? 'Change of Unit requests from drivers will show up here.' : 'Succession requests from franchise holders will show up here.'}
+              </Text>
+            </View>
+          ) : null}
+
           {/* ── Change of Unit Pending Requests ── */}
-          {pendingCouApps.length > 0 ? (
+          {filter !== 'succession' && pendingCouApps.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={[styles.sectionIcon, { backgroundColor: colors.warningLight }]}>
@@ -734,10 +857,12 @@ export const FranchiseManagementScreen = () => {
             </View>
           ) : null}
 
-          <View style={styles.listHeader}>
-            <Text style={styles.listLabel}>APPLICATIONS</Text>
-            <Text style={styles.listCount}>{filtered.length} shown</Text>
-          </View>
+          {!requestFilter ? (
+            <View style={styles.listHeader}>
+              <Text style={styles.listLabel}>APPLICATIONS</Text>
+              <Text style={styles.listCount}>{filtered.length} shown</Text>
+            </View>
+          ) : null}
 
           {filtered.map((app) => {
             const next = NEXT[app.status];
@@ -1019,6 +1144,21 @@ export const FranchiseManagementScreen = () => {
                         <Text style={styles.bodyPanelTitle}>Assign tricycle body number</Text>
                       </View>
                       <Text style={styles.bodyPanelHint}>Payment is verified. Enter the body number from the office records — it is printed on the MTOP.</Text>
+                      {(() => {
+                        const suggested = nextBodyNumber(applications, app.toda);
+                        const current = (bodyDrafts[app.id] ?? app.body_number ?? '').trim();
+                        return current === suggested ? null : (
+                          <TouchableOpacity
+                            style={styles.bodySuggest}
+                            onPress={() => setBodyDrafts((drafts) => ({ ...drafts, [app.id]: suggested }))}
+                            disabled={busy}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialCommunityIcons name="numeric" size={14} color={colors.primary} />
+                            <Text style={styles.bodySuggestText}>Use next number {suggested}</Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
                       <TextInput
                         style={styles.bodyInput}
                         value={bodyDrafts[app.id] ?? app.body_number ?? ''}
@@ -1035,6 +1175,27 @@ export const FranchiseManagementScreen = () => {
                           <MaterialCommunityIcons name="lock-outline" size={12} color={AMBER_TEXT} />
                           <Text style={styles.bodyRequiredText}>Enter the body number to unlock Issue MTOP.</Text>
                         </View>
+                      ) : null}
+                      {(todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? []).length > 0 ? (
+                        <>
+                          <Text style={[styles.bodyPanelHint, { marginTop: 10 }]}>Route</Text>
+                          <View style={styles.routeChips}>
+                            {(todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? []).map((route) => {
+                              const selected = (routeDrafts[app.id] ?? app.route_id) === route.id;
+                              return (
+                                <TouchableOpacity
+                                  key={route.id}
+                                  style={[styles.routeChip, selected && styles.routeChipActive]}
+                                  onPress={() => setRouteDrafts((drafts) => ({ ...drafts, [app.id]: route.id }))}
+                                  disabled={busy}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[styles.routeChipText, selected && styles.routeChipTextActive]}>{routeLabel(route)}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </>
                       ) : null}
                     </View>
                   )
@@ -1092,7 +1253,7 @@ export const FranchiseManagementScreen = () => {
             );
           })}
 
-          {filtered.length === 0 && (
+          {!requestFilter && filtered.length === 0 && (
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
                 <MaterialCommunityIcons name="file-search-outline" size={34} color={colors.primary} />
@@ -1501,6 +1662,19 @@ const styles = StyleSheet.create({
 
   // ── Sections ──
   section: { marginBottom: spacing.md },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: 12,
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  requestName: { ...typography.label, fontSize: 14 },
+  requestMeta: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   sectionIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { ...typography.label, fontSize: 15, flex: 1 },
@@ -1725,6 +1899,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   bodyRequired: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  bodySuggest: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 8, minHeight: 32 },
+  bodySuggestText: { ...typography.label, fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
+  routeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  routeChip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  routeChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  routeChipText: { ...typography.labelSmall, fontSize: 12, color: colors.textSecondary },
+  routeChipTextActive: { color: '#fff' },
   bodyRequiredText: { ...typography.labelSmall, fontSize: 11, color: AMBER_TEXT },
   bodyLocked: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 },
   bodyLockedValue: { ...typography.number, fontSize: 18, letterSpacing: 1, color: colors.primary },

@@ -276,6 +276,7 @@ export class ManagementReportService {
       title: `${e.bodyNumber ? `Body ${e.bodyNumber}` : 'No body no.'} · ${e.driverName}`,
       subtitle: [
         e.plateNumber ? `Plate: ${e.plateNumber}` : null,
+        e.route ? `Route: ${e.route}` : null,
         e.mtopNumber ? `MTOP: ${e.mtopNumber}` : 'No MTOP',
         e.expiryDate ? `Expires: ${e.expiryDate}` : null,
       ].filter(Boolean).join(' · '),

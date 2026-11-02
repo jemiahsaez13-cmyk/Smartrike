@@ -280,6 +280,8 @@ export class FranchiseService {
       expiryDate?: string;
       currentHolderName?: string;
       franchiseStatus?: FranchiseRecordStatus;
+      /** Only sent when given, so saving works before migration 082. */
+      routeId?: string | null;
     }
   ): Promise<FranchiseApplication> {
     if (!details.bodyNumber.trim()) throw new Error('Tricycle body number is required.');
@@ -291,6 +293,7 @@ export class FranchiseService {
       expiry_date: details.expiryDate || null,
       current_holder_name: details.currentHolderName?.trim() || undefined,
       franchise_status: details.franchiseStatus,
+      ...(details.routeId !== undefined ? { route_id: details.routeId } : {}),
     });
   }
 
@@ -430,6 +433,22 @@ export class FranchiseService {
       .single();
     if (error) throw error;
     return data;
+  }
+
+  /**
+   * Authorized reassignment (B7): frees the body number of a terminated or
+   * transferred unit so it can be issued again. Admin only (migration 082).
+   */
+  async releaseBodyNumber(id: string, reason: string): Promise<number> {
+    if (!reason.trim()) throw new Error('Give the reason for releasing this body number.');
+    const { data, error } = await supabase.rpc('release_body_number', { p_franchise_id: id, p_reason: reason.trim() });
+    if (error) {
+      const message = String(error.message || 'The body number could not be released.');
+      throw new Error(/release_body_number|could not find the function/i.test(message)
+        ? 'Releasing body numbers needs database migration 082. Apply it in the Supabase SQL editor, then try again.'
+        : message);
+    }
+    return Number(data ?? 0);
   }
 
   async getById(id: string): Promise<FranchiseApplication | null> {

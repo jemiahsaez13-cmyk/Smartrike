@@ -113,6 +113,15 @@ export interface FranchiseApplication {
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */
   body_number?: string | null;
+  /** TODA route of the unit, assigned with the body number (migration 082). */
+  route_id?: string | null;
+  /**
+   * Set when an administrator authorized reassigning this record's body number
+   * after the unit was terminated or transferred (migration 082).
+   */
+  body_number_released_at?: string | null;
+  body_number_released_by?: string | null;
+  body_number_release_reason?: string | null;
   /** Operational standing of an issued franchise. */
   franchise_status?: FranchiseRecordStatus | null;
   original_holder_name?: string | null;
@@ -255,6 +264,53 @@ export const assignedBodyNumber = (
   if (app?.franchise_status === 'terminated' || app?.franchise_status === 'transferred') return null;
   return body;
 };
+
+/** Route of the driver's current unit (C2); hidden with the body number. */
+export const assignedRouteId = (
+  app: Pick<FranchiseApplication, 'body_number' | 'franchise_status' | 'route_id'> | null | undefined
+): string | null => (assignedBodyNumber(app) ? app?.route_id ?? null : null);
+
+/** "Brgy A → Brgy B" for a TODA route. */
+export const routeLabel = (route: { from_barangay: string; to_barangay: string } | null | undefined): string | null =>
+  route ? `${route.from_barangay} → ${route.to_barangay}` : null;
+
+/**
+ * Next sequential body number in a TODA (B5): the highest trailing number on
+ * any of its records plus one, zero-padded to 3 digits, keeping the prefix of
+ * that highest number (e.g. "B-041" → "B-042"; none yet → "001").
+ */
+export const nextBodyNumber = (
+  records: Pick<FranchiseApplication, 'toda' | 'body_number' | 'status'>[],
+  toda: string | null | undefined
+): string => {
+  const key = (toda ?? '').trim().toLowerCase();
+  let best = 0;
+  let prefix = '';
+  let width = 3;
+  records.forEach((r) => {
+    if ((r.toda ?? '').trim().toLowerCase() !== key || r.status === 'rejected') return;
+    const match = (r.body_number ?? '').trim().toUpperCase().match(/^(.*?)(\d+)$/);
+    if (!match) return;
+    const n = parseInt(match[2], 10);
+    if (n > best) {
+      best = n;
+      prefix = match[1];
+      width = Math.max(3, match[2].length);
+    }
+  });
+  return `${prefix}${String(best + 1).padStart(width, '0')}`;
+};
+
+/**
+ * Terminated or transferred unit whose body number is still blocked until an
+ * administrator releases it (B7).
+ */
+export const isInactiveBodyNumber = (
+  app: Pick<FranchiseApplication, 'body_number' | 'franchise_status' | 'body_number_released_at'>
+): boolean =>
+  !!app.body_number?.trim()
+  && !app.body_number_released_at
+  && (app.franchise_status === 'terminated' || app.franchise_status === 'transferred');
 
 export const renewalStanding = (
   app: Pick<FranchiseApplication, 'issued_at' | 'expiry_date' | 'renewal_year' | 'franchise_status'>,
