@@ -356,3 +356,18 @@ and the rest of the app, keep working on a database without 082).
   released number can be issued again. Refused while an active or open MTOP
   still holds the number.
 - `enforce_mtop_workflow` is the 074 version plus these rules.
+
+
+## Live admin notifications (083)
+
+Apply `083_admin_live_notifications.sql` after 082. Until it is applied the
+admin badges still work (they count pending work directly), but no alerts are
+created.
+
+Every active admin gets a notification (live bell badge, heads-up banner on
+phones) when a driver or passenger account is created, a driver submits or
+re-uploads registration photos, an MTOP application or renewal is filed, a
+driver re-uploads an MTOP document, sends MTOP payment proof or books a payment
+appointment, requests a Change of Unit, a holder requests a succession, or a
+report is filed. Types start with `admin_`. Triggers never block the original
+write.

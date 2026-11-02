@@ -12,6 +12,8 @@ import { FranchiseService } from '@/models/services/FranchiseService';
 import { FranchiseApplication } from '@/models/entities/Franchise';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
+import { useAppSelector } from '@/controllers/store';
+import { useAdminPendingCounts, badgeLabel } from '@/controllers/hooks/useAdminPendingCounts';
 
 const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 16) / 2;
 
@@ -36,6 +38,13 @@ const relativeTime = (iso: any): string => {
 
 export const AdminDashboard = () => {
   const navigation = useNavigation<any>();
+  // Live badges (migration 083): unread notifications on the bell, drivers
+  // waiting for document review on the users button.
+  const authUser = useAppSelector((state) => state.auth.user);
+  const unreadNotifications = useAppSelector((state) =>
+    state.notification.userId === authUser?.id ? state.notification.unreadCount : 0
+  );
+  const pendingCounts = useAdminPendingCounts();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -151,13 +160,34 @@ export const AdminDashboard = () => {
               <Text style={styles.liveText}>Live · {stats ? `${stats.totalUsers} users` : 'syncing'}</Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => navigation.navigate('UserManagement')}
-            activeOpacity={0.76}
-          >
-            <MaterialCommunityIcons name="account-group-outline" size={21} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate('Notifications')}
+              activeOpacity={0.76}
+              accessibilityLabel={unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : 'Notifications'}
+            >
+              <MaterialCommunityIcons name={unreadNotifications > 0 ? 'bell-ring-outline' : 'bell-outline'} size={21} color="#FFFFFF" />
+              {unreadNotifications > 0 && (
+                <View style={styles.headerBadge}>
+                  <Text style={styles.reportsBadgeText}>{badgeLabel(unreadNotifications)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => navigation.navigate('UserManagement')}
+              activeOpacity={0.76}
+              accessibilityLabel={pendingCounts.drivers > 0 ? `Users, ${pendingCounts.drivers} drivers to review` : 'Users'}
+            >
+              <MaterialCommunityIcons name="account-group-outline" size={21} color="#FFFFFF" />
+              {pendingCounts.drivers > 0 && (
+                <View style={styles.headerBadge}>
+                  <Text style={styles.reportsBadgeText}>{badgeLabel(pendingCounts.drivers)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
 
         <View style={styles.body}>
@@ -558,6 +588,24 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 10,
     letterSpacing: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: -7,
+    right: -7,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.error,
+    paddingHorizontal: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   actionBtn: {
     width: 44,

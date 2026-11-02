@@ -38,14 +38,24 @@ export const fetchNotifications = createAsyncThunk(
   'notification/fetch',
   async (userId: string, { rejectWithValue }) => {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data ?? [];
+      const [list, unread] = await Promise.all([
+        supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50),
+        // The list holds the latest 50; the badge counts every unread row.
+        supabase
+          .from('notifications')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('read', false),
+      ]);
+      if (list.error) throw list.error;
+      const rows = (list.data ?? []) as AppNotification[];
+      const shownUnread = rows.filter((n) => !n.read).length;
+      return { rows, unreadCount: unread.error ? shownUnread : Math.max(unread.count ?? 0, shownUnread) };
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
@@ -80,10 +90,12 @@ const notificationSlice = createSlice({
       // echoed back) — dedupe by id so live updates never double-count.
       if (action.payload.user_id !== state.userId) return;
       const index = state.notifications.findIndex(n => n.id === action.payload.id);
+      const wasUnread = index >= 0 ? !state.notifications[index].read : false;
       if (index >= 0) state.notifications[index] = action.payload;
       else state.notifications.unshift(action.payload);
       state.notifications.sort((a, b) => b.created_at.localeCompare(a.created_at));
-      state.unreadCount = state.notifications.filter(n => !n.read).length;
+      const isUnread = !action.payload.read;
+      if (isUnread !== wasUnread) state.unreadCount = Math.max(0, state.unreadCount + (isUnread ? 1 : -1));
     },
     markNotificationRead(state, action: PayloadAction<string>) {
       const notif = state.notifications.find(n => n.id === action.payload);
@@ -119,8 +131,8 @@ const notificationSlice = createSlice({
       .addCase(fetchNotifications.fulfilled, (state, action) => {
         if (state.fetchRequestId !== action.meta.requestId || state.userId !== action.meta.arg) return;
         state.loading = false;
-        state.notifications = action.payload;
-        state.unreadCount = action.payload.filter((n: AppNotification) => !n.read).length;
+        state.notifications = action.payload.rows;
+        state.unreadCount = action.payload.unreadCount;
       })
       .addCase(fetchNotifications.rejected, (state, action) => {
         if (state.fetchRequestId !== action.meta.requestId) return;

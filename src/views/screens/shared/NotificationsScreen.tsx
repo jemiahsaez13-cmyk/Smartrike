@@ -40,6 +40,32 @@ const NOTIF_ICONS: Record<string, { icon: string; color: string; bg: string }> =
   [NOTIFICATION_TYPES.SYSTEM_ALERT]: { icon: 'alert-circle', color: colors.warning, bg: colors.warningLight },
   [NOTIFICATION_TYPES.VIOLATION]: { icon: 'account-alert-outline', color: colors.error, bg: colors.errorLight },
   message: { icon: 'message-text', color: colors.accent, bg: colors.infoLight },
+  // Admin alerts (migration 083)
+  admin_new_driver: { icon: 'account-plus', color: colors.primary, bg: colors.primaryLight },
+  admin_new_passenger: { icon: 'account-plus-outline', color: colors.primary, bg: colors.primaryLight },
+  admin_driver_documents: { icon: 'card-account-details-outline', color: '#8A5A00', bg: colors.warningLight },
+  admin_mtop_application: { icon: 'file-document-edit-outline', color: '#8A5A00', bg: colors.warningLight },
+  admin_mtop_renewal: { icon: 'calendar-refresh', color: '#8A5A00', bg: colors.warningLight },
+  admin_mtop_documents: { icon: 'file-upload-outline', color: '#8A5A00', bg: colors.warningLight },
+  admin_mtop_payment: { icon: 'cash-clock', color: '#8A5A00', bg: colors.warningLight },
+  admin_change_of_unit: { icon: 'swap-horizontal', color: '#8A5A00', bg: colors.warningLight },
+  admin_succession: { icon: 'account-switch-outline', color: '#8A5A00', bg: colors.warningLight },
+  admin_report: { icon: 'flag', color: colors.error, bg: colors.errorLight },
+};
+
+// Where an admin lands when tapping an alert (screens in AdminNavigator).
+const ADMIN_TARGET: Record<string, { name: string; params?: object }> = {
+  admin_new_driver: { name: 'UserManagement' },
+  admin_new_passenger: { name: 'UserManagement' },
+  admin_driver_documents: { name: 'UserManagement' },
+  admin_mtop_application: { name: 'AdminMain', params: { screen: 'MTOP' } },
+  admin_mtop_renewal: { name: 'AdminMain', params: { screen: 'MTOP' } },
+  admin_mtop_documents: { name: 'AdminMain', params: { screen: 'MTOP' } },
+  admin_mtop_payment: { name: 'AdminMain', params: { screen: 'MTOP' } },
+  admin_change_of_unit: { name: 'AdminMain', params: { screen: 'MTOP' } },
+  admin_succession: { name: 'FranchiseRegistry' },
+  admin_report: { name: 'Reports' },
+  [NOTIFICATION_TYPES.SYSTEM_ALERT]: { name: 'ViolationManagement' },
 };
 
 const getNotifMeta = (type: string) =>
@@ -48,7 +74,7 @@ const getNotifMeta = (type: string) =>
 export const NotificationsScreen = () => {
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
-  const { notifications: storedNotifications, loading } = useAppSelector(state => state.notification);
+  const { notifications: storedNotifications, loading, unreadCount: storedUnread } = useAppSelector(state => state.notification);
   const { user } = useAppSelector(state => state.auth);
   const notifications = storedNotifications.filter(n => n.user_id === user?.id);
 
@@ -105,7 +131,7 @@ export const NotificationsScreen = () => {
     if (user?.id) dispatch(markAllReadAndPersist(user.id));
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = Math.max(storedUnread, notifications.filter(n => !n.read).length);
 
   // Never blank the whole screen while fetching: the header (and its back
   // button) must always render so a slow/hung network can't trap the user on
@@ -157,7 +183,11 @@ export const NotificationsScreen = () => {
               return (
                 <TouchableOpacity
                   key={notif.id ?? idx}
-                  onPress={() => handleMarkRead(notif.id)}
+                  onPress={() => {
+                    handleMarkRead(notif.id);
+                    const target = user?.user_type === 'admin' ? ADMIN_TARGET[notif.type] : undefined;
+                    if (target) navigation.navigate(target.name, target.params);
+                  }}
                   activeOpacity={0.8}
                 >
                   <Card
