@@ -129,7 +129,7 @@ export const AdminDashboard = () => {
   // admin); only shows what needs attention.
   const queue: { id: string; title: string; level: string; icon: string; route: string; params?: object; count: number }[] = [];
   const mtopWaiting = pendingCounts.mtop;
-  const driversWaiting = Math.max(pendingCounts.unverifiedDrivers, pendingCounts.drivers);
+  const driversWaiting = pendingCounts.drivers;
   if (mtopWaiting) queue.push({
     id: 'f',
     title: `${mtopWaiting} MTOP request${mtopWaiting > 1 ? 's' : ''} need${mtopWaiting === 1 ? 's' : ''} review`,
@@ -144,9 +144,7 @@ export const AdminDashboard = () => {
   if (driversWaiting) queue.push({
     id: 'd',
     title: `${driversWaiting} driver${driversWaiting > 1 ? 's' : ''} awaiting verification`,
-    level: pendingCounts.drivers
-      ? `Onboarding · ${pendingCounts.drivers} with documents to review`
-      : 'Onboarding · waiting for documents',
+    level: 'Onboarding · verified when their MTOP is approved',
     icon: 'account-clock-outline',
     route: 'UserManagement',
     params: { filter: 'pending' },

@@ -24,21 +24,6 @@ import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
-import { DriverDocumentReviewModal } from '@/views/components/admin/DriverDocumentReviewModal';
-import { DriverDocumentsStatus } from '@/models/entities/DriverDocument';
-
-const DOCS_LABEL: Record<DriverDocumentsStatus, string> = {
-  missing: 'Docs missing',
-  pending: 'Docs to review',
-  rejected: 'Docs rejected',
-  approved: 'Docs approved',
-};
-const DOCS_SHORT: Record<DriverDocumentsStatus, string> = {
-  missing: 'Missing',
-  pending: 'Pending',
-  rejected: 'Rejected',
-  approved: 'Approved',
-};
 
 const adminService = new AdminService();
 const conductService = new ConductService();
@@ -82,9 +67,6 @@ export const UserManagementScreen = () => {
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
   const [deactivateReason, setDeactivateReason] = useState('');
 
-  // Registration document review (migration 078)
-  const [reviewTarget, setReviewTarget] = useState<User | null>(null);
-
   // Opened again from the Violations review list with a filter preset.
   useEffect(() => {
     if (route.params?.filter) setFilter(route.params.filter as Filter);
@@ -123,7 +105,7 @@ export const UserManagementScreen = () => {
 
   // Red counts on the filter chips that need the admin's attention.
   const chipAlert: Partial<Record<Filter, number>> = {
-    pending: users.filter((u) => u.user_type === 'driver' && (u as any).driver_documents_status === 'pending').length,
+    pending: users.filter((u) => u.user_type === 'driver' && (u as any).verification_status === 'pending' && u.status !== 'deactivated').length,
     flagged: users.filter((u) => !!conduct.get(u.id)?.flagged || !!conduct.get(u.id)?.repeatedCancellations).length,
   };
 
@@ -194,20 +176,6 @@ export const UserManagementScreen = () => {
     } finally {
       setWorking(false);
     }
-  };
-
-  const openDocuments = async (user: User) => {
-    // Close the action sheet first; only one modal can show at a time.
-    setSelected(null);
-    await new Promise((r) => setTimeout(r, 300));
-    setReviewTarget(user);
-  };
-
-  // The database keeps users.driver_documents_status in step; mirror it here
-  // so the list and the Verify action update without a reload.
-  const onDocumentsChanged = (driverId: string, status: DriverDocumentsStatus) => {
-    setUsers((prev) => prev.map((u) => (u.id === driverId ? ({ ...u, driver_documents_status: status } as User) : u)));
-    setReviewTarget((prev) => (prev && prev.id === driverId ? ({ ...prev, driver_documents_status: status } as User) : prev));
   };
 
   const resetInvite = () => {
@@ -480,18 +448,6 @@ export const UserManagementScreen = () => {
                     <Text style={styles.verifyText}>{d.verification_status}</Text>
                   </View>
                 )}
-                {isDriver && d.verification_status !== 'verified' && d.driver_documents_status && d.driver_documents_status !== 'approved' && (
-                  <View style={[styles.verifyChip, d.driver_documents_status === 'rejected' && { backgroundColor: colors.errorLight }]}>
-                    <MaterialCommunityIcons
-                      name="file-document-outline"
-                      size={13}
-                      color={d.driver_documents_status === 'rejected' ? colors.error : colors.textSecondary}
-                    />
-                    <Text style={[styles.verifyText, d.driver_documents_status === 'rejected' && { color: colors.error }]}>
-                      {DOCS_LABEL[d.driver_documents_status as DriverDocumentsStatus]}
-                    </Text>
-                  </View>
-                )}
                 {(weekly?.flagged || weekly?.repeatedCancellations) && (
                   <View style={styles.flagChip}>
                     <MaterialCommunityIcons name="flag" size={12} color={colors.error} />
@@ -613,36 +569,19 @@ export const UserManagementScreen = () => {
                     <Text style={[styles.actionLabel, { color: colors.warning }]}>Issue Warning</Text>
                   </TouchableOpacity>
                 )}
-                {selected.user_type === 'driver' && selected.status !== 'deactivated' && (
-                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => openDocuments(selected)}>
-                    <MaterialCommunityIcons name="file-document-check-outline" size={20} color={colors.text} />
-                    <Text style={styles.actionLabel}>
-                      Review Documents
-                      {(selected as any).driver_documents_status
-                        ? ` · ${DOCS_SHORT[(selected as any).driver_documents_status as DriverDocumentsStatus]}`
-                        : ''}
-                    </Text>
+                {selected.user_type === 'driver' && selected.status !== 'deactivated' && (selected as any).verification_status !== 'verified' && (
+                  <TouchableOpacity
+                    style={styles.actionRow}
+                    disabled={working}
+                    onPress={() => applyVerification(selected, 'verified')}
+                  >
+                    <MaterialCommunityIcons name="check-decagram" size={20} color={colors.text} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.actionLabel}>Verify Driver</Text>
+                      <Text style={styles.actionHint}>Approving the driver's MTOP also verifies them</Text>
+                    </View>
                   </TouchableOpacity>
                 )}
-                {selected.user_type === 'driver' && selected.status !== 'deactivated' && (selected as any).verification_status !== 'verified' && (() => {
-                  // The database refuses verification until all four documents are approved.
-                  const docsApproved = (selected as any).driver_documents_status === 'approved';
-                  return (
-                    <TouchableOpacity
-                      style={[styles.actionRow, !docsApproved && { opacity: 0.5 }]}
-                      disabled={working || !docsApproved}
-                      onPress={() => applyVerification(selected, 'verified')}
-                    >
-                      <MaterialCommunityIcons name="check-decagram" size={20} color={colors.text} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.actionLabel}>Verify Driver</Text>
-                        {!docsApproved && (
-                          <Text style={styles.actionHint}>Approve all four documents first</Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })()}
                 {selected.user_type === 'driver' && selected.status !== 'deactivated' && (selected as any).verification_status !== 'rejected' && (
                   <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyVerification(selected, 'rejected')}>
                     <MaterialCommunityIcons name="close-octagon-outline" size={20} color={colors.text} />
@@ -683,12 +622,6 @@ export const UserManagementScreen = () => {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-
-      <DriverDocumentReviewModal
-        driver={reviewTarget}
-        onClose={() => setReviewTarget(null)}
-        onChanged={onDocumentsChanged}
-      />
 
       {/* Permanent deactivation form */}
       <Modal visible={!!deactivateTarget} transparent animationType="slide" onRequestClose={() => setDeactivateTarget(null)}>

@@ -25,13 +25,6 @@ const REVIEW_TONE = {
   rejected: { fg: colors.error, bg: colors.errorLight, label: 'Rejected' },
 } as const;
 
-const DOCS_STATUS_LABEL: Record<string, string> = {
-  missing: 'Missing',
-  pending: 'To review',
-  approved: 'Approved',
-  rejected: 'Rejected',
-};
-
 const isImage = (url?: string | null) =>
   !!url && (/^data:image\//i.test(url) || /^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url));
 
@@ -101,7 +94,6 @@ export const AdminDriverDetails = ({ driverId, driver }: Props) => {
     ['TODA', show(d.toda_membership) === '—' ? 'Not assigned yet' : show(d.toda_membership)],
     ['Account status', titleCase(d.status)],
     ['Verification', titleCase(d.verification_status)],
-    ['Documents', DOCS_STATUS_LABEL[d.driver_documents_status] ?? '—'],
     ['Registered', d.created_at ? formatDate(d.created_at) : '—'],
   ];
   const vehicleText = [vehicle.color, vehicle.make, vehicle.model, vehicle.year].filter(Boolean).join(' ');
@@ -199,10 +191,21 @@ export const AdminDriverDetails = ({ driverId, driver }: Props) => {
         ))}
       </Surface>
 
-      <Surface style={styles.card} elevation={1}>
-        <Text style={styles.cardTitle}>Registration photos</Text>
-        {loading ? <ActivityIndicator color={colors.primary} /> : <PhotoGrid photos={registrationPhotos} />}
-      </Surface>
+      {/* Photos from the old sign-up upload (before the MTOP took over). */}
+      {!loading && docs.length > 0 ? (
+        <Surface style={styles.card} elevation={1}>
+          <Text style={styles.cardTitle}>Sign-up photos</Text>
+          <PhotoGrid photos={registrationPhotos.filter((photo) => !!photo.url)} />
+        </Surface>
+      ) : null}
+      {loading ? <ActivityIndicator color={colors.primary} style={{ marginBottom: spacing.md }} /> : null}
+
+      {!loading && !mtop ? (
+        <Surface style={styles.card} elevation={1}>
+          <Text style={styles.cardTitle}>MTOP application</Text>
+          <Text style={styles.adminOnly}>No MTOP application yet. The driver's documents and photos will appear here once they apply.</Text>
+        </Surface>
+      ) : null}
 
       {!loading && mtop ? (
         <Surface style={styles.card} elevation={1}>

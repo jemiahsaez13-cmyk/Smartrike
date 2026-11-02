@@ -371,3 +371,17 @@ driver re-uploads an MTOP document, sends MTOP payment proof or books a payment
 appointment, requests a Change of Unit, a holder requests a succession, or a
 report is filed. Types start with `admin_`. Triggers never block the original
 write.
+
+
+## Driver sign-up without photos (084)
+
+Apply `084_driver_signup_without_photos.sql` after 083. The license / plate /
+OR / CR photos are required in the MTOP application, so the app no longer
+asks for them at driver sign-up.
+
+- `guard_driver_verification` (078) no longer requires four approved photos
+  before an admin verifies a driver; MTOP approval still verifies (069).
+- The "driver documents to review" admin alert (083) is removed; the
+  new-driver alert points to the MTOP application.
+- `driver_documents` and older uploads are kept; admins still see them on the
+  driver profile.

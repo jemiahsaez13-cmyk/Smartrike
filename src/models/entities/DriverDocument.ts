@@ -36,9 +36,3 @@ export const DRIVER_DOCUMENT_TYPES: { type: DriverDocumentType; label: string; h
 export const DRIVER_DOCUMENT_LABEL: Record<DriverDocumentType, string> = Object.fromEntries(
   DRIVER_DOCUMENT_TYPES.map((d) => [d.type, d.label])
 ) as Record<DriverDocumentType, string>;
-
-/** Photos picked on the registration form, uploaded right after the email OTP. */
-export interface DriverApplicationDraft {
-  homeAddress: string;
-  documents: Partial<Record<DriverDocumentType, string>>;
-}

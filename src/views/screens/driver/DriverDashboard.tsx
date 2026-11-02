@@ -39,7 +39,6 @@ export const DriverDashboard = () => {
   const isOnline = currentStatus === 'online' || currentStatus === 'on-trip';
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
-  const documentsStatus = (user as any)?.driver_documents_status as string | null | undefined;
   const myApplication = useAppSelector(state => state.franchise.myApplication);
   const bodyNumber = assignedBodyNumber(myApplication);
   // C2: the TODA route assigned with the body number (migration 082).
@@ -278,22 +277,20 @@ export const DriverDashboard = () => {
       </LinearGradient>
 
       <View style={styles.body}>
-        {!isVerified && documentsStatus && (
-          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('DriverDocuments')}>
-            <Card variant="elevated" padding="md" style={[styles.applicationCard, documentsStatus === 'rejected' && styles.applicationCardRejected]}>
-              <MaterialCommunityIcons
-                name={documentsStatus === 'rejected' ? 'alert-circle-outline' : 'file-document-check-outline'}
-                size={24}
-                color={documentsStatus === 'rejected' ? colors.error : colors.primary}
-              />
+        {/* Unverified: the MTOP application is the way in (its approval
+            verifies the driver, migration 069). */}
+        {!isVerified && (
+          <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Franchise')}>
+            <Card variant="elevated" padding="md" style={styles.applicationCard}>
+              <MaterialCommunityIcons name="file-document-edit-outline" size={24} color={colors.primary} />
               <View style={styles.applicationText}>
                 <Text style={styles.applicationTitle}>
-                  {documentsStatus === 'rejected' ? 'Some documents were rejected' : 'Driver application under review'}
+                  {myApplication ? 'MTOP application in progress' : 'Apply for your MTOP'}
                 </Text>
                 <Text style={styles.applicationSub}>
-                  {documentsStatus === 'rejected'
-                    ? 'Upload new photos so the administrator can approve you.'
-                    : 'View your submitted documents and their review status.'}
+                  {myApplication
+                    ? 'You can accept bookings once the administrator approves your MTOP.'
+                    : 'Submit your MTOP requirements. Your account is verified for bookings once it is approved.'}
                 </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={22} color={colors.textMuted} />

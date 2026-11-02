@@ -12,9 +12,6 @@ import { Button } from '@/views/components/common/Button';
 import { useAuth } from '@/controllers/hooks/useAuth';
 import { notify } from '@/utils/confirm';
 import { Loading } from '@/views/components/common/Loading';
-import { DriverDocumentPicker } from '@/views/components/driver/DriverDocumentPicker';
-import { DriverDocumentService } from '@/models/services/DriverDocumentService';
-import { DRIVER_DOCUMENT_TYPES, DriverDocumentType } from '@/models/entities/DriverDocument';
 import {
   isValidEmail,
   isValidPassword,
@@ -45,8 +42,6 @@ export const EmailRegisterScreen = () => {
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [homeAddress, setHomeAddress] = useState('');
-  const [documents, setDocuments] = useState<Partial<Record<DriverDocumentType, string>>>({});
-  const [missingDocs, setMissingDocs] = useState<DriverDocumentType[]>([]);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -107,23 +102,9 @@ export const EmailRegisterScreen = () => {
     }
     setErrors({});
 
-    if (userType === 'driver') {
-      const missing = DRIVER_DOCUMENT_TYPES.filter((d) => !documents[d.type]);
-      setMissingDocs(missing.map((d) => d.type));
-      if (missing.length) {
-        notify('Documents required', `Upload a clear photo of: ${missing.map((d) => d.label).join(', ')}.`);
-        return;
-      }
-    }
-
     if (!agreedToTerms) {
       notify('Almost there', 'Please agree to the terms and conditions to continue.');
       return;
-    }
-
-    // Uploaded right after the email code creates the account.
-    if (userType === 'driver') {
-      DriverDocumentService.holdDraft(cleanEmail, { homeAddress: homeAddress.trim(), documents });
     }
 
     try {
@@ -339,20 +320,11 @@ export const EmailRegisterScreen = () => {
                   left={<TextInput.Icon icon="home-outline" color={colors.textMuted} />}
                 />
 
-                <Text style={styles.sectionLabel}>REQUIRED DOCUMENTS</Text>
-                <DriverDocumentPicker
-                  values={documents}
-                  invalid={missingDocs}
-                  onChange={(type, uri) => {
-                    setDocuments((prev) => ({ ...prev, [type]: uri }));
-                    setMissingDocs((prev) => prev.filter((t) => t !== type));
-                  }}
-                />
                 {/* TODA membership is assigned by the administrator from the
                     registered TODA list (the app matches members by TODA name),
                     so it is not typed in at sign-up. */}
                 <Text style={styles.passwordHint}>
-                  The FEDTODAB administrator reviews these documents before you can accept bookings, and assigns your TODA when your account is approved.
+                  After sign-up, apply for your MTOP in the app. The FEDTODAB administrator reviews your documents there, and your account is verified for bookings once the MTOP is approved.
                 </Text>
               </View>
             )}

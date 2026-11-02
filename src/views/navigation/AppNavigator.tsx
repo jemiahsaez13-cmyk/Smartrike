@@ -13,7 +13,6 @@ import { DriverNavigator } from './DriverNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { SplashScreen } from '@/views/screens/auth/SplashScreen';
 import { ProfileSetupScreen } from '@/views/screens/auth/ProfileSetupScreen';
-import { DriverDocumentsScreen } from '@/views/screens/driver/DriverDocumentsScreen';
 import { NotificationListener } from '@/views/components/common/NotificationListener';
 import { colors, spacing, typography } from '@/views/styles/theme';
 
@@ -78,15 +77,6 @@ export const AppNavigator = () => {
     !user.profile_completed &&
     !user.id?.startsWith('demo-');
 
-  // An unverified driver whose registration documents are not all on file
-  // must upload them before using the app (migration 078). Rejected documents
-  // are fixed from the dashboard instead, so the driver is not locked out.
-  const needsDriverDocuments =
-    !!user &&
-    user.user_type === 'driver' &&
-    (user as any).verification_status !== 'verified' &&
-    (user as any).driver_documents_status === 'missing';
-
   return (
     <NavigationContainer>
       {isAuthenticated && <NotificationListener />}
@@ -96,10 +86,7 @@ export const AppNavigator = () => {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         </Stack.Navigator>
-      ) : needsDriverDocuments ? (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="DriverDocumentsGate" component={DriverDocumentsScreen} />
-        </Stack.Navigator>
+
       ) : (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {user?.user_type === 'passenger' && <Stack.Screen name="Passenger" component={PassengerNavigator} />}
