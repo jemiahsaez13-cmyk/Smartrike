@@ -3,8 +3,15 @@ import {
   SaveRouteInput,
   SaveTodaInput,
   TodaAssociation,
+  TodaCapacity,
   TodaRoute,
 } from '@/models/entities/Toda';
+import { fetchAllRows } from '@/utils/supabaseUtils';
+
+/** Franchise records that no longer hold a unit in the TODA. */
+const RELEASED_FRANCHISE_STATUSES = ['terminated', 'transferred', 'renewed'];
+
+const nameKey = (name?: string | null) => (name ?? '').trim().toLowerCase();
 
 export class TodaService {
   // ── Associations ───────────────────────────────────────────────────────────
@@ -40,6 +47,7 @@ export class TodaService {
       contact_phone: input.contact_phone?.trim() || null,
       notes: input.notes?.trim() || null,
       is_active: input.is_active ?? true,
+      ...(input.approved_units !== undefined ? { approved_units: input.approved_units } : {}),
       updated_at: new Date().toISOString(),
       ...(input.id ? {} : { created_by: actorId ?? null }),
     };
@@ -51,6 +59,9 @@ export class TodaService {
     const { data, error } = await query.select().single();
     if (error) {
       if (error.code === '23505') throw new Error('A TODA with this name already exists.');
+      if (/approved_units/i.test(String(error.message))) {
+        throw new Error('Approved units need database migration 079. Apply it in the Supabase SQL editor, then try again.');
+      }
       throw error;
     }
     return data as TodaAssociation;
@@ -123,6 +134,61 @@ export class TodaService {
       .delete()
       .eq('id', routeId);
     if (error) throw error;
+  }
+
+  // ── Capacity (B4) ───────────────────────────────────────────────────────────
+
+  /**
+   * Per TODA (keyed by lower-cased name): member drivers, and units holding an
+   * issued MTOP. A unit counts under the TODA on its MTOP, or the driver's TODA
+   * when the MTOP has none; terminated, transferred and superseded records
+   * free the unit.
+   */
+  async getCapacityCounts(): Promise<Map<string, TodaCapacity>> {
+    const [drivers, franchises] = await Promise.all([
+      fetchAllRows<{ id: string; toda_membership: string | null }>(() =>
+        supabase
+          .from('users')
+          .select('id, toda_membership')
+          .eq('user_type', 'driver')
+          .not('toda_membership', 'is', null)
+          .order('id')
+      ),
+      fetchAllRows<{ id: string; driver_id: string; toda: string | null; franchise_status: string | null }>(() =>
+        supabase
+          .from('franchise_applications')
+          .select('id, driver_id, toda, franchise_status')
+          .eq('status', 'issued')
+          .order('id')
+      ),
+    ]);
+
+    const counts = new Map<string, TodaCapacity>();
+    const entry = (key: string) => {
+      let c = counts.get(key);
+      if (!c) {
+        c = { members: 0, activeUnits: 0 };
+        counts.set(key, c);
+      }
+      return c;
+    };
+    const membership = new Map<string, string>();
+    drivers.forEach((d) => {
+      const key = nameKey(d.toda_membership);
+      if (!key) return;
+      membership.set(d.id, key);
+      entry(key).members += 1;
+    });
+    franchises.forEach((f) => {
+      if (f.franchise_status && RELEASED_FRANCHISE_STATUSES.includes(f.franchise_status)) return;
+      const key = nameKey(f.toda) || membership.get(f.driver_id);
+      if (key) entry(key).activeUnits += 1;
+    });
+    return counts;
+  }
+
+  capacityFor(counts: Map<string, TodaCapacity>, toda: Pick<TodaAssociation, 'name'>): TodaCapacity {
+    return counts.get(nameKey(toda.name)) ?? { members: 0, activeUnits: 0 };
   }
 
   // ── Members ─────────────────────────────────────────────────────────────────

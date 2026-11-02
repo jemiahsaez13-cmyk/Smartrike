@@ -10,6 +10,8 @@ export interface TodaAssociation {
   contact_phone: string | null;
   notes: string | null;
   is_active: boolean;
+  /** Tricycle units the TODA is authorised to operate; null = not set (migration 079). */
+  approved_units?: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -45,7 +47,18 @@ export type SaveTodaInput = {
   contact_phone?: string;
   notes?: string;
   is_active?: boolean;
+  approved_units?: number | null;
 };
+
+/** Members and units holding an issued MTOP, per TODA (B4). */
+export interface TodaCapacity {
+  members: number;
+  activeUnits: number;
+}
+
+/** True when the TODA has an approved capacity and every unit is taken. */
+export const isTodaFull = (toda: Pick<TodaAssociation, 'approved_units'>, capacity?: TodaCapacity) =>
+  toda.approved_units != null && !!capacity && capacity.activeUnits >= toda.approved_units;
 
 export type SaveRouteInput = {
   id?: string;

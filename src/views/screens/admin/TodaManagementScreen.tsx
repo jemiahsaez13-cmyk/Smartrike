@@ -24,7 +24,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
-import { TodaAssociation, TodaRoute, SaveTodaInput } from '@/models/entities/Toda';
+import { TodaAssociation, TodaRoute, SaveTodaInput, TodaCapacity, isTodaFull } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
@@ -195,6 +195,8 @@ export const TodaManagementScreen = () => {
 
   // List state
   const [todas, setTodas] = useState<TodaAssociation[]>([]);
+  // null until loaded, so a failed count is never shown as zero.
+  const [capacity, setCapacity] = useState<Map<string, TodaCapacity> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -214,6 +216,7 @@ export const TodaManagementScreen = () => {
   const [todaContact, setTodaContact] = useState('');
   const [todaPhone, setTodaPhone] = useState('');
   const [todaNotes, setTodaNotes] = useState('');
+  const [todaUnits, setTodaUnits] = useState('');
   const [todaSaving, setTodaSaving] = useState(false);
   const [areaPickerVisible, setAreaPickerVisible] = useState(false);
 
@@ -232,7 +235,16 @@ export const TodaManagementScreen = () => {
   // ── Load all TODAs ──────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
-      setTodas(await service.listAll());
+      const [list, counts] = await Promise.all([
+        service.listAll(),
+        // Advisory only: the TODA list still loads if the counts cannot.
+        service.getCapacityCounts().catch((e) => {
+          console.warn('TODA capacity counts unavailable:', e);
+          return null;
+        }),
+      ]);
+      setTodas(list);
+      if (counts) setCapacity(counts);
     } catch (e: any) {
       console.error('TodaManagement load failed:', e);
     } finally {
@@ -271,10 +283,17 @@ export const TodaManagementScreen = () => {
     setTodaContact(toda?.contact_name ?? '');
     setTodaPhone(toda?.contact_phone ?? '');
     setTodaNotes(toda?.notes ?? '');
+    setTodaUnits(toda?.approved_units != null ? String(toda.approved_units) : '');
     setTodaModal(true);
   };
 
   const saveToda = async () => {
+    const unitsText = todaUnits.trim();
+    const approvedUnits = unitsText === '' ? null : Number(unitsText);
+    if (approvedUnits !== null && (!Number.isInteger(approvedUnits) || approvedUnits < 0 || approvedUnits > 10000)) {
+      void notify('Invalid approved units', 'Enter a whole number of units (0–10000), or leave it blank if not set.');
+      return;
+    }
     setTodaSaving(true);
     try {
       const input: SaveTodaInput = {
@@ -286,6 +305,8 @@ export const TodaManagementScreen = () => {
         contact_phone: todaPhone,
         notes: todaNotes,
         is_active: editingToda?.is_active ?? true,
+        // Only sent when set or changed, so saving still works before migration 079.
+        ...(approvedUnits !== (editingToda?.approved_units ?? null) ? { approved_units: approvedUnits } : {}),
       };
       const saved = await service.save(input, actor?.id);
       if (editingToda) {
@@ -508,6 +529,17 @@ export const TodaManagementScreen = () => {
                           Contact: {toda.contact_name}{toda.contact_phone ? ` · ${toda.contact_phone}` : ''}
                         </Text>
                       ) : null}
+                      {capacity && (() => {
+                        const c = service.capacityFor(capacity, toda);
+                        const full = isTodaFull(toda, c);
+                        return (
+                          <Text style={[styles.todaMeta, full && styles.todaMetaFull]} numberOfLines={1}>
+                            Members: {c.members} · Units: {c.activeUnits}
+                            {toda.approved_units != null ? ` / ${toda.approved_units} approved` : ''}
+                            {full ? ' · Full' : ''}
+                          </Text>
+                        );
+                      })()}
                     </View>
                     <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
                   </TouchableOpacity>
@@ -598,6 +630,33 @@ export const TodaManagementScreen = () => {
               {/* ── Members tab ── */}
               {detailTab === 'members' && (
                 <>
+                  {capacity && (() => {
+                    const c = service.capacityFor(capacity, selected);
+                    const full = isTodaFull(selected, c);
+                    return (
+                      <View style={[styles.capacityCard, full && styles.capacityCardFull]}>
+                        <MaterialCommunityIcons
+                          name={full ? 'alert-circle-outline' : 'motorbike'}
+                          size={20}
+                          color={full ? colors.error : colors.primary}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.capacityTitle, full && { color: colors.error }]}>
+                            Units: {c.activeUnits}
+                            {selected.approved_units != null ? ` of ${selected.approved_units} approved` : ''}
+                            {' · '}Members: {c.members}
+                          </Text>
+                          <Text style={styles.capacitySub}>
+                            {selected.approved_units == null
+                              ? 'Approved unit capacity not set. Edit the TODA to add it.'
+                              : full
+                              ? 'Capacity reached. Do not issue new MTOP units for this TODA.'
+                              : `${selected.approved_units - c.activeUnits} unit${selected.approved_units - c.activeUnits === 1 ? '' : 's'} available.`}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })()}
                   <Text style={styles.detailSectionLabel}>
                     DRIVERS ASSIGNED TO {selected.name.toUpperCase()}
                   </Text>
@@ -730,6 +789,13 @@ export const TodaManagementScreen = () => {
                   ))}
                 </View>
               )}
+              <Field
+                label="APPROVED UNITS"
+                value={todaUnits}
+                onChangeText={(v) => setTodaUnits(v.replace(/[^0-9]/g, ''))}
+                placeholder="Number of authorised tricycle units"
+                keyboardType="number-pad"
+              />
               <Field label="CONTACT PERSON" value={todaContact} onChangeText={setTodaContact} placeholder="President / Rep name" />
               <Field label="CONTACT PHONE" value={todaPhone} onChangeText={setTodaPhone} placeholder="09XXXXXXXXX" keyboardType="phone-pad" />
               <Field label="NOTES" value={todaNotes} onChangeText={setTodaNotes} placeholder="Additional information…" multiline />
@@ -1140,6 +1206,15 @@ const styles = StyleSheet.create({
   inactivePillText: { ...typography.labelSmall, fontSize: 10, color: colors.textMuted },
   todaArea: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginBottom: 1 },
   todaMeta: { ...typography.bodySmall, fontSize: 11, color: colors.textMuted },
+  todaMetaFull: { color: colors.error, fontWeight: '600' },
+  capacityCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.primaryLight, borderRadius: radius.md,
+    padding: spacing.md, marginBottom: spacing.md,
+  },
+  capacityCardFull: { backgroundColor: colors.errorLight },
+  capacityTitle: { ...typography.label, fontSize: 14, color: colors.text },
+  capacitySub: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
   divider: { height: 1, backgroundColor: colors.borderLight },
 

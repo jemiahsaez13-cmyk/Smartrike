@@ -276,3 +276,31 @@ this migration before shipping that build.
   `deactivation_reason`. Only `admin_deactivate_user(uuid, text)` can set it; it
   cannot be reversed from the app, and `admin_delete_user` refuses deactivated
   accounts so their records are kept.
+
+
+## Driver registration documents (078)
+
+Apply `078_driver_registration_documents.sql` after 077, before shipping the
+build with the document pickers on the driver sign-up form.
+
+- `driver_documents`: one photo per document (driver's license, plate, OR, CR),
+  each reviewed by an admin (pending / approved / rejected with remarks).
+- `users.driver_documents_status` (missing / pending / approved / rejected) is
+  kept by triggers; drivers cannot edit it.
+- `submit_driver_documents(text, jsonb)` is the driver's only upload path; it
+  also saves `home_address`. Approved documents are locked.
+- Admins can verify a driver only after all four documents are approved. MTOP
+  approval (069) still verifies drivers.
+- Drivers are notified of each rejected document and of the application result.
+
+
+## TODA capacity and flagged-account alerts (079)
+
+Apply `079_toda_capacity_and_flag_alerts.sql` after 078.
+
+- `toda_associations.approved_units` (NULL = not set). The TODA screen shows
+  units holding an issued MTOP against it and warns when full.
+- All active admins get a notification when an account reaches 3 confirmed
+  violations, or a passenger reaches 3 cancellations without a valid reason,
+  within the rolling 7 days (Asia/Manila). It fires once when the count
+  reaches 3. Keep in step with `CONDUCT_FLAG_THRESHOLD` / `CONDUCT_WINDOW_DAYS`.
