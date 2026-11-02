@@ -1,4 +1,5 @@
 import { fetchNotifications } from '@/controllers/slices/notificationSlice';
+import { CountBadge } from '@/views/components/common/CountBadge';
 import React, { useCallback } from 'react';
 import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -78,7 +79,7 @@ export const ProfileScreen = () => {
             onPress={() => navigation.navigate('Notifications')}
           >
             <MaterialCommunityIcons name="bell-outline" size={22} color={colors.text} />
-            {unreadNotifs > 0 && <View style={styles.badge} />}
+            <CountBadge count={unreadNotifs} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
@@ -248,17 +249,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 9,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.error,
-    borderWidth: 1.5,
-    borderColor: colors.surfaceAlt,
   },
   content: {
     paddingHorizontal: spacing.screen,

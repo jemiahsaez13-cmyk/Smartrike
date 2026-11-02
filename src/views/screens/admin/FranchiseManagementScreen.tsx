@@ -26,6 +26,7 @@ import {
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { TodaRoute } from '@/models/entities/Toda';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, spacing, typography, radius, shadows, gradients } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { confirm, notify } from '@/utils/confirm';
@@ -107,15 +108,19 @@ const peso = (value: number | string | null | undefined) =>
 
 const initialOf = (name?: string | null) => (name || '?').trim().charAt(0).toUpperCase() || '?';
 
-// Segmented filter tab with a count badge.
-const FilterChip = ({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={[styles.chip, active && styles.chipActive]}>
-    <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    <View style={[styles.chipCount, active && styles.chipCountActive]}>
-      <Text style={[styles.chipCountText, active && styles.chipCountTextActive]}>{count}</Text>
-    </View>
-  </TouchableOpacity>
-);
+// Segmented filter tab with a count badge. `alert` turns a non-zero count red
+// for requests waiting on the admin.
+const FilterChip = ({ label, count, active, onPress, alert = false }: { label: string; count: number; active: boolean; onPress: () => void; alert?: boolean }) => {
+  const urgent = alert && count > 0;
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={[styles.chip, active && styles.chipActive]}>
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+      <View style={[styles.chipCount, active && styles.chipCountActive, urgent && styles.chipCountUrgent]}>
+        <Text style={[styles.chipCountText, active && styles.chipCountTextActive, urgent && styles.chipCountTextUrgent]}>{count}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const StatusPill = ({ status }: { status: FranchiseStatus }) => {
   const tone = STATUS_TONE[status];
@@ -590,6 +595,11 @@ export const FranchiseManagementScreen = () => {
   if (loading && applications.length === 0) return <Loading message="Loading applications..." />;
 
   const isOpen = (a: FranchiseApplication) => a.status !== 'issued' && a.status !== 'rejected';
+  // Open applications the admin must act on now (not waiting on the driver).
+  const actionable = applications.filter((a) =>
+    ['submitted', 'document_verification', 'approved'].includes(a.status)
+    || (a.status === 'payment' && a.payment_review_status === 'pending_review')
+  ).length;
   const counts = {
     all: applications.length,
     pending: applications.filter(isOpen).length,
@@ -648,6 +658,7 @@ export const FranchiseManagementScreen = () => {
             >
               <MaterialCommunityIcons name="book-open-variant" size={18} color="#fff" />
               <Text style={styles.registryBtnText}>Registry</Text>
+              <CountBadge count={successionRequests.length} ringColor={colors.primary} />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -669,10 +680,10 @@ export const FranchiseManagementScreen = () => {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
           <FilterChip label="All" count={counts.all} active={filter === 'all'} onPress={() => setFilter('all')} />
-          <FilterChip label="Pending" count={counts.pending} active={filter === 'pending'} onPress={() => setFilter('pending')} />
+          <FilterChip label="Pending" count={counts.pending} active={filter === 'pending'} onPress={() => setFilter('pending')} alert={actionable > 0} />
           <FilterChip label="Renewals" count={counts.renewals} active={filter === 'renewals'} onPress={() => setFilter('renewals')} />
-          <FilterChip label="Change of Unit" count={pendingCouApps.length} active={filter === 'cou'} onPress={() => setFilter('cou')} />
-          <FilterChip label="Succession" count={successionRequests.length} active={filter === 'succession'} onPress={() => setFilter('succession')} />
+          <FilterChip label="Change of Unit" count={pendingCouApps.length} active={filter === 'cou'} onPress={() => setFilter('cou')} alert />
+          <FilterChip label="Succession" count={successionRequests.length} active={filter === 'succession'} onPress={() => setFilter('succession')} alert />
           <FilterChip label="Issued" count={counts.issued} active={filter === 'issued'} onPress={() => setFilter('issued')} />
         </ScrollView>
 
@@ -1657,6 +1668,8 @@ const styles = StyleSheet.create({
   chipCountActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
   chipCountText: { ...typography.labelSmall, fontSize: 11, color: colors.textSecondary },
   chipCountTextActive: { color: '#fff' },
+  chipCountUrgent: { backgroundColor: colors.error },
+  chipCountTextUrgent: { color: '#fff', fontWeight: '800' },
 
   body: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
 

@@ -20,6 +20,7 @@ import { supabase } from '@/config/supabase';
 import { confirm, notify } from '@/utils/confirm';
 import { useAppSelector } from '@/controllers/store';
 import { User } from '@/models/types';
+import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
@@ -118,6 +119,12 @@ export const UserManagementScreen = () => {
   const onRefresh = () => {
     setRefreshing(true);
     load();
+  };
+
+  // Red counts on the filter chips that need the admin's attention.
+  const chipAlert: Partial<Record<Filter, number>> = {
+    pending: users.filter((u) => u.user_type === 'driver' && (u as any).driver_documents_status === 'pending').length,
+    flagged: users.filter((u) => !!conduct.get(u.id)?.flagged || !!conduct.get(u.id)?.repeatedCancellations).length,
   };
 
   const filtered = users.filter((u) => {
@@ -414,6 +421,7 @@ export const UserManagementScreen = () => {
               activeOpacity={0.8}
             >
               <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
+              <CountBadge count={chipAlert[f.key] ?? 0} variant="inline" />
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -832,7 +840,7 @@ const styles = StyleSheet.create({
   searchInput: { ...typography.body, flex: 1, color: colors.text, fontSize: 14, height: 48, padding: 0 },
   filterBar: { borderBottomWidth: 1, borderBottomColor: colors.borderLight, paddingBottom: spacing.sm },
   filterRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.screen },
-  chip: { height: 32, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, justifyContent: 'center' },
+  chip: { height: 32, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   chipActive: { backgroundColor: colors.primary },
   chipText: { ...typography.labelSmall, fontSize: 12, color: colors.textSecondary },
   chipTextActive: { color: '#fff' },

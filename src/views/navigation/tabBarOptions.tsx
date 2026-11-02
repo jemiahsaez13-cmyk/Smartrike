@@ -1,5 +1,7 @@
 import React from 'react';
+import { View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, fonts, radius, shadows } from '@/views/styles/theme';
 
 // ────────────────────────────────────────────────────────────────
@@ -69,4 +71,23 @@ export const tabIcon =
         size={size + 1}
         color={color}
       />
+    );
+
+/**
+ * tabIcon with a red count pinned to the icon's top-right corner. Drawn on the
+ * icon (not tabBarBadge) so it sits in the same place on every tab and
+ * platform; the ring matches the tab's background.
+ */
+export const tabIconWithBadge =
+  (active: string, inactive: string | undefined, count: number) =>
+  ({ focused, color, size }: { focused: boolean; color: string; size: number }) =>
+    (
+      <View>
+        <MaterialCommunityIcons
+          name={(focused ? active : inactive ?? active) as any}
+          size={size + 1}
+          color={color}
+        />
+        <CountBadge count={count} ringColor={focused ? colors.surfaceHover : colors.surface} style={{ top: -5, right: -11 }} />
+      </View>
     );

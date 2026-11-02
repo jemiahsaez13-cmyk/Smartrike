@@ -3,11 +3,25 @@ import { useAppSelector } from '@/controllers/store';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 
 export interface AdminPendingCounts {
-  /** MTOP work waiting on the admin: review, payment proof, issuance, Change of Unit, succession. */
+  /** MTOP tab total: applications + succession requests. */
   mtop: number;
+  /** Applications in review, payment proof to verify, ready to issue, Change of Unit. */
+  applications: number;
+  /** Change of Unit requests (part of applications). */
+  changeOfUnit: number;
+  /** Succession requests waiting in the Registry. */
+  successions: number;
   /** Drivers whose registration photos wait for review. */
   drivers: number;
+  /** Open passenger/driver reports. */
+  reports: number;
+  /** Ride payment proofs not yet reviewed. */
+  ridePayments: number;
 }
+
+const EMPTY: AdminPendingCounts = {
+  mtop: 0, applications: 0, changeOfUnit: 0, successions: 0, drivers: 0, reports: 0, ridePayments: 0,
+};
 
 const count = async (query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
   try {
@@ -26,7 +40,7 @@ const count = async (query: PromiseLike<{ count: number | null; error: unknown }
 export const useAdminPendingCounts = (): AdminPendingCounts => {
   const user = useAppSelector((state) => state.auth.user);
   const latestNotification = useAppSelector((state) => state.notification.notifications[0]?.id);
-  const [counts, setCounts] = useState<AdminPendingCounts>({ mtop: 0, drivers: 0 });
+  const [counts, setCounts] = useState<AdminPendingCounts>(EMPTY);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Each caller (tab bar, dashboard) needs its own realtime channel name.
   const channelKey = useRef(Math.random().toString(36).slice(2, 10));
@@ -34,7 +48,7 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
 
   const refresh = useCallback(async () => {
     if (!isSupabaseConfigured || !isAdmin) return;
-    const [applications, successions, drivers] = await Promise.all([
+    const [applications, changeOfUnit, successions, drivers, reports, ridePayments] = await Promise.all([
       count(
         supabase
           .from('franchise_applications')
@@ -44,6 +58,12 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
             + 'and(status.eq.payment,payment_review_status.eq.pending_review),'
             + 'cou_status.eq.pending'
           )
+      ),
+      count(
+        supabase
+          .from('franchise_applications')
+          .select('id', { count: 'exact', head: true })
+          .eq('cou_status', 'pending')
       ),
       count(
         supabase
@@ -58,8 +78,18 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
           .eq('user_type', 'driver')
           .eq('driver_documents_status', 'pending')
       ),
+      count(supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open')),
+      count(supabase.from('ride_payment_submissions').select('id', { count: 'exact', head: true }).eq('status', 'pending')),
     ]);
-    setCounts({ mtop: applications + successions, drivers });
+    setCounts({
+      mtop: applications + successions,
+      applications,
+      changeOfUnit,
+      successions,
+      drivers,
+      reports,
+      ridePayments,
+    });
   }, [isAdmin]);
 
   // Coalesce bursts of realtime events into one refresh.
@@ -81,6 +111,8 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
         .channel(`admin_pending_counts_${user?.id}_${channelKey.current}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'franchise_applications' }, schedule)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'franchise_succession_requests' }, schedule)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, schedule)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'ride_payment_submissions' }, schedule)
         .subscribe();
     } catch {
       /* realtime unavailable: notification arrivals and the interval still refresh */

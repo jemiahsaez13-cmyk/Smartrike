@@ -28,15 +28,12 @@ import { AdminAnnouncementScreen } from '@/views/screens/admin/AdminAnnouncement
 import { BookingMonitoringScreen } from '@/views/screens/admin/BookingMonitoringScreen';
 import { TodaAssignmentScreen } from '@/views/screens/admin/TodaAssignmentScreen';
 import { TodaManagementScreen } from '@/views/screens/admin/TodaManagementScreen';
-import { uberTabScreenOptions, tabIcon } from '@/views/navigation/tabBarOptions';
+import { uberTabScreenOptions, tabIcon, tabIconWithBadge } from '@/views/navigation/tabBarOptions';
 import { useAppSelector } from '@/controllers/store';
-import { useAdminPendingCounts, badgeLabel } from '@/controllers/hooks/useAdminPendingCounts';
-import { colors } from '@/views/styles/theme';
+import { useAdminPendingCounts } from '@/controllers/hooks/useAdminPendingCounts';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
-
-const badgeStyle = { backgroundColor: colors.error, color: '#fff', fontSize: 10, fontWeight: '700' as const };
 
 const AdminTabs = () => {
   // Live red badges (migration 083): unread admin notifications on Home, MTOP
@@ -53,9 +50,7 @@ const AdminTabs = () => {
       component={AdminDashboard}
       options={{
         tabBarLabel: 'Home',
-        tabBarIcon: tabIcon('view-dashboard', 'view-dashboard-outline'),
-        tabBarBadge: unread > 0 ? badgeLabel(unread) : undefined,
-        tabBarBadgeStyle: badgeStyle,
+        tabBarIcon: tabIconWithBadge('view-dashboard', 'view-dashboard-outline', unread),
       }}
     />
     <Tab.Screen
@@ -63,9 +58,7 @@ const AdminTabs = () => {
       component={FranchiseManagementScreen}
       options={{
         tabBarLabel: 'MTOP',
-        tabBarIcon: tabIcon('card-account-details', 'card-account-details-outline'),
-        tabBarBadge: pending.mtop > 0 ? badgeLabel(pending.mtop) : undefined,
-        tabBarBadgeStyle: badgeStyle,
+        tabBarIcon: tabIconWithBadge('card-account-details', 'card-account-details-outline', pending.mtop),
       }}
     />
     <Tab.Screen
@@ -81,7 +74,7 @@ const AdminTabs = () => {
     <Tab.Screen
       name="Profile"
       component={ProfileScreen}
-      options={{ tabBarLabel: 'Account', tabBarIcon: tabIcon('account', 'account-outline') }}
+      options={{ tabBarLabel: 'Account', tabBarIcon: tabIconWithBadge('account', 'account-outline', unread) }}
     />
   </Tab.Navigator>
   );

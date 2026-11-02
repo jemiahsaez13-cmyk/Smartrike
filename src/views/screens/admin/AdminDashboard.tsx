@@ -13,7 +13,8 @@ import { FranchiseApplication } from '@/models/entities/Franchise';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 import { useAppSelector } from '@/controllers/store';
-import { useAdminPendingCounts, badgeLabel } from '@/controllers/hooks/useAdminPendingCounts';
+import { useAdminPendingCounts } from '@/controllers/hooks/useAdminPendingCounts';
+import { CountBadge } from '@/views/components/common/CountBadge';
 
 const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 16) / 2;
 
@@ -45,6 +46,8 @@ export const AdminDashboard = () => {
     state.notification.userId === authUser?.id ? state.notification.unreadCount : 0
   );
   const pendingCounts = useAdminPendingCounts();
+  // The live count wins over the one loaded on focus.
+  const liveReports = (reports: number) => Math.max(reports, pendingCounts.reports);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -168,11 +171,7 @@ export const AdminDashboard = () => {
               accessibilityLabel={unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : 'Notifications'}
             >
               <MaterialCommunityIcons name={unreadNotifications > 0 ? 'bell-ring-outline' : 'bell-outline'} size={21} color="#FFFFFF" />
-              {unreadNotifications > 0 && (
-                <View style={styles.headerBadge}>
-                  <Text style={styles.reportsBadgeText}>{badgeLabel(unreadNotifications)}</Text>
-                </View>
-              )}
+              <CountBadge count={unreadNotifications} ringColor={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionBtn}
@@ -181,11 +180,7 @@ export const AdminDashboard = () => {
               accessibilityLabel={pendingCounts.drivers > 0 ? `Users, ${pendingCounts.drivers} drivers to review` : 'Users'}
             >
               <MaterialCommunityIcons name="account-group-outline" size={21} color="#FFFFFF" />
-              {pendingCounts.drivers > 0 && (
-                <View style={styles.headerBadge}>
-                  <Text style={styles.reportsBadgeText}>{badgeLabel(pendingCounts.drivers)}</Text>
-                </View>
-              )}
+              <CountBadge count={pendingCounts.drivers} ringColor={colors.primary} />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -204,19 +199,15 @@ export const AdminDashboard = () => {
           {/* Prominent Reports entry — always visible, urgent when open > 0 */}
           <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Reports')}>
             <Card variant="elevated" padding="md" style={styles.reportsCard}>
-              <View style={[styles.reportsIcon, openReports > 0 && { backgroundColor: colors.errorLight }]}>
-                <MaterialCommunityIcons name="flag" size={24} color={openReports > 0 ? colors.error : colors.primary} />
-                {openReports > 0 && (
-                  <View style={styles.reportsBadge}>
-                    <Text style={styles.reportsBadgeText}>{openReports > 9 ? '9+' : openReports}</Text>
-                  </View>
-                )}
+              <View style={[styles.reportsIcon, liveReports(openReports) > 0 && { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="flag" size={24} color={liveReports(openReports) > 0 ? colors.error : colors.primary} />
+                <CountBadge count={liveReports(openReports)} />
               </View>
               <View style={styles.queueCopy}>
                 <Text style={styles.reportsTitle}>Reports and Violations</Text>
                 <Text style={styles.queueLevel}>
-                  {openReports > 0
-                    ? `${openReports} open report${openReports > 1 ? 's' : ''} need${openReports === 1 ? 's' : ''} your review`
+                  {liveReports(openReports) > 0
+                    ? `${liveReports(openReports)} open report${liveReports(openReports) > 1 ? 's' : ''} need${liveReports(openReports) === 1 ? 's' : ''} your review`
                     : 'Review reports and manage driver violations'}
                 </Text>
               </View>
@@ -257,10 +248,15 @@ export const AdminDashboard = () => {
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('FranchiseRegistry')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="book-open-variant" size={20} color={colors.primary} />
+                <CountBadge count={pendingCounts.successions} />
               </View>
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Franchise Registry</Text>
-                <Text style={styles.queueLevel}>Renewals, succession, transfers &amp; termination</Text>
+                <Text style={[styles.queueLevel, pendingCounts.successions > 0 && styles.queueAlert]}>
+                  {pendingCounts.successions > 0
+                    ? `${pendingCounts.successions} succession request${pendingCounts.successions > 1 ? 's' : ''} to review`
+                    : 'Renewals, succession, transfers & termination'}
+                </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
@@ -279,10 +275,15 @@ export const AdminDashboard = () => {
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('RidePaymentManagement')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="receipt-text-check-outline" size={20} color={colors.primary} />
+                <CountBadge count={pendingCounts.ridePayments} />
               </View>
               <View style={styles.queueCopy}>
                 <Text style={styles.queueTitle}>Ride Payments</Text>
-                <Text style={styles.queueLevel}>Review passenger payment proof and references</Text>
+                <Text style={[styles.queueLevel, pendingCounts.ridePayments > 0 && styles.queueAlert]}>
+                  {pendingCounts.ridePayments > 0
+                    ? `${pendingCounts.ridePayments} payment proof${pendingCounts.ridePayments > 1 ? 's' : ''} waiting for review`
+                    : 'Review passenger payment proof and references'}
+                </Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
@@ -593,20 +594,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
-  headerBadge: {
-    position: 'absolute',
-    top: -7,
-    right: -7,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.error,
-    paddingHorizontal: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
   actionBtn: {
     width: 44,
     height: 44,
@@ -771,21 +758,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
-  reportsBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.error,
-    paddingHorizontal: 5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  reportsBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   reportsTitle: {
     ...typography.subtitle,
     color: colors.text,
@@ -816,6 +788,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
   },
+  queueAlert: { color: colors.error },
   queueLevel: {
     ...typography.bodySmall,
     color: colors.textSecondary,
