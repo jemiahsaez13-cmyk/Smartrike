@@ -23,6 +23,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
 import { TodaAssociation, TodaRoute } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
+import { assignedBodyNumber } from '@/models/entities/Franchise';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
@@ -104,6 +105,8 @@ export const DriverTodaScreen = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const user = useAppSelector((s) => s.auth.user);
+  // Loaded by the dashboard; shown when available.
+  const bodyNumber = assignedBodyNumber(useAppSelector((s) => s.franchise.myApplication));
 
   const [toda, setToda] = useState<TodaAssociation | null>(null);
   const [routes, setRoutes] = useState<TodaRoute[]>([]);
@@ -205,6 +208,7 @@ export const DriverTodaScreen = () => {
                 <Text style={styles.bannerMetaText}>
                   {routes.length} route{routes.length !== 1 ? 's' : ''}
                 </Text>
+                {bodyNumber ? <Text style={styles.bannerMetaText}>Body No. {bodyNumber}</Text> : null}
               </View>
             </View>
           </View>

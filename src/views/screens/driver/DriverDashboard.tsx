@@ -7,6 +7,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { setUser } from '@/controllers/slices/authSlice';
+import { fetchMyApplication } from '@/controllers/slices/franchiseSlice';
+import { assignedBodyNumber } from '@/models/entities/Franchise';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { Driver } from '@/models/types';
@@ -37,6 +39,7 @@ export const DriverDashboard = () => {
   // A driver can only go online / accept rides once an admin has verified them.
   const isVerified = (user as any)?.verification_status === 'verified';
   const documentsStatus = (user as any)?.driver_documents_status as string | null | undefined;
+  const bodyNumber = assignedBodyNumber(useAppSelector(state => state.franchise.myApplication));
 
   // A brand-new driver has no rated trips — show "New", not the default 5.0.
   const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
@@ -143,6 +146,8 @@ export const DriverDashboard = () => {
   useFocusEffect(useCallback(() => {
     let active = true;
     if (!statusLock.current) void refreshProfile(true, () => active);
+    // Body number shown on the TODA card (assigned at MTOP issuance).
+    if (user?.id) void dispatch(fetchMyApplication(user.id));
     // A trip that was cancelled by the passenger or already completed must not
     // linger as an "Active Trip" card.
     if (currentTrip?.id) {
@@ -153,7 +158,7 @@ export const DriverDashboard = () => {
       }).catch(() => undefined);
     }
     return () => { active = false; };
-  }, [dispatch, refreshProfile, currentTrip?.id]));
+  }, [dispatch, refreshProfile, currentTrip?.id, user?.id]));
 
   // While awaiting admin approval, check periodically so the switch unlocks
   // as soon as the driver is verified.
@@ -326,7 +331,7 @@ export const DriverDashboard = () => {
         <DailyGoalCard earnings={dailyEarnings} style={styles.goalCard} />
 
         {/* TODA Card */}
-        {(user as any)?.toda_membership ? (
+        {(user as any)?.toda_membership || bodyNumber ? (
           <TouchableOpacity
             style={styles.todaCard}
             onPress={() => navigation.navigate('DriverToda')}
@@ -337,7 +342,8 @@ export const DriverDashboard = () => {
             </View>
             <View style={styles.todaCardText}>
               <Text style={styles.todaCardLabel}>MY TODA</Text>
-              <Text style={styles.todaCardName}>{(user as any).toda_membership}</Text>
+              <Text style={styles.todaCardName}>{(user as any).toda_membership || 'Not assigned yet'}</Text>
+              {bodyNumber ? <Text style={styles.todaCardMeta}>Body No. {bodyNumber}</Text> : null}
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
           </TouchableOpacity>
@@ -620,6 +626,12 @@ const styles = StyleSheet.create({
     ...typography.label,
     fontSize: 15,
     color: colors.text,
+    marginTop: 1,
+  },
+  todaCardMeta: {
+    ...typography.bodySmall,
+    fontSize: 12,
+    color: colors.textSecondary,
     marginTop: 1,
   },
   requestAlert: {

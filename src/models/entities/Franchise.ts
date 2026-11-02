@@ -242,6 +242,20 @@ export interface RenewalStanding {
   nextWindowYear: number;
 }
 
+/**
+ * Body number the driver currently operates under, from their latest MTOP
+ * record (a renewal carries the number forward). None once the franchise was
+ * terminated or transferred to someone else.
+ */
+export const assignedBodyNumber = (
+  app: Pick<FranchiseApplication, 'body_number' | 'franchise_status'> | null | undefined
+): string | null => {
+  const body = app?.body_number?.trim();
+  if (!body) return null;
+  if (app?.franchise_status === 'terminated' || app?.franchise_status === 'transferred') return null;
+  return body;
+};
+
 export const renewalStanding = (
   app: Pick<FranchiseApplication, 'issued_at' | 'expiry_date' | 'renewal_year' | 'franchise_status'>,
   today: Date = new Date()
