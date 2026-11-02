@@ -125,11 +125,34 @@ export const AdminDashboard = () => {
     { id: '4', title: 'Total Users', value: stats ? `${stats.totalUsers}` : '—', icon: 'account-group-outline' },
   ];
 
-  // Operations queue derived from live counts; only show what needs attention.
-  const queue: { id: string; title: string; level: string; icon: string; route: string }[] = [];
-  if (stats?.pendingFranchises) queue.push({ id: 'f', title: `${stats.pendingFranchises} franchise request${stats.pendingFranchises > 1 ? 's' : ''} need review`, level: 'Compliance · MTOP', icon: 'shield-alert-outline', route: 'MTOP' });
-  if (stats?.pendingDrivers) queue.push({ id: 'd', title: `${stats.pendingDrivers} driver${stats.pendingDrivers > 1 ? 's' : ''} awaiting verification`, level: 'Onboarding', icon: 'account-clock-outline', route: 'UserManagement' });
-  if (stats?.cancelledTrips) queue.push({ id: 'c', title: `${stats.cancelledTrips} cancelled trip${stats.cancelledTrips > 1 ? 's' : ''} on record`, level: 'Support · Audit', icon: 'clipboard-search-outline', route: 'Logs' });
+  // Operations queue: live counts (red badge on the item when it waits on the
+  // admin); only shows what needs attention.
+  const queue: { id: string; title: string; level: string; icon: string; route: string; params?: object; count: number }[] = [];
+  const mtopWaiting = pendingCounts.mtop;
+  const driversWaiting = Math.max(pendingCounts.unverifiedDrivers, pendingCounts.drivers);
+  if (mtopWaiting) queue.push({
+    id: 'f',
+    title: `${mtopWaiting} MTOP request${mtopWaiting > 1 ? 's' : ''} need${mtopWaiting === 1 ? 's' : ''} review`,
+    level: [
+      pendingCounts.changeOfUnit ? `${pendingCounts.changeOfUnit} Change of Unit` : null,
+      pendingCounts.successions ? `${pendingCounts.successions} succession` : null,
+    ].filter(Boolean).join(' · ') || 'Compliance · MTOP',
+    icon: 'shield-alert-outline',
+    route: 'MTOP',
+    count: mtopWaiting,
+  });
+  if (driversWaiting) queue.push({
+    id: 'd',
+    title: `${driversWaiting} driver${driversWaiting > 1 ? 's' : ''} awaiting verification`,
+    level: pendingCounts.drivers
+      ? `Onboarding · ${pendingCounts.drivers} with documents to review`
+      : 'Onboarding · waiting for documents',
+    icon: 'account-clock-outline',
+    route: 'UserManagement',
+    params: { filter: 'pending' },
+    count: driversWaiting,
+  });
+  if (stats?.cancelledTrips) queue.push({ id: 'c', title: `${stats.cancelledTrips} cancelled trip${stats.cancelledTrips > 1 ? 's' : ''} on record`, level: 'Support · Audit', icon: 'clipboard-search-outline', route: 'Logs', count: 0 });
 
   const weekBars = analytics?.bars.Weekly ?? [];
   const weekLabels = analytics?.labels.Weekly ?? [];
@@ -398,13 +421,14 @@ export const AdminDashboard = () => {
             ) : (
               queue.map((item, index) => (
                 <View key={item.id}>
-                  <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate(item.route)}>
-                    <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
-                      <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
+                  <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate(item.route, item.params)}>
+                    <View style={[styles.queueIcon, { backgroundColor: item.count > 0 ? colors.errorLight : colors.surfaceAlt }]}>
+                      <MaterialCommunityIcons name={item.icon as any} size={20} color={item.count > 0 ? colors.error : colors.primary} />
+                      <CountBadge count={item.count} />
                     </View>
                     <View style={styles.queueCopy}>
                       <Text style={styles.queueTitle}>{item.title}</Text>
-                      <Text style={styles.queueLevel}>{item.level}</Text>
+                      <Text style={[styles.queueLevel, item.count > 0 && styles.queueAlert]}>{item.level}</Text>
                     </View>
                     <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
                   </TouchableOpacity>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 
@@ -13,6 +14,8 @@ export interface AdminPendingCounts {
   successions: number;
   /** Drivers whose registration photos wait for review. */
   drivers: number;
+  /** Driver accounts not verified yet (documents missing, to review or rejected). */
+  unverifiedDrivers: number;
   /** Open passenger/driver reports. */
   reports: number;
   /** Ride payment proofs not yet reviewed. */
@@ -20,7 +23,7 @@ export interface AdminPendingCounts {
 }
 
 const EMPTY: AdminPendingCounts = {
-  mtop: 0, applications: 0, changeOfUnit: 0, successions: 0, drivers: 0, reports: 0, ridePayments: 0,
+  mtop: 0, applications: 0, changeOfUnit: 0, successions: 0, drivers: 0, unverifiedDrivers: 0, reports: 0, ridePayments: 0,
 };
 
 const count = async (query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
@@ -48,7 +51,7 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
 
   const refresh = useCallback(async () => {
     if (!isSupabaseConfigured || !isAdmin) return;
-    const [applications, changeOfUnit, successions, drivers, reports, ridePayments] = await Promise.all([
+    const [applications, changeOfUnit, successions, drivers, unverifiedDrivers, reports, ridePayments] = await Promise.all([
       count(
         supabase
           .from('franchise_applications')
@@ -78,6 +81,14 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
           .eq('user_type', 'driver')
           .eq('driver_documents_status', 'pending')
       ),
+      count(
+        supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_type', 'driver')
+          .eq('verification_status', 'pending')
+          .neq('status', 'deactivated')
+      ),
       count(supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open')),
       count(supabase.from('ride_payment_submissions').select('id', { count: 'exact', head: true }).eq('status', 'pending')),
     ]);
@@ -87,6 +98,7 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
       changeOfUnit,
       successions,
       drivers,
+      unverifiedDrivers,
       reports,
       ridePayments,
     });
@@ -101,6 +113,9 @@ export const useAdminPendingCounts = (): AdminPendingCounts => {
   useEffect(() => {
     void refresh();
   }, [refresh, latestNotification]);
+
+  // Back on the screen (e.g. after verifying a driver): recount at once.
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   useEffect(() => {
     if (!isSupabaseConfigured || !isAdmin) return;
