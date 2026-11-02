@@ -41,6 +41,7 @@ import MapView, { AnimatedMarker, AnimatedRegion, Marker, Polyline, PROVIDER_GOO
 import { PassengerRidePaymentModal } from '@/views/components/payment/PassengerRidePaymentModal';
 import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 const { height } = Dimensions.get('window');
 const realtimeService = new RealtimeService();
@@ -791,6 +792,7 @@ export const ActiveTripScreen = () => {
               <Text style={[styles.detailValue, typography.currency]}>
                 ₱{currentBooking ? currentBooking.total_fare.toFixed(2) : '0.00'}
               </Text>
+              <FareDiscountNote booking={currentBooking} />
             </View>
           </View>
           <View style={styles.detailRow}>

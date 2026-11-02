@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { createBooking, acceptBooking, startTrip, completeTrip, cancelBooking } from '../slices/bookingSlice';
 import { Location } from '@/models/types';
+import { BookingPassengerType } from '@/config/constants';
 
 export const useBooking = () => {
   const dispatch = useAppDispatch();
@@ -18,6 +19,7 @@ export const useBooking = () => {
         passengerCount?: number;
         rideType?: 'standard' | 'priority';
         distanceKm?: number;
+        passengerType?: BookingPassengerType;
       }
     ) => {
       return dispatch(
@@ -30,6 +32,7 @@ export const useBooking = () => {
           passengerCount: options?.passengerCount,
           rideType: options?.rideType,
           distanceKm: options?.distanceKm,
+          passengerType: options?.passengerType,
         })
       ).unwrap();
     },

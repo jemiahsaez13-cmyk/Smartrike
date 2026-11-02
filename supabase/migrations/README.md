@@ -304,3 +304,16 @@ Apply `079_toda_capacity_and_flag_alerts.sql` after 078.
   violations, or a passenger reaches 3 cancellations without a valid reason,
   within the rolling 7 days (Asia/Manila). It fires once when the count
   reaches 3. Keep in step with `CONDUCT_FLAG_THRESHOLD` / `CONDUCT_WINDOW_DAYS`.
+
+
+## Passenger fare discounts (080)
+
+Apply `080_passenger_fare_discounts.sql` after 079, before shipping the build
+with the "Fare discount" picker (a Senior/PWD/Student booking fails on a
+database without these columns; regular bookings keep working).
+
+- `bookings.passenger_type` (regular / senior / pwd / student),
+  `discount_pct`, `discount_amount`. `total_fare` is net of the discount.
+- `enforce_booking_insert` (068) now also applies the discount server-side:
+  20% off one passenger's share (RA 9994, RA 10754, RA 11314). The rest of
+  the function is unchanged. Keep in step with `PASSENGER_DISCOUNT_PCT`.

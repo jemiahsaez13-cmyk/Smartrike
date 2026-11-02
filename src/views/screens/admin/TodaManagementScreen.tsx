@@ -24,7 +24,9 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
-import { TodaAssociation, TodaRoute, SaveTodaInput, TodaCapacity, isTodaFull } from '@/models/entities/Toda';
+import { TodaAssociation, TodaRoute, SaveTodaInput, TodaCapacity, TodaMasterListEntry, isTodaFull } from '@/models/entities/Toda';
+import { FRANCHISE_RECORD_STATUS_LABEL, FranchiseRecordStatus } from '@/models/entities/Franchise';
+import { ExportService } from '@/models/services/ExportService';
 import { TodaService } from '@/models/services/TodaService';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
@@ -45,6 +47,15 @@ const BOAC_BARANGAYS = [
 const peso = (n: number) => `₱${Number(n).toFixed(2)}`;
 
 const service = new TodaService();
+
+const unitStatusLabel = (status: string) =>
+  status === 'no_mtop' ? 'No MTOP' : FRANCHISE_RECORD_STATUS_LABEL[status as FranchiseRecordStatus] ?? status;
+
+const unitStatusColor = (status: string) =>
+  status === 'active' ? colors.success
+  : status === 'no_mtop' ? colors.textMuted
+  : status === 'expired' || status === 'pending_renewal' || status === 'suspended' ? colors.warning
+  : colors.error;
 
 // ─── View modes ───────────────────────────────────────────────────────────────
 type ViewMode = 'list' | 'detail';
@@ -205,7 +216,11 @@ export const TodaManagementScreen = () => {
   const [selected, setSelected] = useState<TodaAssociation | null>(null);
   const [routes, setRoutes] = useState<TodaRoute[]>([]);
   const [members, setMembers] = useState<{ id: string; name: string; plate_number?: string; body_number?: string; verification_status?: string }[]>([]);
-  const [detailTab, setDetailTab] = useState<'members' | 'routes'>('members');
+  const [detailTab, setDetailTab] = useState<'members' | 'routes' | 'master'>('members');
+  const [masterList, setMasterList] = useState<TodaMasterListEntry[] | null>(null);
+  const [masterLoading, setMasterLoading] = useState(false);
+  const [masterQuery, setMasterQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
   // TODA create / edit modal
@@ -260,6 +275,8 @@ export const TodaManagementScreen = () => {
     setSelected(toda);
     setView('detail');
     setDetailTab('members');
+    setMasterList(null);
+    setMasterQuery('');
     setDetailLoading(true);
     try {
       const [r, m] = await Promise.all([
@@ -272,6 +289,52 @@ export const TodaManagementScreen = () => {
       console.error('Detail load failed:', e);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // ── Master list (B6) ────────────────────────────────────────────────────────
+  const openMasterList = async () => {
+    setDetailTab('master');
+    if (!selected || masterList) return;
+    setMasterLoading(true);
+    try {
+      setMasterList(await service.getMasterList(selected.name));
+    } catch (e: any) {
+      void notify('Could not load the master list', e?.message || 'Please try again.');
+    } finally {
+      setMasterLoading(false);
+    }
+  };
+
+  const masterQueryKey = masterQuery.trim().toLowerCase();
+  const filteredMaster = (masterList ?? []).filter(
+    (e) =>
+      !masterQueryKey ||
+      [e.driverName, e.plateNumber, e.bodyNumber, e.mtopNumber, unitStatusLabel(e.unitStatus)]
+        .some((v) => (v ?? '').toLowerCase().includes(masterQueryKey))
+  );
+
+  const exportMasterList = async () => {
+    if (!selected || !filteredMaster.length) return;
+    setExporting(true);
+    try {
+      await ExportService.exportRowsToCSV(
+        filteredMaster.map((e) => ({
+          TODA: e.toda,
+          'Body No.': e.bodyNumber ?? '',
+          Driver: e.driverName,
+          'Plate No.': e.plateNumber ?? '',
+          'MTOP No.': e.mtopNumber ?? '',
+          'MTOP Expiry': e.expiryDate ?? '',
+          'Unit Status': unitStatusLabel(e.unitStatus),
+          'Driver Verification': e.verificationStatus ?? '',
+        })),
+        `toda_master_list_${selected.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`
+      );
+    } catch (e: any) {
+      void notify('Export failed', e?.message || 'Could not export the master list.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -621,6 +684,20 @@ export const TodaManagementScreen = () => {
                 Routes ({routes.length})
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, detailTab === 'master' && styles.tabActive]}
+              onPress={openMasterList}
+              activeOpacity={0.75}
+            >
+              <MaterialCommunityIcons
+                name="clipboard-list-outline"
+                size={16}
+                color={detailTab === 'master' ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.tabText, detailTab === 'master' && styles.tabTextActive]}>
+                Master List
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {detailLoading ? (
@@ -722,6 +799,95 @@ export const TodaManagementScreen = () => {
                   onAdd={openRouteModal}
                   onDelete={deleteRoute}
                 />
+              )}
+
+              {/* ── Master list tab (B6) ── */}
+              {detailTab === 'master' && (
+                <>
+                  <View style={styles.masterToolbar}>
+                    <View style={styles.masterSearch}>
+                      <MaterialCommunityIcons name="magnify" size={18} color={colors.textMuted} />
+                      <TextInput
+                        style={styles.masterSearchInput}
+                        placeholder="Search driver, plate, body or MTOP no."
+                        placeholderTextColor={colors.textMuted}
+                        value={masterQuery}
+                        onChangeText={setMasterQuery}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.masterExportBtn, (!filteredMaster.length || exporting) && { opacity: 0.5 }]}
+                      onPress={exportMasterList}
+                      disabled={!filteredMaster.length || exporting}
+                      activeOpacity={0.8}
+                    >
+                      {exporting ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <MaterialCommunityIcons name="download-outline" size={18} color={colors.primary} />
+                      )}
+                      <Text style={styles.masterExportText}>CSV</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.detailSectionLabel}>
+                    {masterList
+                      ? `${filteredMaster.length} RECORD${filteredMaster.length === 1 ? '' : 'S'} · ${selected.name.toUpperCase()}`
+                      : 'MASTER LIST'}
+                  </Text>
+
+                  {masterLoading ? (
+                    <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+                  ) : filteredMaster.length === 0 ? (
+                    <View style={styles.empty}>
+                      <MaterialCommunityIcons name="clipboard-text-off-outline" size={40} color={colors.textLight} />
+                      <Text style={styles.emptyTitle}>{masterQueryKey ? 'No matches' : 'No units or members yet'}</Text>
+                      <Text style={styles.emptyText}>
+                        {masterQueryKey ? 'Try a different search.' : 'Issued MTOP units and assigned drivers appear here.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Card variant="elevated" padding="none" style={styles.listCard}>
+                      {filteredMaster.map((e, index) => {
+                        const color = unitStatusColor(e.unitStatus);
+                        return (
+                          <View key={e.key}>
+                            <View style={styles.memberRow}>
+                              <View style={styles.masterBody}>
+                                <Text style={styles.masterBodyLabel}>BODY</Text>
+                                <Text style={styles.masterBodyValue} numberOfLines={1}>{e.bodyNumber ?? '—'}</Text>
+                              </View>
+                              <View style={styles.memberInfo}>
+                                <Text style={styles.memberName} numberOfLines={1}>{e.driverName}</Text>
+                                <View style={styles.memberChips}>
+                                  {e.plateNumber ? (
+                                    <View style={styles.identChip}>
+                                      <MaterialCommunityIcons name="card-text-outline" size={11} color={colors.textMuted} />
+                                      <Text style={styles.identChipText}>{e.plateNumber}</Text>
+                                    </View>
+                                  ) : null}
+                                  {e.mtopNumber ? (
+                                    <View style={styles.identChip}>
+                                      <MaterialCommunityIcons name="file-certificate-outline" size={11} color={colors.textMuted} />
+                                      <Text style={styles.identChipText}>
+                                        {e.mtopNumber}{e.expiryDate ? ` · exp ${e.expiryDate}` : ''}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                  <View style={[styles.identChip, { backgroundColor: color + '18' }]}>
+                                    <Text style={[styles.identChipText, { color }]}>{unitStatusLabel(e.unitStatus)}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+                            {index < filteredMaster.length - 1 && <View style={styles.divider} />}
+                          </View>
+                        );
+                      })}
+                    </Card>
+                  )}
+                </>
               )}
             </ScrollView>
           )}
@@ -1273,6 +1439,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, borderWidth: 1, borderColor: colors.borderLight,
   },
   identChipText: { ...typography.labelSmall, fontSize: 10, color: colors.textMuted },
+
+  // Master list
+  masterToolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
+  masterSearch: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.md, height: 42,
+  },
+  masterSearchInput: { ...typography.body, flex: 1, fontSize: 13, color: colors.text, height: 42, padding: 0 },
+  masterExportBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, height: 42, paddingHorizontal: spacing.md,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface,
+  },
+  masterExportText: { ...typography.label, fontSize: 13, color: colors.primary },
+  masterBody: {
+    width: 52, height: 44, borderRadius: radius.sm, backgroundColor: colors.primaryLight,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
+  },
+  masterBodyLabel: { ...typography.labelSmall, fontSize: 8, letterSpacing: 1, color: colors.primary },
+  masterBodyValue: { ...typography.label, fontSize: 14, color: colors.primary },
 
   // Routes
   routesHeader: {

@@ -9,6 +9,7 @@ import { Button } from '@/views/components/common/Button';
 import { colors, layout, radius, spacing, shadows, typography } from '@/views/styles/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { notify } from '@/utils/confirm';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 export const BookingRequestScreen = () => {
   const dispatch = useAppDispatch();
@@ -74,6 +75,8 @@ export const BookingRequestScreen = () => {
               </View>
               <Text style={[styles.fareAmount, typography.currency]}>₱{Number(request.total_fare || 0).toFixed(2)}</Text>
             </View>
+
+            <FareDiscountNote booking={request} forDriver style={{ textAlign: 'right' }} />
 
             <View style={styles.divider} />
 

@@ -31,6 +31,7 @@ import { formatETA, formatDistance } from '@/utils/locationUtils';
 import { confirm, notify } from '@/utils/confirm';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 const { height } = Dimensions.get('window');
 const userRepo = new UserRepository();
@@ -435,6 +436,7 @@ export const DriverTripScreen = () => {
 
         {/* Fare & route */}
         <Card variant="elevated" padding="md" style={styles.fareCard}>
+          <FareDiscountNote booking={currentBooking} forDriver style={{ textAlign: 'center', marginBottom: 6 }} />
           <View style={styles.fareRow}>
             <View style={styles.fareItem}>
               <Text style={styles.fareValue}>₱{(currentBooking.total_fare ?? 0).toFixed(2)}</Text>

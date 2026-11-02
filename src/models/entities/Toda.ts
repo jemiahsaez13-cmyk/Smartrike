@@ -50,6 +50,22 @@ export type SaveTodaInput = {
   approved_units?: number | null;
 };
 
+/** One line of a TODA master list (B6): a unit, or a member without one. */
+export interface TodaMasterListEntry {
+  /** Franchise id for a unit, driver id for a member without an MTOP. */
+  key: string;
+  toda: string;
+  driverId: string | null;
+  driverName: string;
+  verificationStatus: string | null;
+  plateNumber: string | null;
+  bodyNumber: string | null;
+  mtopNumber: string | null;
+  expiryDate: string | null;
+  /** Franchise record status, or 'no_mtop' for a member without a unit. */
+  unitStatus: string;
+}
+
 /** Members and units holding an issued MTOP, per TODA (B4). */
 export interface TodaCapacity {
   members: number;

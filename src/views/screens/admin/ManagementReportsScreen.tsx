@@ -44,6 +44,7 @@ const REPORTS: Array<{ key: ManagementReportType; label: string; icon: string }>
   { key: 'assignment_records',  label: 'Assignments',   icon: 'swap-horizontal-bold' },
   { key: 'operator_registration',label: 'Operators',    icon: 'account-hard-hat-outline' },
   { key: 'toda_association',    label: 'Associations',  icon: 'office-building-outline' },
+  { key: 'toda_master_list',    label: 'Master List',   icon: 'clipboard-list-outline' },
 ];
 const STATUSES: Array<FranchiseRecordStatus | 'all'> = ['all', 'active', 'expired', 'pending_renewal', 'terminated', 'transferred'];
 const CATEGORIES: Array<InventoryCategory | 'all'> = ['all', 'supplies', 'equipment', 'safety', 'office', 'other'];
@@ -256,7 +257,7 @@ export const ManagementReportsScreen = () => {
             {row.details ? <Text style={styles.resultDetails}>{row.details}</Text> : null}
             <View style={styles.resultFooter}>
               {row.category ? <Text style={styles.resultCategory}>{pretty(row.category)}</Text> : <View />}
-              <Text style={styles.resultDate}>{new Date(row.date).toLocaleDateString()}</Text>
+              {row.date ? <Text style={styles.resultDate}>{new Date(row.date).toLocaleDateString()}</Text> : null}
             </View>
           </View>
         ))}

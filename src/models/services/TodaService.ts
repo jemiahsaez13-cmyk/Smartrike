@@ -4,9 +4,11 @@ import {
   SaveTodaInput,
   TodaAssociation,
   TodaCapacity,
+  TodaMasterListEntry,
   TodaRoute,
 } from '@/models/entities/Toda';
 import { fetchAllRows } from '@/utils/supabaseUtils';
+import { FranchiseService } from './FranchiseService';
 
 /** Franchise records that no longer hold a unit in the TODA. */
 const RELEASED_FRANCHISE_STATUSES = ['terminated', 'transferred', 'renewed'];
@@ -185,6 +187,76 @@ export class TodaService {
       if (key) entry(key).activeUnits += 1;
     });
     return counts;
+  }
+
+  /**
+   * TODA master list (B6): every MTOP unit under the TODA (current registry,
+   * any record status) plus member drivers who hold no unit yet. Pass no name
+   * for every TODA; units and members without a TODA are left out then.
+   */
+  async getMasterList(todaName?: string): Promise<TodaMasterListEntry[]> {
+    const wanted = todaName ? nameKey(todaName) : null;
+    const [drivers, registry] = await Promise.all([
+      fetchAllRows<{ id: string; name: string; toda_membership: string | null; verification_status: string | null }>(() =>
+        supabase
+          .from('users')
+          .select('id, name, toda_membership, verification_status')
+          .eq('user_type', 'driver')
+          .not('toda_membership', 'is', null)
+          .order('id')
+      ),
+      new FranchiseService().getRegistry(),
+    ]);
+
+    const driverById = new Map(drivers.map((d) => [d.id, d]));
+    const entries: TodaMasterListEntry[] = [];
+    const driversWithUnit = new Set<string>();
+
+    registry.forEach((fr) => {
+      const driver = driverById.get(fr.driver_id);
+      const toda = (fr.toda ?? '').trim() || driver?.toda_membership?.trim() || '';
+      if (!toda || (wanted && nameKey(toda) !== wanted)) return;
+      const released = !!fr.franchise_status && RELEASED_FRANCHISE_STATUSES.includes(fr.franchise_status);
+      if (!released) driversWithUnit.add(fr.driver_id);
+      entries.push({
+        key: fr.id,
+        toda,
+        driverId: fr.driver_id,
+        driverName: fr.current_holder_name || fr.driver_name || driver?.name || 'Driver',
+        verificationStatus: driver?.verification_status ?? null,
+        plateNumber: fr.plate_number || null,
+        bodyNumber: fr.body_number ?? null,
+        mtopNumber: fr.mtop_number ?? null,
+        expiryDate: fr.expiry_date ? String(fr.expiry_date).slice(0, 10) : null,
+        unitStatus: fr.franchise_status ?? 'active',
+      });
+    });
+
+    drivers.forEach((d) => {
+      const toda = d.toda_membership?.trim() ?? '';
+      if (!toda || (wanted && nameKey(toda) !== wanted) || driversWithUnit.has(d.id)) return;
+      entries.push({
+        key: d.id,
+        toda,
+        driverId: d.id,
+        driverName: d.name,
+        verificationStatus: d.verification_status,
+        plateNumber: null,
+        bodyNumber: null,
+        mtopNumber: null,
+        expiryDate: null,
+        unitStatus: 'no_mtop',
+      });
+    });
+
+    // Body number order (numeric where possible), members without a unit last.
+    const bodyKey = (e: TodaMasterListEntry) => e.bodyNumber ?? '￿';
+    return entries.sort(
+      (a, b) =>
+        a.toda.localeCompare(b.toda) ||
+        bodyKey(a).localeCompare(bodyKey(b), undefined, { numeric: true }) ||
+        a.driverName.localeCompare(b.driverName)
+    );
   }
 
   capacityFor(counts: Map<string, TodaCapacity>, toda: Pick<TodaAssociation, 'name'>): TodaCapacity {

@@ -4,7 +4,7 @@ import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculati
 import { NotificationService } from './NotificationService';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
-import { NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import { BookingPassengerType, NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 
 // Parses a timestamp as UTC when it arrives without a timezone suffix.
 const toMs = (value: unknown): number => {
@@ -39,6 +39,7 @@ export class BookingService {
       passengerCount?: number;
       rideType?: 'standard' | 'priority';
       distanceKm?: number;
+      passengerType?: BookingPassengerType;
     } = {}
   ): Promise<Booking> {
     // One ride at a time. An expired search is closed first so it never blocks
@@ -66,14 +67,17 @@ export class BookingService {
     // (migration 068), so price from the same rounded number.
     const distance = Math.round(rawDistance * 100) / 100;
     const { baseFare, perKmRate, multiplier } = await this.fareService.getFareConfig();
-    const totalFare = this.fareService.calculateFareForPassengers(
+    const passengerType = options.passengerType ?? 'regular';
+    const quote = this.fareService.quoteFare(
       distance,
       baseFare,
       perKmRate,
       passengerCount,
       multiplier,
-      rideType
+      rideType,
+      passengerType
     );
+    const totalFare = quote.totalFare;
     const estimatedDuration = Math.ceil(distance / 30 * 60);
 
     const booking = await this.bookingRepo.create({
@@ -100,6 +104,11 @@ export class BookingService {
       passenger_rating: null,
       driver_rating: null,
       notes: options.notes || null,
+      // Discount columns only exist after migration 080; a regular booking
+      // leaves them out so it still works on an older database.
+      ...(passengerType !== 'regular'
+        ? { passenger_type: passengerType, discount_pct: quote.discountPct, discount_amount: quote.discountAmount }
+        : {}),
       accepted_at: null,
       started_at: null,
       completed_at: null

@@ -18,7 +18,7 @@ import { GeocodingService } from '@/models/services/GeocodingService';
 import { DirectionsService, RoadRoute } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
 import { Location, SavedAddress } from '@/models/types';
-import { PopularPlace } from '@/config/constants';
+import { BookingPassengerType, PASSENGER_DISCOUNT_PCT, PASSENGER_TYPE_LABEL, PopularPlace } from '@/config/constants';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
@@ -90,11 +90,12 @@ export const BookRideScreen = () => {
   const route = useRoute<any>();
   const [dropoffAddress, setDropoffAddress] = useState('');
   const [dropoff, setDropoff] = useState<Location | null>(null);
-  const [estimate, setEstimate] = useState<{ fare: number; distance: number; eta: number } | null>(null);
+  const [estimate, setEstimate] = useState<{ fare: number; distance: number; eta: number; discount: number } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [rideType, setRideType] = useState<'standard' | 'priority'>('standard');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [passengers, setPassengers] = useState(1);
+  const [passengerType, setPassengerType] = useState<BookingPassengerType>('regular');
   const [tripNote, setTripNote] = useState('');
   const [destinations, setDestinations] = useState<PopularPlace[]>([]);
   const [picking, setPicking] = useState(false);
@@ -261,16 +262,17 @@ export const BookRideScreen = () => {
         // Prefer real road distance; fall back to straight-line (haversine).
         const distance = roadRoute?.distanceKm ?? (await fareService.calculateDistance(ep, dropoff));
         const { baseFare, perKmRate, multiplier } = await fareService.getFareConfig();
-        const fare = fareService.calculateFareForPassengers(
+        const quote = fareService.quoteFare(
           distance,
           baseFare,
           perKmRate,
           passengers,
           multiplier,
-          rideType
+          rideType,
+          passengerType
         );
         const eta = Math.max(3, Math.ceil((distance / (rideType === 'priority' ? 30 : 25)) * 60));
-        if (active) setEstimate({ fare, distance, eta });
+        if (active) setEstimate({ fare: quote.totalFare, distance, eta, discount: quote.discountAmount });
       } catch {
         if (active) setEstimate(null);
       }
@@ -279,7 +281,7 @@ export const BookRideScreen = () => {
     return () => {
       active = false;
     };
-  }, [pickup, currentLocation, dropoff, rideType, roadRoute, passengers]);
+  }, [pickup, currentLocation, dropoff, rideType, roadRoute, passengers, passengerType]);
 
   useEffect(() => {
     const destination = route.params?.destination;
@@ -416,6 +418,7 @@ export const BookRideScreen = () => {
       noteParts.push(`For: ${otherName.trim()}${otherPhone.trim() ? ` (${otherPhone.trim()})` : ''}`);
     }
     if (passengers > 1) noteParts.push(`${passengers} passengers`);
+    if (passengerType !== 'regular') noteParts.push(`${PASSENGER_TYPE_LABEL[passengerType]} discount: driver checks ID`);
     if (tripNote.trim()) noteParts.push(tripNote.trim());
     const notes = noteParts.join(' • ') || undefined;
 
@@ -427,6 +430,7 @@ export const BookRideScreen = () => {
           passengerCount: passengers,
           rideType,
           distanceKm: estimate?.distance,
+          passengerType,
         });
         navigation.navigate('ConfirmBooking');
       } catch (error: any) {
@@ -822,6 +826,30 @@ export const BookRideScreen = () => {
             </View>
           </View>
 
+          {/* Passenger fare discount (D4) */}
+          <View style={styles.discountGroup}>
+            <Text style={styles.controlLabel}>Fare discount</Text>
+            <View style={styles.paymentRow}>
+              {(['regular', 'senior', 'pwd', 'student'] as const).map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.paymentPill, passengerType === type && styles.paymentPillActive]}
+                  onPress={() => setPassengerType(type)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.paymentText, passengerType === type && styles.paymentTextActive]}>
+                    {type === 'senior' ? 'Senior' : PASSENGER_TYPE_LABEL[type]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {passengerType !== 'regular' && (
+              <Text style={styles.cashHint}>
+                {PASSENGER_DISCOUNT_PCT[passengerType]}% off one passenger's fare. Show a valid {passengerType === 'student' ? 'school' : passengerType === 'pwd' ? 'PWD' : 'senior citizen'} ID to the driver at pickup, or the regular fare applies.
+              </Text>
+            )}
+          </View>
+
           <View style={styles.noteBox}>
             <MaterialCommunityIcons name="text-box-edit-outline" size={18} color={colors.textMuted} />
             <RNTextInput
@@ -878,6 +906,11 @@ export const BookRideScreen = () => {
             </View>
             <View style={styles.farePriceWrap}>
               <Text style={[styles.farePrice, typography.currency]}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
+              {estimate && estimate.discount > 0 ? (
+                <Text style={[styles.fareBreakdown, { color: colors.success }]}>
+                  −₱{estimate.discount.toFixed(2)} {PASSENGER_TYPE_LABEL[passengerType]}
+                </Text>
+              ) : null}
               {estimate && passengers > 1 ? (
                 <Text style={styles.fareBreakdown}>Total for {passengers}</Text>
               ) : null}
@@ -1563,6 +1596,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
     padding: spacing.sm,
+  },
+  discountGroup: {
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
   },
   paymentGroup: {
     flex: 1.2,

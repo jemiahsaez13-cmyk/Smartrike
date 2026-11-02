@@ -58,7 +58,8 @@ export type ManagementReportType =
   | 'due_within_30_days'    // Franchises expiring within 30 days
   | 'assignment_records'    // Franchise assignment / ownership history
   | 'operator_registration' // All registered drivers/operators (user profiles)
-  | 'toda_association';     // All TODA associations with member + route counts
+  | 'toda_association'      // All TODA associations with member + route counts
+  | 'toda_master_list';     // Every TODA's units + members (body no., plate, MTOP)
 
 export interface ManagementReportFilters {
   type: ManagementReportType;

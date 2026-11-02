@@ -16,6 +16,7 @@ import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { isStalePendingBooking } from '@/models/services/BookingService';
 import { NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
 import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 const realtimeService = new RealtimeService();
 const bookingRepo = new BookingRepository();
@@ -226,6 +227,7 @@ export const ConfirmBookingScreen = () => {
                 {currentBooking?.passenger_count ?? 1} passenger{(currentBooking?.passenger_count ?? 1) > 1 ? 's' : ''}
                 {' • '}{currentBooking?.payment_method === 'cash' ? 'Pay driver in cash' : 'Online payment'}
               </Text>
+              <FareDiscountNote booking={currentBooking} />
             </View>
             <Text style={[styles.fareValue, typography.currency]}>₱{currentBooking ? Number(currentBooking.total_fare || 0).toFixed(2) : '0.00'}</Text>
           </View>

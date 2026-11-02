@@ -1,6 +1,16 @@
 import { supabase } from '@/config/supabase';
 import { Location } from '@/models/types';
 import { phtHourOfDay } from '@/utils/dateUtils';
+import { BookingPassengerType, PASSENGER_DISCOUNT_PCT } from '@/config/constants';
+
+export interface FareQuote {
+  /** Fare for everyone before any discount. */
+  grossFare: number;
+  discountPct: number;
+  discountAmount: number;
+  /** What the passenger pays (total_fare). */
+  totalFare: number;
+}
 
 /** LGU/TODA capacity ceiling for one tricycle booking. */
 export const MAX_TRICYCLE_PASSENGERS = 5;
@@ -64,6 +74,32 @@ export class FareCalculationService {
       ? routeFare + Math.max(12, routeFare * 0.15)
       : routeFare;
     return Math.round(adjustedRouteFare * count * 100) / 100;
+  }
+
+  /**
+   * Full quote with the passenger discount (D4). The discount covers one
+   * passenger's share only (the person whose ID the driver checks), so in a
+   * group booking the others pay the regular fare. Mirrors migration 080.
+   */
+  quoteFare(
+    distance: number,
+    baseFare: number,
+    perKmRate: number,
+    passengerCount: number,
+    multiplier: number = 1,
+    rideType: 'standard' | 'priority' = 'standard',
+    passengerType: BookingPassengerType = 'regular'
+  ): FareQuote {
+    const grossFare = this.calculateFareForPassengers(distance, baseFare, perKmRate, passengerCount, multiplier, rideType);
+    const discountPct = PASSENGER_DISCOUNT_PCT[passengerType] ?? 0;
+    const onePassenger = this.calculateFareForPassengers(distance, baseFare, perKmRate, 1, multiplier, rideType);
+    const discountAmount = Math.round(onePassenger * discountPct) / 100;
+    return {
+      grossFare,
+      discountPct,
+      discountAmount,
+      totalFare: Math.round((grossFare - discountAmount) * 100) / 100,
+    };
   }
 
   async calculateDistance(pickup: Location, dropoff: Location): Promise<number> {

@@ -216,3 +216,23 @@ export const NOTIFICATION_TYPES = {
   SYSTEM_ALERT: 'system_alert',
   VIOLATION: 'violation',
 } as const;
+
+// ─── Passenger fare discounts (D4, migration 080) ─────────────────────────────
+// 20% off one passenger's share of the fare: senior citizens (RA 9994), PWD
+// (RA 10754) and students (RA 11314). The driver checks the ID at pickup.
+// Keep in step with enforce_booking_insert in migration 080.
+export type BookingPassengerType = 'regular' | 'senior' | 'pwd' | 'student';
+
+export const PASSENGER_DISCOUNT_PCT: Record<BookingPassengerType, number> = {
+  regular: 0,
+  senior: 20,
+  pwd: 20,
+  student: 20,
+};
+
+export const PASSENGER_TYPE_LABEL: Record<BookingPassengerType, string> = {
+  regular: 'Regular',
+  senior: 'Senior Citizen',
+  pwd: 'PWD',
+  student: 'Student',
+};

@@ -29,6 +29,10 @@ export interface Booking {
   cancellation_reason?: string | null;
   cancellation_valid?: boolean | null;
   cancelled_at?: Date | null;
+  // Passenger fare discount (migration 080). total_fare is already net of it.
+  passenger_type?: 'regular' | 'senior' | 'pwd' | 'student' | null;
+  discount_pct?: number | null;
+  discount_amount?: number | null;
 }
 
 export type BookingStatus = 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled';

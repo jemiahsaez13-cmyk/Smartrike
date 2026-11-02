@@ -11,6 +11,7 @@ import {
   ManagementReportRow,
 } from '@/models/entities/Association';
 import { FranchiseService } from './FranchiseService';
+import { TodaService } from './TodaService';
 import { InventoryService, ViolationService } from './AssociationService';
 
 const franchiseService = new FranchiseService();
@@ -37,6 +38,7 @@ const TITLES: Record<ManagementReportFilters['type'], string> = {
   assignment_records:   'Assignment Records',
   operator_registration:'Operator / Driver Registration Report',
   toda_association:     'TODA Association Report',
+  toda_master_list:     'TODA Master List',
 };
 
 const emptyCounts = (): Record<FranchiseRecordStatus, number> => ({
@@ -96,6 +98,9 @@ export class ManagementReportService {
     }
     if (type === 'toda_association') {
       return this._todaAssociationReport(filters);
+    }
+    if (type === 'toda_master_list') {
+      return this._todaMasterListReport();
     }
 
     // ── Existing types ──────────────────────────────────────────────────────
@@ -261,6 +266,25 @@ export class ManagementReportService {
     const counts = emptyCounts();
     franchises.forEach((fr) => { counts[fr.franchise_status ?? 'active'] += 1; });
     return { title: TITLES.registered_tricycles, rows, activeFranchises: counts.active, renewedThisYear: 0, statusCounts: counts };
+  }
+
+  // ── B6: TODA master list (not date-filtered: it is the current roster) ────
+  private async _todaMasterListReport(): Promise<ManagementReportDataset> {
+    const entries = await new TodaService().getMasterList();
+    const rows: ManagementReportRow[] = entries.map((e) => ({
+      id: e.key,
+      title: `${e.bodyNumber ? `Body ${e.bodyNumber}` : 'No body no.'} · ${e.driverName}`,
+      subtitle: [
+        e.plateNumber ? `Plate: ${e.plateNumber}` : null,
+        e.mtopNumber ? `MTOP: ${e.mtopNumber}` : 'No MTOP',
+        e.expiryDate ? `Expires: ${e.expiryDate}` : null,
+      ].filter(Boolean).join(' · '),
+      status: e.unitStatus === 'no_mtop' ? 'no mtop' : e.unitStatus,
+      date: e.expiryDate ?? '',
+      category: e.toda,
+      details: e.verificationStatus ? `Driver verification: ${e.verificationStatus}` : undefined,
+    }));
+    return { title: TITLES.toda_master_list, rows, activeFranchises: 0, renewedThisYear: 0, statusCounts: emptyCounts() };
   }
 
   // ── Module 16: TODA Membership ───────────────────────────────────────────
