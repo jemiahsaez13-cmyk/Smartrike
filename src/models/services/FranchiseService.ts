@@ -280,8 +280,6 @@ export class FranchiseService {
       expiryDate?: string;
       currentHolderName?: string;
       franchiseStatus?: FranchiseRecordStatus;
-      /** Only sent when given, so saving works before migration 082. */
-      routeId?: string | null;
     }
   ): Promise<FranchiseApplication> {
     if (!details.bodyNumber.trim()) throw new Error('Tricycle body number is required.');
@@ -293,7 +291,6 @@ export class FranchiseService {
       expiry_date: details.expiryDate || null,
       current_holder_name: details.currentHolderName?.trim() || undefined,
       franchise_status: details.franchiseStatus,
-      ...(details.routeId !== undefined ? { route_id: details.routeId } : {}),
     });
   }
 

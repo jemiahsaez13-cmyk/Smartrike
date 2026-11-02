@@ -19,12 +19,10 @@ import {
   mtopExpiryFrom,
   renewalStanding,
   nextBodyNumber,
-  routeLabel,
   SuccessionRequest,
   relationshipLabel,
 } from '@/models/entities/Franchise';
 import { FranchiseService } from '@/models/services/FranchiseService';
-import { TodaRoute } from '@/models/entities/Toda';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, spacing, typography, radius, shadows, gradients } from '@/views/styles/theme';
@@ -212,10 +210,6 @@ export const FranchiseManagementScreen = () => {
   const [billingApp, setBillingApp] = useState<FranchiseApplication | null>(null);
   // Body numbers typed by the admin before issuing, keyed by application id.
   const [bodyDrafts, setBodyDrafts] = useState<Record<string, string>>({});
-  // B5: TODA route picked with the body number, keyed by application id, and
-  // each TODA's routes keyed by lower-case TODA name.
-  const [routeDrafts, setRouteDrafts] = useState<Record<string, string>>({});
-  const [todaRoutes, setTodaRoutes] = useState<Record<string, TodaRoute[]>>({});
 
   // Change of Unit review state
   const [couActionBusy, setCouActionBusy] = useState<string | null>(null); // app id
@@ -235,28 +229,6 @@ export const FranchiseManagementScreen = () => {
       .catch(() => { if (active) setSuccessionRequests([]); });
     return () => { active = false; };
   }, [applications]);
-
-  // Load the routes of every TODA with an application waiting for issuance.
-  useEffect(() => {
-    const missing = Array.from(new Set(
-      applications
-        .filter((a) => a.status === 'approved' && a.type !== 'renewal')
-        .map((a) => (a.toda ?? '').trim().toLowerCase())
-        .filter((key) => key && !(key in todaRoutes))
-    ));
-    if (missing.length === 0) return;
-    let active = true;
-    Promise.all(missing.map(async (key) => {
-      try {
-        return [key, await todaService.listRoutesByTodaName(key)] as const;
-      } catch {
-        return [key, [] as TodaRoute[]] as const;
-      }
-    })).then((entries) => {
-      if (active) setTodaRoutes((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
-    });
-    return () => { active = false; };
-  }, [applications, todaRoutes]);
 
   // Keep the admin queue current while this screen is open. New renewal
   // submissions appear without requiring the administrator to refresh.
@@ -352,8 +324,6 @@ export const FranchiseManagementScreen = () => {
     const next = NEXT[app.status];
     if (!next) return;
     let bodyNumber = '';
-    let routeId: string | null = null;
-    let routeName = '';
     if (next.status === 'issued') {
       bodyNumber = (bodyDrafts[app.id] ?? app.body_number ?? '').trim().toUpperCase();
       if (!bodyNumber) {
@@ -375,17 +345,6 @@ export const FranchiseManagementScreen = () => {
         await notify('Body number already used', `Body number ${bodyNumber} is already assigned to ${clash.driver_name} in ${app.toda}. Enter a different body number.`);
         return;
       }
-      // B5: a new unit runs on one of the TODA's routes (when it has any).
-      // A renewal keeps the route of the unit it renews.
-      if (app.type !== 'renewal') {
-        const routes = todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? [];
-        routeId = routeDrafts[app.id] ?? app.route_id ?? null;
-        if (routes.length > 0 && !routes.some((r) => r.id === routeId)) {
-          await notify('Route required', `Choose the ${app.toda} route this tricycle will serve.`);
-          return;
-        }
-        routeName = routeLabel(routes.find((r) => r.id === routeId)) ?? '';
-      }
       // B4: a new unit needs a free slot in the TODA's approved capacity. A
       // renewal replaces its own record, so it does not add a unit.
       if (app.type !== 'renewal') {
@@ -405,7 +364,7 @@ export const FranchiseManagementScreen = () => {
       }
       const okay = await confirm(
         'Issue MTOP',
-        `Issue the MTOP permit to ${app.driver_name} with tricycle body number ${bodyNumber}${routeName ? ` on route ${routeName}` : ''}? Confirm only when the permit is ready for release.`,
+        `Issue the MTOP permit to ${app.driver_name} with tricycle body number ${bodyNumber} (${app.toda})? Confirm only when the permit is ready for release.`,
         { confirmText: 'Issue MTOP' }
       );
       if (!okay) return;
@@ -413,8 +372,6 @@ export const FranchiseManagementScreen = () => {
     const patch: Partial<FranchiseApplication> = { ...next.patch };
     if (next.status === 'issued') {
       patch.body_number = bodyNumber;
-      // Sent only when chosen, so issuing still works before migration 082.
-      if (routeId) patch.route_id = routeId;
       const year = new Date().getFullYear();
       patch.mtop_number = app.mtop_number || `MTOP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
       patch.franchise_status = 'active';
@@ -430,7 +387,6 @@ export const FranchiseManagementScreen = () => {
       await dispatch(advanceApplication({ id: app.id, status: next.status, patch })).unwrap();
       if (next.status === 'issued') {
         setBodyDrafts(({ [app.id]: _done, ...rest }) => rest);
-        setRouteDrafts(({ [app.id]: _done, ...rest }) => rest);
       }
     } catch (error: any) {
       const message = String(typeof error === 'string' ? error : error?.message || '');
@@ -1187,27 +1143,7 @@ export const FranchiseManagementScreen = () => {
                           <Text style={styles.bodyRequiredText}>Enter the body number to unlock Issue MTOP.</Text>
                         </View>
                       ) : null}
-                      {(todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? []).length > 0 ? (
-                        <>
-                          <Text style={[styles.bodyPanelHint, { marginTop: 10 }]}>Route</Text>
-                          <View style={styles.routeChips}>
-                            {(todaRoutes[(app.toda ?? '').trim().toLowerCase()] ?? []).map((route) => {
-                              const selected = (routeDrafts[app.id] ?? app.route_id) === route.id;
-                              return (
-                                <TouchableOpacity
-                                  key={route.id}
-                                  style={[styles.routeChip, selected && styles.routeChipActive]}
-                                  onPress={() => setRouteDrafts((drafts) => ({ ...drafts, [app.id]: route.id }))}
-                                  disabled={busy}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={[styles.routeChipText, selected && styles.routeChipTextActive]}>{routeLabel(route)}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                        </>
-                      ) : null}
+
                     </View>
                   )
                 ) : null}
@@ -1914,11 +1850,6 @@ const styles = StyleSheet.create({
   bodyRequired: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   bodySuggest: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 8, minHeight: 32 },
   bodySuggestText: { ...typography.label, fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
-  routeChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  routeChip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  routeChipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
-  routeChipText: { ...typography.labelSmall, fontSize: 12, color: colors.textSecondary },
-  routeChipTextActive: { color: '#fff' },
   bodyRequiredText: { ...typography.labelSmall, fontSize: 11, color: AMBER_TEXT },
   bodyLocked: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 },
   bodyLockedValue: { ...typography.number, fontSize: 18, letterSpacing: 1, color: colors.primary },

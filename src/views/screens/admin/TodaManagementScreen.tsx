@@ -310,7 +310,7 @@ export const TodaManagementScreen = () => {
   const filteredMaster = (masterList ?? []).filter(
     (e) =>
       !masterQueryKey ||
-      [e.driverName, e.plateNumber, e.bodyNumber, e.route, e.mtopNumber, unitStatusLabel(e.unitStatus)]
+      [e.driverName, e.plateNumber, e.bodyNumber, e.mtopNumber, unitStatusLabel(e.unitStatus)]
         .some((v) => (v ?? '').toLowerCase().includes(masterQueryKey))
   );
 
@@ -322,7 +322,6 @@ export const TodaManagementScreen = () => {
         filteredMaster.map((e) => ({
           TODA: e.toda,
           'Body No.': e.bodyNumber ?? '',
-          Route: e.route ?? '',
           Driver: e.driverName,
           'Plate No.': e.plateNumber ?? '',
           'MTOP No.': e.mtopNumber ?? '',
@@ -866,12 +865,6 @@ export const TodaManagementScreen = () => {
                                     <View style={styles.identChip}>
                                       <MaterialCommunityIcons name="card-text-outline" size={11} color={colors.textMuted} />
                                       <Text style={styles.identChipText}>{e.plateNumber}</Text>
-                                    </View>
-                                  ) : null}
-                                  {e.route ? (
-                                    <View style={styles.identChip}>
-                                      <MaterialCommunityIcons name="map-marker-path" size={11} color={colors.textMuted} />
-                                      <Text style={styles.identChipText}>{e.route}</Text>
                                     </View>
                                   ) : null}
                                   {e.mtopNumber ? (

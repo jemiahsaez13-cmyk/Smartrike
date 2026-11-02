@@ -8,8 +8,7 @@ import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { restoreDriverStatus, addIncomingRequest, syncIncomingRequests, fetchCompletedTrips, fetchActiveTrip, updateDriverStatus, clearCurrentTrip } from '@/controllers/slices/driverSlice';
 import { setUser } from '@/controllers/slices/authSlice';
 import { fetchMyApplication } from '@/controllers/slices/franchiseSlice';
-import { assignedBodyNumber, assignedRouteId, routeLabel } from '@/models/entities/Franchise';
-import { TodaService } from '@/models/services/TodaService';
+import { assignedBodyNumber } from '@/models/entities/Franchise';
 import { useLocation } from '@/controllers/hooks/useLocation';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { Driver } from '@/models/types';
@@ -41,20 +40,6 @@ export const DriverDashboard = () => {
   const isVerified = (user as any)?.verification_status === 'verified';
   const myApplication = useAppSelector(state => state.franchise.myApplication);
   const bodyNumber = assignedBodyNumber(myApplication);
-  // C2: the TODA route assigned with the body number (migration 082).
-  const routeId = assignedRouteId(myApplication);
-  const [routeName, setRouteName] = useState<string | null>(null);
-  useEffect(() => {
-    if (!routeId) {
-      setRouteName(null);
-      return;
-    }
-    let active = true;
-    new TodaService().getRoute(routeId)
-      .then((route) => { if (active) setRouteName(routeLabel(route)); })
-      .catch(() => { if (active) setRouteName(null); });
-    return () => { active = false; };
-  }, [routeId]);
 
   // A brand-new driver has no rated trips — show "New", not the default 5.0.
   const ratingLabel = user?.rating && (user?.total_trips ?? 0) > 0 ? user.rating.toFixed(1) : 'New';
@@ -357,7 +342,7 @@ export const DriverDashboard = () => {
               <Text style={styles.todaCardLabel}>MY TODA</Text>
               <Text style={styles.todaCardName}>{(user as any).toda_membership || 'Not assigned yet'}</Text>
               {bodyNumber ? (
-                <Text style={styles.todaCardMeta}>Body No. {bodyNumber}{routeName ? ` · Route: ${routeName}` : ''}</Text>
+                <Text style={styles.todaCardMeta}>Body No. {bodyNumber}</Text>
               ) : null}
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />

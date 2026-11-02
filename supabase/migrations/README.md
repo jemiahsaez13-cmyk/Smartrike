@@ -385,3 +385,7 @@ asks for them at driver sign-up.
   new-driver alert points to the MTOP application.
 - `driver_documents` and older uploads are kept; admins still see them on the
   driver profile.
+
+> Note (2026-11-02): the app no longer asks for a route at MTOP issuance; the
+> driver's TODA is their route. `franchise_applications.route_id` (082) stays
+> in the schema, unused.

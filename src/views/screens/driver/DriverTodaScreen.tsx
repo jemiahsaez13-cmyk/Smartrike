@@ -23,7 +23,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
 import { TodaAssociation, TodaRoute } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
-import { assignedBodyNumber, assignedRouteId, routeLabel } from '@/models/entities/Franchise';
+import { assignedBodyNumber } from '@/models/entities/Franchise';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
@@ -108,7 +108,6 @@ export const DriverTodaScreen = () => {
   // Loaded by the dashboard; shown when available.
   const myApplication = useAppSelector((s) => s.franchise.myApplication);
   const bodyNumber = assignedBodyNumber(myApplication);
-  const myRouteId = assignedRouteId(myApplication);
 
   const [toda, setToda] = useState<TodaAssociation | null>(null);
   const [routes, setRoutes] = useState<TodaRoute[]>([]);
@@ -211,9 +210,6 @@ export const DriverTodaScreen = () => {
                   {routes.length} route{routes.length !== 1 ? 's' : ''}
                 </Text>
                 {bodyNumber ? <Text style={styles.bannerMetaText}>Body No. {bodyNumber}</Text> : null}
-                {myRouteId && routes.some((r) => r.id === myRouteId) ? (
-                  <Text style={styles.bannerMetaText}>Route: {routeLabel(routes.find((r) => r.id === myRouteId))}</Text>
-                ) : null}
               </View>
             </View>
           </View>

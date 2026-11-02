@@ -97,31 +97,6 @@ export class TodaService {
     return (data ?? []) as TodaRoute[];
   }
 
-  /** Every TODA route with its TODA name (registry route display, B5). */
-  async listAllRoutes(): Promise<(TodaRoute & { toda_name: string | null })[]> {
-    const [todas, routes] = await Promise.all([
-      this.listAll(),
-      supabase.from('toda_routes').select('*').order('from_barangay', { ascending: true }),
-    ]);
-    if (routes.error) throw routes.error;
-    const names = new Map(todas.map((t) => [t.id, t.name]));
-    return ((routes.data ?? []) as TodaRoute[]).map((r) => ({ ...r, toda_name: names.get(r.toda_id) ?? null }));
-  }
-
-  /** Routes of a TODA looked up by its name (MTOP records store the name). */
-  async listRoutesByTodaName(todaName?: string | null): Promise<TodaRoute[]> {
-    const key = nameKey(todaName);
-    if (!key) return [];
-    const toda = (await this.listAll()).find((t) => nameKey(t.name) === key);
-    return toda ? this.listRoutes(toda.id) : [];
-  }
-
-  async getRoute(routeId: string): Promise<TodaRoute | null> {
-    const { data, error } = await supabase.from('toda_routes').select('*').eq('id', routeId).maybeSingle();
-    if (error) throw error;
-    return (data as TodaRoute | null) ?? null;
-  }
-
   async saveRoute(input: SaveRouteInput): Promise<TodaRoute> {
     const from = input.from_barangay.trim();
     const to = input.to_barangay.trim();
@@ -234,7 +209,7 @@ export class TodaService {
    */
   async getMasterList(todaName?: string): Promise<TodaMasterListEntry[]> {
     const wanted = todaName ? nameKey(todaName) : null;
-    const [drivers, registry, routes] = await Promise.all([
+    const [drivers, registry] = await Promise.all([
       fetchAllRows<{ id: string; name: string; toda_membership: string | null; verification_status: string | null }>(() =>
         supabase
           .from('users')
@@ -244,10 +219,7 @@ export class TodaService {
           .order('id')
       ),
       new FranchiseService().getRegistry(),
-      // Optional: route names (B5); the list still loads without them.
-      this.listAllRoutes().catch(() => [] as TodaRoute[]),
     ]);
-    const routeById = new Map(routes.map((r) => [r.id, `${r.from_barangay} → ${r.to_barangay}`]));
 
     const driverById = new Map(drivers.map((d) => [d.id, d]));
     const entries: TodaMasterListEntry[] = [];
@@ -267,7 +239,6 @@ export class TodaService {
         verificationStatus: driver?.verification_status ?? null,
         plateNumber: fr.plate_number || null,
         bodyNumber: fr.body_number ?? null,
-        route: fr.route_id ? routeById.get(fr.route_id) ?? null : null,
         mtopNumber: fr.mtop_number ?? null,
         expiryDate: fr.expiry_date ? String(fr.expiry_date).slice(0, 10) : null,
         unitStatus: fr.franchise_status ?? 'active',
@@ -285,7 +256,6 @@ export class TodaService {
         verificationStatus: d.verification_status,
         plateNumber: null,
         bodyNumber: null,
-        route: null,
         mtopNumber: null,
         expiryDate: null,
         unitStatus: 'no_mtop',

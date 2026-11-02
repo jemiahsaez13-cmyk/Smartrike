@@ -113,7 +113,7 @@ export interface FranchiseApplication {
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */
   body_number?: string | null;
-  /** TODA route of the unit, assigned with the body number (migration 082). */
+  /** Unused: the TODA is the unit's route (column from migration 082). */
   route_id?: string | null;
   /**
    * Set when an administrator authorized reassigning this record's body number
@@ -264,15 +264,6 @@ export const assignedBodyNumber = (
   if (app?.franchise_status === 'terminated' || app?.franchise_status === 'transferred') return null;
   return body;
 };
-
-/** Route of the driver's current unit (C2); hidden with the body number. */
-export const assignedRouteId = (
-  app: Pick<FranchiseApplication, 'body_number' | 'franchise_status' | 'route_id'> | null | undefined
-): string | null => (assignedBodyNumber(app) ? app?.route_id ?? null : null);
-
-/** "Brgy A → Brgy B" for a TODA route. */
-export const routeLabel = (route: { from_barangay: string; to_barangay: string } | null | undefined): string | null =>
-  route ? `${route.from_barangay} → ${route.to_barangay}` : null;
 
 /**
  * Next sequential body number in a TODA (B5): the highest trailing number on

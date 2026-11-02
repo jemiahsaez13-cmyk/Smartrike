@@ -23,10 +23,7 @@ import {
   SuccessionRequest,
   renewalStanding,
   isInactiveBodyNumber,
-  routeLabel,
 } from '@/models/entities/Franchise';
-import { TodaRoute } from '@/models/entities/Toda';
-import { TodaService } from '@/models/services/TodaService';
 import { FranchiseService, SuccessorAccount } from '@/models/services/FranchiseService';
 import { FranchiseAgreementService } from '@/models/services/FranchiseAgreementService';
 import { ViolationService } from '@/models/services/AssociationService';
@@ -35,11 +32,6 @@ import { colors, layout, radius, shadows, spacing, typography } from '@/views/st
 
 const franchiseService = new FranchiseService();
 const violationService = new ViolationService();
-const todaService = new TodaService();
-
-type RegistryRoute = TodaRoute & { toda_name: string | null };
-const sameToda = (a?: string | null, b?: string | null) =>
-  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
 
 type RegistryAction =
   | 'details'
@@ -89,9 +81,6 @@ export const FranchiseRegistryScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | FranchiseRecordStatus | 'inactive_body'>('all');
-  // B5: TODA routes for display and for the Details form.
-  const [routes, setRoutes] = useState<RegistryRoute[]>([]);
-  const [routeId, setRouteId] = useState<string | null>(null);
   const [selected, setSelected] = useState<FranchiseApplication | null>(null);
   const [action, setAction] = useState<RegistryAction | null>(null);
   const [saving, setSaving] = useState(false);
@@ -123,15 +112,13 @@ export const FranchiseRegistryScreen = () => {
 
   const load = useCallback(async () => {
     try {
-      const [registry, lifecycleEvents, requests, allRoutes] = await Promise.all([
+      const [registry, lifecycleEvents, requests] = await Promise.all([
         franchiseService.getRegistry(),
         franchiseService.getEvents(),
         // Optional: keeps the registry usable before migration 074 is applied.
         franchiseService.getPendingSuccessionRequests().catch(() => [] as SuccessionRequest[]),
-        todaService.listAllRoutes().catch(() => [] as RegistryRoute[]),
       ]);
       setRecords(registry);
-      setRoutes(allRoutes);
       setEvents(lifecycleEvents);
       setSuccessionRequests(requests);
     } catch (error) {
@@ -149,7 +136,6 @@ export const FranchiseRegistryScreen = () => {
     setAction(nextAction);
     setActiveRequest(null);
     setBodyNumber(record.body_number || '');
-    setRouteId(record.route_id ?? null);
     setHolderName(record.current_holder_name || record.driver_name);
     setRecordStatus(record.franchise_status || 'active');
     setExpiryDate(record.expiry_date || nextYear());
@@ -222,7 +208,6 @@ export const FranchiseRegistryScreen = () => {
           expiryDate,
           currentHolderName: holderName,
           franchiseStatus: recordStatus,
-          routeId: routeId !== (selected.route_id ?? null) ? routeId : undefined,
         });
       } else if (action === 'release_body') {
         await franchiseService.releaseBodyNumber(selected.id, reason);
@@ -419,14 +404,7 @@ export const FranchiseRegistryScreen = () => {
                   <Text style={styles.identifierLabel}>PLATE</Text>
                   <Text style={styles.identifierValue}>{record.plate_number}</Text>
                 </View>
-                {record.route_id ? (
-                  <View style={styles.identifier}>
-                    <Text style={styles.identifierLabel}>ROUTE</Text>
-                    <Text style={styles.identifierValue} numberOfLines={2}>
-                      {routeLabel(routes.find((r) => r.id === record.route_id)) ?? '—'}
-                    </Text>
-                  </View>
-                ) : null}
+
               </View>
 
               {(() => {
@@ -537,20 +515,6 @@ export const FranchiseRegistryScreen = () => {
               {action === 'details' ? (
                 <>
                   <Field label="Tricycle body number" value={bodyNumber} onChangeText={setBodyNumber} placeholder="e.g. B-042" />
-                  {(() => {
-                    const options = routes.filter((r) => sameToda(r.toda_name, selected?.toda));
-                    if (options.length === 0) return null;
-                    return (
-                      <>
-                        <Text style={styles.fieldLabel}>TODA route</Text>
-                        <View style={styles.choiceWrap}>
-                          {options.map((route) => (
-                            <Choice key={route.id} label={routeLabel(route) ?? ''} active={routeId === route.id} onPress={() => setRouteId(route.id)} />
-                          ))}
-                        </View>
-                      </>
-                    );
-                  })()}
                   <Field label="Current franchise holder" value={holderName} onChangeText={setHolderName} />
                   <Field label="Expiry date (YYYY-MM-DD)" value={expiryDate} onChangeText={setExpiryDate} />
                   <Text style={styles.fieldLabel}>Operational status</Text>

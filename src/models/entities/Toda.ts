@@ -60,8 +60,6 @@ export interface TodaMasterListEntry {
   verificationStatus: string | null;
   plateNumber: string | null;
   bodyNumber: string | null;
-  /** "Brgy A → Brgy B" when the unit has a TODA route (B5). */
-  route: string | null;
   mtopNumber: string | null;
   expiryDate: string | null;
   /** Franchise record status, or 'no_mtop' for a member without a unit. */
