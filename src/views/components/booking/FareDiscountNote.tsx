@@ -9,6 +9,8 @@ interface Props {
     discount_pct?: number | null;
     discount_amount?: number | null;
     total_fare?: number | null;
+    discount_revoked_at?: Date | string | null;
+    discount_revoked_reason?: string | null;
   } | null | undefined;
   /** Driver screens remind the driver to check the ID at pickup. */
   forDriver?: boolean;
@@ -17,11 +19,20 @@ interface Props {
 
 /**
  * One-line fare breakdown for a discounted booking (D6): regular fare,
- * the discount and what is paid. Renders nothing for a regular fare.
+ * the discount and what is paid, or that the driver removed it. Renders
+ * nothing for a regular fare.
  */
 export const FareDiscountNote = ({ booking, forDriver, style }: Props) => {
   const type = booking?.passenger_type;
   const discount = Number(booking?.discount_amount ?? 0);
+  // D5: the driver removed the discount (ID missing or not valid).
+  if (type && type !== 'regular' && booking?.discount_revoked_at) {
+    return (
+      <Text style={[styles.note, styles.revoked, style]}>
+        {PASSENGER_TYPE_LABEL[type]} discount removed{booking.discount_revoked_reason ? `: ${booking.discount_revoked_reason}` : ''} · Regular fare
+      </Text>
+    );
+  }
   if (!type || type === 'regular' || discount <= 0) return null;
   const total = Number(booking?.total_fare ?? 0);
   return (
@@ -35,4 +46,5 @@ export const FareDiscountNote = ({ booking, forDriver, style }: Props) => {
 
 const styles = StyleSheet.create({
   note: { ...typography.bodySmall, fontSize: 11, color: colors.success, marginTop: 2 },
+  revoked: { color: colors.error },
 });

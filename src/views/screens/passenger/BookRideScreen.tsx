@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, useWindowDimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, useWindowDimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +17,8 @@ import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
 import { DirectionsService, RoadRoute } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
+import { DiscountIdService } from '@/models/services/DiscountIdService';
+import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { Location, SavedAddress } from '@/models/types';
 import { BookingPassengerType, PASSENGER_DISCOUNT_PCT, PASSENGER_TYPE_LABEL, PopularPlace } from '@/config/constants';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
@@ -96,6 +98,8 @@ export const BookRideScreen = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [passengers, setPassengers] = useState(1);
   const [passengerType, setPassengerType] = useState<BookingPassengerType>('regular');
+  // D5: a student discount needs a photo of the school ID.
+  const [studentIdPhoto, setStudentIdPhoto] = useState<string | null>(null);
   const [tripNote, setTripNote] = useState('');
   const [destinations, setDestinations] = useState<PopularPlace[]>([]);
   const [picking, setPicking] = useState(false);
@@ -413,6 +417,10 @@ export const BookRideScreen = () => {
       void notify('Choose Destination', 'Set a drop-off — pick a place, tap the map, or use “Set on map”.');
       return;
     }
+    if (passengerType === 'student' && !studentIdPhoto) {
+      void notify('Student ID needed', 'Add a photo of your school ID for the student discount, or choose Regular.');
+      return;
+    }
     const noteParts: string[] = [];
     if (bookForOther && otherName.trim()) {
       noteParts.push(`For: ${otherName.trim()}${otherPhone.trim() ? ` (${otherPhone.trim()})` : ''}`);
@@ -424,7 +432,7 @@ export const BookRideScreen = () => {
 
     const proceed = async (method: 'cash' | 'online') => {
       try {
-        await bookRide(user!.id, ep, dropoff, {
+        const booking = await bookRide(user!.id, ep, dropoff, {
           notes,
           paymentMethod: method,
           passengerCount: passengers,
@@ -432,6 +440,13 @@ export const BookRideScreen = () => {
           distanceKm: estimate?.distance,
           passengerType,
         });
+        if (passengerType === 'student' && studentIdPhoto) {
+          try {
+            await DiscountIdService.attach(booking.id, studentIdPhoto);
+          } catch {
+            void notify('ID photo not sent', 'Your ride is booked, but the ID photo did not upload. Show your school ID to the driver at pickup.');
+          }
+        }
         navigation.navigate('ConfirmBooking');
       } catch (error: any) {
         const message = typeof error === 'string' ? error : error?.message;
@@ -847,6 +862,29 @@ export const BookRideScreen = () => {
               <Text style={styles.cashHint}>
                 {PASSENGER_DISCOUNT_PCT[passengerType]}% off one passenger's fare. Show a valid {passengerType === 'student' ? 'school' : passengerType === 'pwd' ? 'PWD' : 'senior citizen'} ID to the driver at pickup, or the regular fare applies.
               </Text>
+            )}
+            {passengerType === 'student' && (
+              <TouchableOpacity
+                style={styles.idPhotoRow}
+                activeOpacity={0.8}
+                onPress={async () => {
+                  try {
+                    const image = await pickImageDataUri();
+                    if (image) setStudentIdPhoto(image);
+                  } catch (error: any) {
+                    void notify('Student ID', error?.message || 'The photo could not be used.');
+                  }
+                }}
+              >
+                {studentIdPhoto ? (
+                  <Image source={{ uri: studentIdPhoto }} style={styles.idPhotoThumb} />
+                ) : (
+                  <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.textSecondary} />
+                )}
+                <Text style={styles.idPhotoText}>
+                  {studentIdPhoto ? 'School ID added · Change photo' : 'Add a photo of your school ID (required)'}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -1672,6 +1710,30 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
     marginTop: spacing.xs,
+  },
+  idPhotoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  idPhotoThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+  },
+  idPhotoText: {
+    ...typography.bodySmall,
+    flex: 1,
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   noteBox: {
     minHeight: 48,

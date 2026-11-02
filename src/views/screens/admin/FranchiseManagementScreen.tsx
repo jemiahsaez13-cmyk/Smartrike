@@ -26,6 +26,9 @@ import { confirm, notify } from '@/utils/confirm';
 import { MtopBillingModal } from '@/views/components/payment/MtopBillingModal';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
+import { TodaService } from '@/models/services/TodaService';
+
+const todaService = new TodaService();
 
 // Amber text on white needs a darker shade than the theme's fill amber.
 const AMBER_TEXT = '#9A6700';
@@ -315,6 +318,23 @@ export const FranchiseManagementScreen = () => {
       if (clash) {
         await notify('Body number already used', `Body number ${bodyNumber} is already assigned to ${clash.driver_name} in ${app.toda}. Enter a different body number.`);
         return;
+      }
+      // B4: a new unit needs a free slot in the TODA's approved capacity. A
+      // renewal replaces its own record, so it does not add a unit.
+      if (app.type !== 'renewal') {
+        let capacity: Awaited<ReturnType<TodaService['getIssueCapacity']>> = null;
+        try {
+          capacity = await todaService.getIssueCapacity(app.toda);
+        } catch {
+          capacity = null; // Count unavailable: do not block issuance.
+        }
+        if (capacity && capacity.units >= capacity.approved) {
+          await notify(
+            'TODA at capacity',
+            `${capacity.toda} already has ${capacity.units} of ${capacity.approved} approved units. Raise its approved units in TODA Management, or end another unit first.`
+          );
+          return;
+        }
       }
       const okay = await confirm(
         'Issue MTOP',

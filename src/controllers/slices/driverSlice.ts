@@ -118,6 +118,10 @@ const driverSlice = createSlice({
     updateDailyEarnings: (state, action: PayloadAction<number>) => {
       state.dailyEarnings += action.payload;
     },
+    // A newer copy of the current trip (e.g. after the fare changed).
+    updateCurrentTrip: (state, action: PayloadAction<Booking>) => {
+      if (state.currentTrip?.id === action.payload.id) state.currentTrip = action.payload;
+    },
     clearCurrentTrip: (state) => {
       state.currentTrip = null;
       state.currentStatus = 'online';
@@ -169,5 +173,5 @@ const driverSlice = createSlice({
   }
 });
 
-export const { restoreDriverStatus, setDriverInfo, addIncomingRequest, removeIncomingRequest, declineIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip } = driverSlice.actions;
+export const { restoreDriverStatus, setDriverInfo, addIncomingRequest, removeIncomingRequest, declineIncomingRequest, syncIncomingRequests, updateDailyEarnings, clearCurrentTrip, updateCurrentTrip } = driverSlice.actions;
 export default driverSlice.reducer;

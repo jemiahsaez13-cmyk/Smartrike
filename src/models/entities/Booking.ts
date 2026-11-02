@@ -33,6 +33,10 @@ export interface Booking {
   passenger_type?: 'regular' | 'senior' | 'pwd' | 'student' | null;
   discount_pct?: number | null;
   discount_amount?: number | null;
+  // Set when the driver removed the discount because the ID was not valid
+  // (migration 081). total_fare is back to the regular fare.
+  discount_revoked_at?: Date | string | null;
+  discount_revoked_reason?: string | null;
 }
 
 export type BookingStatus = 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled';

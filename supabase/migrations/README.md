@@ -317,3 +317,23 @@ database without these columns; regular bookings keep working).
 - `enforce_booking_insert` (068) now also applies the discount server-side:
   20% off one passenger's share (RA 9994, RA 10754, RA 11314). The rest of
   the function is unchanged. Keep in step with `PASSENGER_DISCOUNT_PCT`.
+
+
+## Discount ID photo and fare revert (081)
+
+Apply `081_discount_id_photo_and_revert.sql` after 080, before shipping the
+build with the student ID picker (a Student booking still books without it,
+but the ID photo upload fails).
+
+- `booking_discount_ids`: one ID photo per discounted booking, outside
+  `bookings` so it is not sent with every query. Visible to whoever can see the
+  booking (passenger, assigned driver, drivers viewing the open request, admins).
+- `attach_discount_id(uuid, text)`: the passenger's only upload path, while the
+  booking is pending. The app requires it for Student.
+- `revert_booking_discount(uuid, text)`: the assigned driver removes the
+  discount during the ride when the ID is missing or not valid. `total_fare`
+  goes back to the regular fare, `discount_revoked_at` / `discount_revoked_reason`
+  are stamped and the passenger is notified. Refused once a ride payment was
+  submitted or the ride is completed.
+- `protect_booking_financial_fields` (040) also locks the discount columns
+  against direct client updates.

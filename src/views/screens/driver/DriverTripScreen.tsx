@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
 import { startTrip, completeTrip, submitDriverRating } from '@/controllers/slices/bookingSlice';
-import { clearCurrentTrip } from '@/controllers/slices/driverSlice';
+import { clearCurrentTrip, updateCurrentTrip } from '@/controllers/slices/driverSlice';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
 import { UserRepository } from '@/models/repositories/UserRepository';
@@ -32,6 +32,7 @@ import { confirm, notify } from '@/utils/confirm';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
+import { DiscountIdCheck } from '@/views/components/booking/DiscountIdCheck';
 
 const { height } = Dimensions.get('window');
 const userRepo = new UserRepository();
@@ -437,6 +438,12 @@ export const DriverTripScreen = () => {
         {/* Fare & route */}
         <Card variant="elevated" padding="md" style={styles.fareCard}>
           <FareDiscountNote booking={currentBooking} forDriver style={{ textAlign: 'center', marginBottom: 6 }} />
+          <DiscountIdCheck
+            booking={currentBooking}
+            canRevert
+            style={{ alignSelf: 'center', marginBottom: 6 }}
+            onReverted={(booking) => dispatch(updateCurrentTrip(booking))}
+          />
           <View style={styles.fareRow}>
             <View style={styles.fareItem}>
               <Text style={styles.fareValue}>₱{(currentBooking.total_fare ?? 0).toFixed(2)}</Text>

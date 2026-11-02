@@ -10,6 +10,7 @@ import { colors, layout, radius, spacing, shadows, typography } from '@/views/st
 import { Loading } from '@/views/components/common/Loading';
 import { ExportService } from '@/models/services/ExportService';
 import { notify } from '@/utils/confirm';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 // Filter options for the status choice chips.
 const FILTERS = [
@@ -227,6 +228,9 @@ export const TripHistoryScreen = () => {
                     {booking.status === 'cancelled' ? '—' : `₱${(booking.total_fare || 0).toFixed(2)}`}
                   </Text>
                 </View>
+                {booking.status !== 'cancelled' && (
+                  <FareDiscountNote booking={booking} style={{ textAlign: 'right', marginTop: -4, marginBottom: 4 }} />
+                )}
 
                 <View style={styles.route}>
                   <View style={styles.routeRail}>

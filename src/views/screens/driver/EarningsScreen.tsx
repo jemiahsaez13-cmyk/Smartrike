@@ -18,6 +18,7 @@ import { Loading } from '@/views/components/common/Loading';
 import { colors, gradients, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 import { formatDate, formatTime, getWeekRange, getMonthRange, isTodayPHT } from '@/utils/dateUtils';
 import { DailyGoalCard } from '@/views/components/driver/DailyGoalCard';
+import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 
 type Period = 'today' | 'week' | 'month' | 'all';
 
@@ -151,6 +152,7 @@ export const EarningsScreen = () => {
                     <Text style={styles.tripMeta}>
                       {trip.completed_at ? `${formatDate(trip.completed_at)} · ${formatTime(trip.completed_at)}` : 'N/A'}
                     </Text>
+                    <FareDiscountNote booking={trip} />
                   </View>
                   <Text style={[styles.tripFare, typography.currency]}>
                     +₱{(trip.total_fare ?? 0).toFixed(2)}

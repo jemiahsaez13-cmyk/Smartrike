@@ -190,6 +190,19 @@ export class TodaService {
   }
 
   /**
+   * Capacity of one TODA before a new MTOP unit is issued (B4). Null when the
+   * TODA is not in the list or has no approved units set (no limit).
+   */
+  async getIssueCapacity(todaName?: string | null): Promise<{ toda: string; approved: number; units: number } | null> {
+    const key = nameKey(todaName);
+    if (!key) return null;
+    const [todas, counts] = await Promise.all([this.listAll(), this.getCapacityCounts()]);
+    const toda = todas.find((t) => nameKey(t.name) === key);
+    if (!toda || toda.approved_units == null) return null;
+    return { toda: toda.name, approved: toda.approved_units, units: counts.get(key)?.activeUnits ?? 0 };
+  }
+
+  /**
    * TODA master list (B6): every MTOP unit under the TODA (current registry,
    * any record status) plus member drivers who hold no unit yet. Pass no name
    * for every TODA; units and members without a TODA are left out then.
