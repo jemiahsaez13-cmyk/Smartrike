@@ -389,3 +389,17 @@ asks for them at driver sign-up.
 > Note (2026-11-02): the app no longer asks for a route at MTOP issuance; the
 > driver's TODA is their route. `franchise_applications.route_id` (082) stays
 > in the schema, unused.
+
+## Succession documents + billing date (085)
+
+Apply `085_succession_documents_and_billing_date.sql` after 084.
+
+- Succession requests carry supporting documents (`documents` JSONB):
+  proof of relationship and the successor's valid ID are required, another
+  supporting document is optional. `request_franchise_succession` now takes
+  `p_documents`; the 7-argument version is dropped.
+- `review_succession_document` (admin) approves or rejects one document;
+  `reupload_succession_document` (holder) replaces a rejected one. A request
+  cannot be approved while any document is not approved.
+- `franchise_applications.billing_sent_at` is stamped by a trigger whenever
+  the admin sends the billing (used by the MTOP Billing & Payments screen).

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -21,6 +22,8 @@ import {
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
   SuccessionRequest,
+  SuccessionDocument,
+  DOCUMENT_REVIEW_LABEL,
   renewalStanding,
   isInactiveBodyNumber,
 } from '@/models/entities/Franchise';
@@ -42,6 +45,7 @@ type RegistryAction =
   | 'change_of_unit'
   | 'violation'
   | 'succession_reject'
+  | 'succession_doc_reject'
   | 'release_body';
 
 const STATUS_COLOR: Record<FranchiseRecordStatus, { fg: string; bg: string }> = {
@@ -109,6 +113,10 @@ export const FranchiseRegistryScreen = () => {
   // Driver-submitted succession requests (migration 074)
   const [successionRequests, setSuccessionRequests] = useState<SuccessionRequest[]>([]);
   const [activeRequest, setActiveRequest] = useState<SuccessionRequest | null>(null);
+  // Supporting documents of a succession request (migration 085)
+  const [activeDoc, setActiveDoc] = useState<SuccessionDocument | null>(null);
+  const [docBusy, setDocBusy] = useState<string | null>(null);
+  const [viewImage, setViewImage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -180,6 +188,24 @@ export const FranchiseRegistryScreen = () => {
     setActiveRequest(request);
   };
 
+  const approveDocument = async (request: SuccessionRequest, doc: SuccessionDocument) => {
+    setDocBusy(`${request.id}:${doc.key}`);
+    try {
+      const updated = await franchiseService.reviewSuccessionDocument(request.id, doc.key, 'approved');
+      setSuccessionRequests((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error: any) {
+      await notify('Could not approve', error?.message || 'Refresh and try again.');
+    } finally {
+      setDocBusy(null);
+    }
+  };
+
+  const rejectDocument = (record: FranchiseApplication, request: SuccessionRequest, doc: SuccessionDocument) => {
+    openAction(record, 'succession_doc_reject');
+    setActiveRequest(request);
+    setActiveDoc(doc);
+  };
+
   const loadSuccessors = async () => {
     setLoadingSuccessors(true);
     try {
@@ -214,6 +240,9 @@ export const FranchiseRegistryScreen = () => {
       } else if (action === 'succession_reject') {
         if (!activeRequest) throw new Error('Succession request not found. Refresh and try again.');
         await franchiseService.reviewSuccession(activeRequest.id, 'rejected', { reason });
+      } else if (action === 'succession_doc_reject') {
+        if (!activeRequest || !activeDoc) throw new Error('Document not found. Refresh and try again.');
+        await franchiseService.reviewSuccessionDocument(activeRequest.id, activeDoc.key, 'rejected', reason);
       } else if (action === 'violation') {
         await violationService.record({
           driver_id: selected.driver_id,
@@ -285,6 +314,8 @@ export const FranchiseRegistryScreen = () => {
         ? 'The driver violation is now included in reports.'
         : action === 'succession_reject'
         ? 'The succession request was rejected and the driver was notified.'
+        : action === 'succession_doc_reject'
+        ? 'The document was rejected. The driver was asked to upload a corrected copy.'
         : action === 'release_body'
         ? `Body number ${selected.body_number} can now be issued to another unit in ${selected.toda}.`
         : 'The franchise registry has been updated.');
@@ -461,8 +492,47 @@ export const FranchiseRegistryScreen = () => {
                     <Text style={styles.requestLine}>
                       <Text style={styles.requestKey}>Reason: </Text>{request.reason}
                     </Text>
+                    {(request.documents ?? []).length > 0 ? (
+                      <View style={styles.docList}>
+                        <Text style={styles.requestKey}>Supporting documents</Text>
+                        {request.documents!.map((doc) => {
+                          const tone = doc.review_status === 'approved' ? colors.success
+                            : doc.review_status === 'rejected' ? colors.error : '#8A5A00';
+                          const busy = docBusy === `${request.id}:${doc.key}`;
+                          return (
+                            <View key={doc.key} style={styles.docRow}>
+                              <TouchableOpacity onPress={() => setViewImage(doc.file_url)} activeOpacity={0.8} accessibilityLabel={`View ${doc.label}`}>
+                                <Image source={{ uri: doc.file_url }} style={styles.docThumb} resizeMode="cover" />
+                              </TouchableOpacity>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.requestLine}>{doc.label}</Text>
+                                <Text style={[styles.docStatus, { color: tone }]}>
+                                  {DOCUMENT_REVIEW_LABEL[doc.review_status] ?? doc.review_status}
+                                  {doc.review_status === 'rejected' ? ' · waiting for a corrected copy' : ''}
+                                </Text>
+                                {doc.review_status === 'pending' ? (
+                                  <View style={styles.docActions}>
+                                    {busy ? <ActivityIndicator size="small" color={colors.primary} /> : (
+                                      <>
+                                        <ActionChip label="Approve" icon="check" onPress={() => approveDocument(request, doc)} />
+                                        <ActionChip label="Reject" icon="close" onPress={() => rejectDocument(record, request, doc)} danger />
+                                      </>
+                                    )}
+                                  </View>
+                                ) : null}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+                    {(request.documents ?? []).some((doc) => doc.review_status !== 'approved') ? (
+                      <Text style={styles.docHint}>Approve every document before the transfer.</Text>
+                    ) : null}
                     <View style={styles.requestActions}>
-                      <ActionChip label="Review & transfer" icon="check" onPress={() => reviewRequest(record, request)} />
+                      {(request.documents ?? []).every((doc) => doc.review_status === 'approved') ? (
+                        <ActionChip label="Review & transfer" icon="check" onPress={() => reviewRequest(record, request)} />
+                      ) : null}
                       <ActionChip label="Reject" icon="close" onPress={() => rejectRequest(record, request)} danger />
                     </View>
                   </View>
@@ -660,6 +730,21 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
+              {action === 'succession_doc_reject' && activeRequest && activeDoc ? (
+                <>
+                  <View style={styles.requestCard}>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Document: </Text>{activeDoc.label}
+                    </Text>
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Requested by: </Text>{activeRequest.requested_by_name}
+                    </Text>
+                  </View>
+                  <Field label="Reason for rejecting" value={reason} onChangeText={setReason} multiline placeholder="e.g. Photo is blurred; name is not readable" />
+                  <Text style={styles.helper}>The driver sees this reason and uploads a corrected copy. The request stays open.</Text>
+                </>
+              ) : null}
+
               {action === 'release_body' ? (
                 <>
                   <View style={styles.changeUnitBanner}>
@@ -690,10 +775,19 @@ export const FranchiseRegistryScreen = () => {
               ) : null}
 
               <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.5 }]} onPress={save} disabled={saving} activeOpacity={0.82}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{action === 'violation' ? 'Record violation' : action === 'release_body' ? 'Release body number' : action === 'succession_reject' ? 'Reject request' : action === 'succession_transfer' && activeRequest ? 'Approve & transfer' : 'Save record'}</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>{action === 'violation' ? 'Record violation' : action === 'release_body' ? 'Release body number' : action === 'succession_reject' ? 'Reject request' : action === 'succession_doc_reject' ? 'Reject document' : action === 'succession_transfer' && activeRequest ? 'Approve & transfer' : 'Save record'}</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      <Modal visible={!!viewImage} transparent animationType="fade" onRequestClose={() => setViewImage(null)}>
+        <View style={styles.imageOverlay}>
+          <TouchableOpacity style={styles.imageClose} onPress={() => setViewImage(null)} accessibilityLabel="Close photo">
+            <MaterialCommunityIcons name="close" size={26} color="#fff" />
+          </TouchableOpacity>
+          {viewImage ? <Image source={{ uri: viewImage }} style={styles.imageFull} resizeMode="contain" /> : null}
         </View>
       </Modal>
     </View>
@@ -709,6 +803,7 @@ const actionTitle = (action: RegistryAction): string => ({
   change_of_unit: 'Change of Unit',
   violation: 'Record driver violation',
   succession_reject: 'Reject succession request',
+  succession_doc_reject: 'Reject document',
   release_body: 'Release body number',
 })[action];
 
@@ -814,4 +909,13 @@ const styles = StyleSheet.create({
   requestLine: { ...typography.bodySmall, color: colors.text, marginTop: 2 },
   requestKey: { ...typography.labelSmall, fontSize: 12, color: colors.textSecondary },
   requestActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  docList: { marginTop: spacing.sm, gap: spacing.sm },
+  docRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  docThumb: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  docStatus: { ...typography.labelSmall, fontSize: 11, marginTop: 2 },
+  docActions: { flexDirection: 'row', gap: spacing.sm, marginTop: 6 },
+  docHint: { ...typography.bodySmall, fontSize: 12, color: '#8A5A00', marginTop: spacing.sm },
+  imageOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
+  imageClose: { position: 'absolute', top: layout.headerTop, right: spacing.lg, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
+  imageFull: { width: '100%', height: '80%' },
 });

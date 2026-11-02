@@ -52,6 +52,40 @@ export const relationshipLabel = (value: string | null | undefined): string =>
 
 export type ChangeOfUnitStatus = 'pending' | 'approved' | 'rejected';
 
+/** Supporting documents of a succession request (migration 085). */
+export type SuccessionDocumentKey = 'proof_of_relationship' | 'successor_valid_id' | 'supporting';
+
+export const SUCCESSION_DOCUMENTS: Array<{ key: SuccessionDocumentKey; label: string; hint: string; required: boolean }> = [
+  {
+    key: 'proof_of_relationship',
+    label: 'Proof of relationship (birth or marriage certificate)',
+    hint: 'Shows how your successor is related to you',
+    required: true,
+  },
+  {
+    key: 'successor_valid_id',
+    label: 'Successor’s valid ID',
+    hint: 'Any government-issued ID of your successor',
+    required: true,
+  },
+  {
+    key: 'supporting',
+    label: 'Other supporting document',
+    hint: 'Affidavit, waiver, or death certificate if needed',
+    required: false,
+  },
+];
+
+export interface SuccessionDocument {
+  key: SuccessionDocumentKey;
+  label: string;
+  file_url: string;
+  file_name?: string | null;
+  uploaded_at?: string | null;
+  review_status: DocumentReviewStatus;
+  review_remarks?: string | null;
+}
+
 // Per-document verdict the admin records while reviewing an application.
 export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected';
 
@@ -109,6 +143,8 @@ export interface FranchiseApplication {
    * appointment.  Null until the driver submits the appointment form.
    */
   appointment_date?: string | null;
+  /** When the admin last sent the billing (migration 085); null on older rows. */
+  billing_sent_at?: string | null;
   fees: number;
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */
@@ -378,6 +414,8 @@ export interface SuccessionRequest {
   successor_phone: string | null;
   relationship: SuccessorRelationship;
   reason: string;
+  /** Supporting documents, reviewed one by one (migration 085). Empty on older requests. */
+  documents?: SuccessionDocument[] | null;
   status: SuccessionRequestStatus;
   rejection_reason: string | null;
   reviewed_by: string | null;

@@ -309,6 +309,17 @@ export const AdminDashboard = () => {
               <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
             </TouchableOpacity>
             <View style={styles.divider} />
+            <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('MtopBilling')}>
+              <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
+                <MaterialCommunityIcons name="cash-register" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.queueCopy}>
+                <Text style={styles.queueTitle}>MTOP Billing & Payments</Text>
+                <Text style={styles.queueLevel}>Fees billed, collected, and overdue</Text>
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
             <TouchableOpacity style={styles.queueItem} activeOpacity={0.76} onPress={() => navigation.navigate('AdminMessages')}>
               <View style={[styles.queueIcon, { backgroundColor: colors.surfaceAlt }]}>
                 <MaterialCommunityIcons name="message-text-lock-outline" size={20} color={colors.primary} />

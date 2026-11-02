@@ -22,6 +22,8 @@ import {
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
   SuccessionRequest,
+  SuccessionDocumentKey,
+  SUCCESSION_DOCUMENTS,
 } from '@/models/entities/Franchise';
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
@@ -752,7 +754,10 @@ export const FranchiseScreen = () => {
   const [successorPhone, setSuccessorPhone] = useState('');
   const [successionRelationship, setSuccessionRelationship] = useState<SuccessorRelationship>('child');
   const [successionReason, setSuccessionReason] = useState('');
+  const [successionDocs, setSuccessionDocs] = useState<Partial<Record<SuccessionDocumentKey, string>>>({});
   const [successionSubmitting, setSuccessionSubmitting] = useState(false);
+  const [successionReuploading, setSuccessionReuploading] = useState<SuccessionDocumentKey | null>(null);
+  const successionDocsReady = SUCCESSION_DOCUMENTS.every((doc) => !doc.required || !!successionDocs[doc.key]);
 
   const issuedFranchiseId = myApplication?.status === 'issued' ? myApplication.id : null;
   useEffect(() => {
@@ -782,8 +787,12 @@ export const FranchiseScreen = () => {
         successorPhone,
         relationship: successionRelationship,
         reason: successionReason,
+        documents: SUCCESSION_DOCUMENTS
+          .filter((doc) => !!successionDocs[doc.key])
+          .map((doc) => ({ key: doc.key, file_url: successionDocs[doc.key]! })),
       });
       setSuccessionRequest(request);
+      setSuccessionDocs({});
       setSuccessorHasAccount(null);
       setSuccessorName('');
       setSuccessorEmail('');
@@ -796,6 +805,37 @@ export const FranchiseScreen = () => {
       setShowSuccessionModal(true);
     } finally {
       setSuccessionSubmitting(false);
+    }
+  };
+
+  const pickSuccessionDoc = async (key: SuccessionDocumentKey) => {
+    try {
+      const img = await pickImageDataUri();
+      if (img) setSuccessionDocs((prev) => ({ ...prev, [key]: img }));
+    } catch (error: any) {
+      void notify('Could not attach photo', error?.message || 'Please try again.');
+    }
+  };
+
+  // Replaces a document the administrator rejected on a pending request.
+  const reuploadSuccessionDoc = async (key: SuccessionDocumentKey) => {
+    if (!successionRequest) return;
+    let img: string | null = null;
+    try {
+      img = await pickImageDataUri();
+    } catch (error: any) {
+      void notify('Could not attach photo', error?.message || 'Please try again.');
+      return;
+    }
+    if (!img) return;
+    setSuccessionReuploading(key);
+    try {
+      setSuccessionRequest(await franchiseService.reuploadSuccessionDocument(successionRequest.id, key, img));
+      await notify('Document sent', 'The corrected copy was sent to the administrator for review.');
+    } catch (error: any) {
+      await notify('Could not upload', error?.message || 'Please try again.');
+    } finally {
+      setSuccessionReuploading(null);
     }
   };
 
@@ -1309,6 +1349,45 @@ export const FranchiseScreen = () => {
                     {status === 'rejected' && successionRequest?.rejection_reason ? (
                       <Text style={styles.couRejectReason}>Reason: {successionRequest.rejection_reason}</Text>
                     ) : null}
+                    {status === 'pending' && (successionRequest?.documents?.length ?? 0) > 0 ? (
+                      <View style={styles.successionDocList}>
+                        {successionRequest!.documents!.map((doc) => {
+                          const docTone = doc.review_status === 'approved' ? colors.success
+                            : doc.review_status === 'rejected' ? colors.error : colors.warning;
+                          return (
+                            <View key={doc.key} style={styles.successionDocRow}>
+                              <MaterialCommunityIcons
+                                name={doc.review_status === 'approved' ? 'check-circle' : doc.review_status === 'rejected' ? 'close-circle' : 'clock-outline'}
+                                size={16}
+                                color={docTone}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.successionDocName}>{doc.label}</Text>
+                                <Text style={[styles.successionDocStatus, { color: docTone }]}>
+                                  {DOCUMENT_REVIEW_LABEL[doc.review_status] ?? doc.review_status}
+                                  {doc.review_status === 'rejected' && doc.review_remarks ? ` · ${doc.review_remarks}` : ''}
+                                </Text>
+                                {doc.review_status === 'rejected' ? (
+                                  <TouchableOpacity
+                                    onPress={() => reuploadSuccessionDoc(doc.key)}
+                                    disabled={!!successionReuploading}
+                                    style={styles.successionReupload}
+                                    activeOpacity={0.8}
+                                  >
+                                    {successionReuploading === doc.key ? (
+                                      <ActivityIndicator size="small" color={colors.accent} />
+                                    ) : (
+                                      <MaterialCommunityIcons name="camera-retake-outline" size={15} color={colors.accent} />
+                                    )}
+                                    <Text style={styles.successionReuploadText}>Upload corrected copy</Text>
+                                  </TouchableOpacity>
+                                ) : null}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
 
@@ -1442,6 +1521,42 @@ export const FranchiseScreen = () => {
                     maxLength={500}
                   />
 
+                  {SUCCESSION_DOCUMENTS.map((doc) => {
+                    const image = successionDocs[doc.key];
+                    return (
+                      <View key={doc.key}>
+                        <Text style={couModalStyles.label}>
+                          {doc.label.toUpperCase()}{' '}
+                          {doc.required ? null : <Text style={couModalStyles.labelOptional}>(optional)</Text>}
+                        </Text>
+                        <TouchableOpacity
+                          style={couModalStyles.imagePicker}
+                          onPress={() => pickSuccessionDoc(doc.key)}
+                          activeOpacity={0.8}
+                        >
+                          {image ? (
+                            <Image source={{ uri: image }} style={couModalStyles.imagePreview} resizeMode="cover" />
+                          ) : (
+                            <View style={couModalStyles.imagePickerPlaceholder}>
+                              <MaterialCommunityIcons name="camera-plus-outline" size={24} color={colors.primary} />
+                              <Text style={couModalStyles.imagePickerText}>Tap to attach photo</Text>
+                              <Text style={couModalStyles.hint}>{doc.hint}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                        {image ? (
+                          <TouchableOpacity
+                            onPress={() => setSuccessionDocs((prev) => ({ ...prev, [doc.key]: undefined }))}
+                            style={couModalStyles.removeImageBtn}
+                          >
+                            <MaterialCommunityIcons name="close-circle" size={15} color={colors.error} />
+                            <Text style={couModalStyles.removeImageText}>Remove photo</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+
                   <Button
                     variant="primary"
                     onPress={handleSuccessionSubmit}
@@ -1451,6 +1566,7 @@ export const FranchiseScreen = () => {
                       || successorName.trim().length < 2
                       || (successorHasAccount && !successorEmail.trim())
                       || successionReason.trim().length < 3
+                      || !successionDocsReady
                       || successionSubmitting
                     }
                     style={couModalStyles.submitBtn}
@@ -2296,6 +2412,36 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: 2,
     paddingHorizontal: 4,
+  },
+  successionDocList: {
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+    paddingHorizontal: 4,
+  },
+  successionDocRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  successionDocName: {
+    ...typography.bodySmall,
+    color: colors.text,
+  },
+  successionDocStatus: {
+    ...typography.labelSmall,
+    marginTop: 1,
+  },
+  successionReupload: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    minHeight: 36,
+  },
+  successionReuploadText: {
+    ...typography.labelSmall,
+    color: colors.accent,
+    fontWeight: '700',
   },
   note: { 
     ...typography.bodySmall,

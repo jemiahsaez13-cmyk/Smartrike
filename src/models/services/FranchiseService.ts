@@ -8,6 +8,7 @@ import {
   PublicDriverFranchise,
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
+  SuccessionDocumentKey,
   SuccessionRequest,
   allDocumentsApproved,
 } from '@/models/entities/Franchise';
@@ -16,6 +17,43 @@ import { User } from '@/models/entities/User';
 export type SuccessorAccount = Pick<User, 'id' | 'name' | 'email' | 'phone'> & {
   license_number: string | null;
 };
+
+/** One MTOP fee (new or renewal application) for payment monitoring. */
+export interface MtopBillingRecord {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  toda: string;
+  plate_number: string;
+  type: FranchiseApplication['type'];
+  status: FranchiseStatus;
+  mtop_number: string | null;
+  fees: number;
+  payment_status: 'pending' | 'paid';
+  payment_review_status: FranchiseApplication['payment_review_status'] | null;
+  payment_reference: string | null;
+  payment_submitted_at: string | null;
+  payment_verified_at: string | null;
+  payment_rejection_reason: string | null;
+  appointment_date: string | null;
+  /** Name of the method the driver paid with. */
+  paid_method: string | null;
+  /** First payment method on the billing; null until the admin sends it. */
+  billed_method: string | null;
+  /** When the billing was sent (migration 085); null on older rows. */
+  billing_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const BILLING_COLUMNS = [
+  'id', 'driver_id', 'driver_name', 'toda', 'plate_number', 'type', 'status', 'mtop_number', 'fees',
+  'payment_status', 'payment_review_status', 'payment_reference', 'payment_submitted_at',
+  'payment_verified_at', 'payment_rejection_reason', 'appointment_date',
+  'paid_method:chosen_payment_method_snapshot->>display_name',
+  'billed_method:selected_payment_methods->0->>display_name',
+  'created_at', 'updated_at',
+];
 
 export interface RecordFranchiseEventInput {
   eventType: FranchiseEventType;
@@ -74,6 +112,29 @@ export class FranchiseService {
     return rows
       .filter((row) => (row.status === 'issued' || !!row.mtop_number) && row.franchise_status !== 'renewed')
       .map((row) => this.withDerivedRecordStatus(row));
+  }
+
+  /**
+   * MTOP fees that reached the payment step (or were paid), newest first.
+   * Selects only the billing columns so document scans are not downloaded.
+   */
+  async getBillingRecords(): Promise<MtopBillingRecord[]> {
+    const query = (columns: string[]) => supabase
+      .from('franchise_applications')
+      .select(columns.join(','))
+      .or('status.in.(payment,approved,issued),payment_status.eq.paid')
+      .order('created_at', { ascending: false });
+    let { data, error } = await query([...BILLING_COLUMNS, 'billing_sent_at']);
+    // Before migration 085 the billing date column does not exist yet.
+    if (error && /billing_sent_at/.test(error.message || '')) {
+      ({ data, error } = await query(BILLING_COLUMNS));
+    }
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as unknown as MtopBillingRecord[]).map((row) => ({
+      ...row,
+      fees: Number(row.fees) || 0,
+      billing_sent_at: row.billing_sent_at ?? null,
+    }));
   }
 
   async getEvents(franchiseId?: string): Promise<FranchiseEvent[]> {
@@ -189,6 +250,7 @@ export class FranchiseService {
     successorPhone?: string;
     relationship: SuccessorRelationship;
     reason: string;
+    documents: Array<{ key: SuccessionDocumentKey; file_url: string }>;
   }): Promise<SuccessionRequest> {
     if (input.successorName.trim().length < 2) throw new Error('Enter your successor’s full name.');
     if (input.hasAccount && !input.successorEmail?.trim()) {
@@ -203,6 +265,40 @@ export class FranchiseService {
       p_successor_phone: input.successorPhone?.trim() || null,
       p_relationship: input.relationship,
       p_reason: input.reason.trim(),
+      p_documents: input.documents,
+    });
+    if (error) throw new Error(error.message);
+    return data as SuccessionRequest;
+  }
+
+  /** Admin approves or rejects one supporting document of a pending request. */
+  async reviewSuccessionDocument(
+    requestId: string,
+    key: SuccessionDocumentKey,
+    decision: 'approved' | 'rejected',
+    remarks?: string
+  ): Promise<SuccessionRequest> {
+    const { data, error } = await supabase.rpc('review_succession_document', {
+      p_request_id: requestId,
+      p_key: key,
+      p_decision: decision,
+      p_remarks: remarks?.trim() || null,
+    });
+    if (error) throw new Error(error.message);
+    return data as SuccessionRequest;
+  }
+
+  /** Holder replaces a rejected supporting document. */
+  async reuploadSuccessionDocument(
+    requestId: string,
+    key: SuccessionDocumentKey,
+    fileUrl: string
+  ): Promise<SuccessionRequest> {
+    const { data, error } = await supabase.rpc('reupload_succession_document', {
+      p_request_id: requestId,
+      p_key: key,
+      p_file_url: fileUrl,
+      p_file_name: null,
     });
     if (error) throw new Error(error.message);
     return data as SuccessionRequest;
