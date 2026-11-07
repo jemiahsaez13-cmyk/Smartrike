@@ -5,6 +5,7 @@ import {
   FranchiseApplication,
   FranchiseStatus,
   FRANCHISE_STATUS_LABEL,
+  MtopPaymentMethodKind,
 } from '@/models/entities/Franchise';
 
 const service = new FranchiseService();
@@ -104,36 +105,26 @@ export const patchApplication = createAsyncThunk(
   }
 );
 
-export const submitFaceToFaceAppointment = createAsyncThunk(
-  'franchise/submitFaceToFaceAppointment',
+// B2: the office records an MTOP payment (migration 086).
+export const recordFranchisePayment = createAsyncThunk(
+  'franchise/recordPayment',
   async (
-    payload: { id: string; appointmentDate: string; driverName: string; plate: string },
+    payload: { id: string; amount: number; paidOn: string; method: MtopPaymentMethodKind; reference: string },
     { rejectWithValue }
   ) => {
     try {
-      const updated = await service.submitFaceToFaceAppointment(
-        payload.id,
-        payload.appointmentDate
-      );
+      const updated = await service.recordPayment(payload.id, payload);
       void ActivityLogService.logActivity({
-        action_type: 'user_action',
-        entity_type: 'driver',
-        entity_id: payload.id,
-        description: `${payload.driverName} scheduled a face-to-face MTOP payment visit (${payload.plate}) on ${new Date(payload.appointmentDate).toLocaleString()}.`,
-        severity: 'info',
+        action_type: 'system_alert',
+        entity_type: 'system',
+        entity_id: updated.id,
+        description: `MTOP payment recorded for ${updated.driver_name} (${updated.plate_number}): ₱${Number(payload.amount).toFixed(2)}, OR/ref. ${updated.payment_reference}.`,
+        severity: 'success',
       });
       return updated;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
-  }
-);
-
-export const submitFranchisePayment = createAsyncThunk(
-  'franchise/submitPayment',
-  async (payload: { id: string; method: 'in_person'; method_id?: string; reference: string; proofUrl: string }, { rejectWithValue }) => {
-    try { return await service.submitPayment(payload.id, payload.method, payload.reference, payload.proofUrl); }
-    catch (error: any) { return rejectWithValue(error.message); }
   }
 );
 
@@ -250,11 +241,7 @@ const franchiseSlice = createSlice({
           state.myApplication = action.payload;
         }
       })
-      .addCase(submitFranchisePayment.fulfilled, (state, action) => {
-        upsert(state.applications, action.payload);
-        if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
-      })
-      .addCase(submitFaceToFaceAppointment.fulfilled, (state, action) => {
+      .addCase(recordFranchisePayment.fulfilled, (state, action) => {
         upsert(state.applications, action.payload);
         if (state.myApplication?.id === action.payload.id) state.myApplication = action.payload;
       })

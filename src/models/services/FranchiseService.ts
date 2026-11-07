@@ -5,6 +5,7 @@ import {
   FranchiseEventType,
   FranchiseRecordStatus,
   FranchiseStatus,
+  MtopPaymentMethodKind,
   PublicDriverFranchise,
   SUCCESSOR_RELATIONSHIP_LABEL,
   SuccessorRelationship,
@@ -42,6 +43,16 @@ export interface MtopBillingRecord {
   billed_method: string | null;
   /** When the billing was sent (migration 085); null on older rows. */
   billing_sent_at: string | null;
+  /** Statement no. and due date (migration 086); null before it. */
+  billing_statement_no: string | null;
+  billing_due_date: string | null;
+  /** Payment recorded by the office (086). */
+  payment_method: FranchiseApplication['payment_method'];
+  payment_amount: number | null;
+  payment_paid_on: string | null;
+  payment_recorded_by: string | null;
+  /** Kept so the billed date falls back for rows billed before 085. */
+  selected_payment_methods: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -52,7 +63,12 @@ const BILLING_COLUMNS = [
   'payment_verified_at', 'payment_rejection_reason', 'appointment_date',
   'paid_method:chosen_payment_method_snapshot->>display_name',
   'billed_method:selected_payment_methods->0->>display_name',
-  'created_at', 'updated_at',
+  'payment_method', 'created_at', 'updated_at',
+];
+/** Columns added by migrations 085 / 086; dropped from the query before they exist. */
+const BILLING_COLUMNS_085 = ['billing_sent_at'];
+const BILLING_COLUMNS_086 = [
+  'billing_statement_no', 'billing_due_date', 'payment_amount', 'payment_paid_on', 'payment_recorded_by',
 ];
 
 export interface RecordFranchiseEventInput {
@@ -117,15 +133,22 @@ export class FranchiseService {
   /**
    * MTOP fees that reached the payment step (or were paid), newest first.
    * Selects only the billing columns so document scans are not downloaded.
+   * With `driverId`, only that driver's statements (C1: driver payment records).
    */
-  async getBillingRecords(): Promise<MtopBillingRecord[]> {
-    const query = (columns: string[]) => supabase
-      .from('franchise_applications')
-      .select(columns.join(','))
-      .or('status.in.(payment,approved,issued),payment_status.eq.paid')
-      .order('created_at', { ascending: false });
-    let { data, error } = await query([...BILLING_COLUMNS, 'billing_sent_at']);
-    // Before migration 085 the billing date column does not exist yet.
+  async getBillingRecords(driverId?: string): Promise<MtopBillingRecord[]> {
+    const query = (columns: string[]) => {
+      let q = supabase
+        .from('franchise_applications')
+        .select(columns.join(','))
+        .or('status.in.(payment,approved,issued),payment_status.eq.paid');
+      if (driverId) q = q.eq('driver_id', driverId);
+      return q.order('created_at', { ascending: false });
+    };
+    let { data, error } = await query([...BILLING_COLUMNS, ...BILLING_COLUMNS_085, ...BILLING_COLUMNS_086]);
+    // Before migration 086 / 085 the newer columns do not exist yet.
+    if (error && /billing_statement_no|billing_due_date|payment_amount|payment_paid_on|payment_recorded_by/.test(error.message || '')) {
+      ({ data, error } = await query([...BILLING_COLUMNS, ...BILLING_COLUMNS_085]));
+    }
     if (error && /billing_sent_at/.test(error.message || '')) {
       ({ data, error } = await query(BILLING_COLUMNS));
     }
@@ -134,6 +157,13 @@ export class FranchiseService {
       ...row,
       fees: Number(row.fees) || 0,
       billing_sent_at: row.billing_sent_at ?? null,
+      billing_statement_no: row.billing_statement_no ?? null,
+      billing_due_date: row.billing_due_date ?? null,
+      payment_amount: row.payment_amount == null ? null : Number(row.payment_amount),
+      payment_paid_on: row.payment_paid_on ?? null,
+      payment_recorded_by: row.payment_recorded_by ?? null,
+      // Only "was it billed" matters here; the method name comes in billed_method.
+      selected_payment_methods: row.billed_method ? true : null,
     }));
   }
 
@@ -550,45 +580,36 @@ export class FranchiseService {
     return data as FranchiseApplication;
   }
 
-  async submitPayment(id: string, method: 'in_person', reference: string, proofUrl: string): Promise<FranchiseApplication> {
-    if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{5,63}$/.test(reference.trim())) {
-      throw new Error('Enter a valid payment reference (6 to 64 characters).');
-    }
-    if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(proofUrl) || proofUrl.length > 3_500_000) {
-      throw new Error('Upload a valid payment screenshot under 2.5 MB.');
-    }
-    const { data, error } = await supabase.rpc('submit_mtop_payment', {
-      p_application_id: id, p_method: method, p_reference: reference.trim(), p_proof_url: proofUrl,
-    });
-    if (error) throw error;
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) throw new Error('The MTOP payment could not be submitted.');
-    return row as FranchiseApplication;
-  }
-
   /**
-   * Records a face-to-face payment appointment chosen by the driver.
-   * Patches `appointment_date` (ISO string) on the application so the admin
-   * can see it on the payment card.
+   * B2: the office records an MTOP payment (migration 086). Marks the fee
+   * paid and moves the application to Approved. Full fee only.
    */
-  async submitFaceToFaceAppointment(
+  async recordPayment(
     id: string,
-    appointmentDate: string
+    input: { amount: number; paidOn: string; method: MtopPaymentMethodKind; reference: string }
   ): Promise<FranchiseApplication> {
-    // Expect a full ISO datetime or at minimum YYYY-MM-DD
-    if (!appointmentDate || appointmentDate.trim().length < 10) {
-      throw new Error('Please select a valid appointment date.');
+    const reference = input.reference.trim().toUpperCase();
+    if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('Enter the amount paid.');
+    if (!validISODate(input.paidOn)) throw new Error('Enter the payment date (YYYY-MM-DD).');
+    if (!/^[A-Z0-9][A-Z0-9 /_-]{2,63}$/.test(reference)) {
+      throw new Error('Enter the OR or reference number (3 to 64 letters or digits).');
     }
-    const dt = new Date(appointmentDate);
-    if (isNaN(dt.getTime())) throw new Error('Invalid appointment date.');
-    if (dt.getTime() < Date.now() - 60_000) {
-      throw new Error('Appointment must be a future date and time.');
-    }
-    return this.patch(id, {
-      appointment_date: appointmentDate,
-      // Mark payment as awaiting so the admin knows a visit is scheduled
-      payment_review_status: 'pending_review',
+    const { data, error } = await supabase.rpc('record_mtop_payment', {
+      p_application_id: id,
+      p_amount: input.amount,
+      p_paid_on: input.paidOn,
+      p_method: input.method,
+      p_reference: reference,
     });
+    if (error) {
+      const message = error.message || '';
+      throw new Error(/record_mtop_payment|could not find the function/i.test(message)
+        ? 'Recording payments needs database migration 086. Apply it in the Supabase SQL editor, then try again.'
+        : message);
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error('The payment could not be recorded.');
+    return row as FranchiseApplication;
   }
 
   /**

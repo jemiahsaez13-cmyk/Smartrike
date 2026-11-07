@@ -12,13 +12,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { FranchiseService, MtopBillingRecord } from '@/models/services/FranchiseService';
 import { ExportService } from '@/models/services/ExportService';
+import { mtopBilledAt, mtopBillingState, mtopDueDate, mtopPaidMethodLabel } from '@/models/entities/Franchise';
 import { notify } from '@/utils/confirm';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 
 const service = new FranchiseService();
 
-/** Unpaid billings older than this are flagged overdue. */
+/** Unpaid billings past their due date (30 days after billing) are overdue. */
 const OVERDUE_AFTER_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -56,34 +57,48 @@ interface BillingRow extends MtopBillingRecord {
   daysOutstanding: number;
   /** Paid date for paid rows, otherwise the billing (or filing) date. */
   recordDate: string;
+  /** YYYY-MM-DD: the statement's due date (086), else 30 days after billing. */
+  dueDate: string | null;
+  /** Date the fee was paid: the recorded date (086), else the verification date. */
+  paidOn: string | null;
+  /** Amount collected: the recorded amount (086), else the fee. */
+  collected: number;
+  methodLabel: string | null;
 }
 
-const stateOf = (row: MtopBillingRecord): BillingState => {
-  if (row.payment_status === 'paid' || row.payment_review_status === 'verified') return 'paid';
-  if (row.payment_review_status === 'pending_review') return 'for_verification';
-  if (row.status === 'payment' && !row.billed_method && !row.billing_sent_at) return 'to_bill';
-  return 'unpaid';
-};
-
 const toRow = (row: MtopBillingRecord, now: number): BillingRow => {
-  const state = stateOf(row);
-  const billedAt = row.billing_sent_at ?? (row.billed_method ? row.updated_at : null);
+  const full = row as unknown as Parameters<typeof mtopBillingState>[0];
+  const billingState = mtopBillingState(full);
+  // Overdue is shown as a flag on an unpaid row, not as its own state.
+  const state: BillingState = billingState === 'overdue' ? 'unpaid' : billingState;
+  const billedAt = mtopBilledAt(full);
   const daysOutstanding = state === 'unpaid' && billedAt
     ? Math.floor((now - new Date(billedAt).getTime()) / DAY_MS)
     : 0;
+  const paidOn = row.payment_paid_on ?? row.payment_verified_at;
   return {
     ...row,
     state,
     billedAt,
-    overdue: state === 'unpaid' && daysOutstanding >= OVERDUE_AFTER_DAYS,
+    overdue: billingState === 'overdue',
     daysOutstanding,
-    recordDate: (state === 'paid' ? row.payment_verified_at : billedAt) ?? row.created_at,
+    recordDate: (state === 'paid' ? paidOn : billedAt) ?? row.created_at,
+    dueDate: billedAt ? mtopDueDate(full) : null,
+    paidOn,
+    collected: row.payment_amount ?? row.fees,
+    methodLabel: mtopPaidMethodLabel({
+      payment_method: row.payment_method,
+      chosen_payment_method_snapshot: row.paid_method ? ({ display_name: row.paid_method } as any) : null,
+      appointment_date: row.appointment_date,
+    }),
   };
 };
 
 const peso = (n: number) => `₱${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const shortDate = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  iso
+    ? new Date(iso.length === 10 ? `${iso}T00:00:00` : iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—';
 
 const inPeriod = (iso: string, period: Period) => {
   if (period === 'all') return true;
@@ -137,7 +152,7 @@ export const MtopBillingScreen = () => {
 
   const filtered = useMemo(() => scoped.filter((row) => matches(row, filter)), [scoped, filter]);
 
-  const collected = scoped.filter((r) => r.state === 'paid').reduce((sum, r) => sum + r.fees, 0);
+  const collected = scoped.filter((r) => r.state === 'paid').reduce((sum, r) => sum + r.collected, 0);
   const outstanding = scoped
     .filter((r) => r.state === 'unpaid' || r.state === 'for_verification')
     .reduce((sum, r) => sum + r.fees, 0);
@@ -153,12 +168,15 @@ export const MtopBillingScreen = () => {
           'MTOP No.': row.mtop_number ?? '',
           Plate: row.plate_number,
           Type: row.type === 'renewal' ? 'Renewal' : 'New',
+          'Statement no.': row.billing_statement_no ?? '',
           Amount: row.fees.toFixed(2),
           Status: row.overdue ? 'Overdue' : STATE_META[row.state].label,
           'Billed on': row.billedAt ? row.billedAt.slice(0, 10) : '',
-          'Paid on': row.state === 'paid' && row.payment_verified_at ? row.payment_verified_at.slice(0, 10) : '',
-          Method: row.paid_method ?? (row.appointment_date ? 'Face-to-face' : ''),
-          'Reference no.': row.payment_reference ?? '',
+          'Due on': row.dueDate ?? '',
+          'Paid on': row.state === 'paid' && row.paidOn ? row.paidOn.slice(0, 10) : '',
+          'Amount paid': row.state === 'paid' ? row.collected.toFixed(2) : '',
+          Method: row.state === 'paid' || row.state === 'for_verification' ? row.methodLabel ?? '' : '',
+          'OR / reference no.': row.payment_reference ?? '',
         })),
         'mtop_billing'
       );
@@ -214,7 +232,7 @@ export const MtopBillingScreen = () => {
           <TouchableOpacity style={styles.overdueBanner} onPress={() => setFilter('overdue')} activeOpacity={0.8}>
             <MaterialCommunityIcons name="alert-circle-outline" size={18} color={colors.error} />
             <Text style={styles.overdueText}>
-              {overdueCount} billing{overdueCount === 1 ? ' is' : 's are'} unpaid for {OVERDUE_AFTER_DAYS}+ days
+              {overdueCount} billing{overdueCount === 1 ? ' is' : 's are'} past the due date ({OVERDUE_AFTER_DAYS} days)
             </Text>
             <MaterialCommunityIcons name="chevron-right" size={18} color={colors.error} />
           </TouchableOpacity>
@@ -273,7 +291,7 @@ export const MtopBillingScreen = () => {
                   <View style={styles.cardNames}>
                     <Text style={styles.driverName} numberOfLines={1}>{row.driver_name}</Text>
                     <Text style={styles.cardSub} numberOfLines={1}>
-                      {row.toda} · {row.type === 'renewal' ? 'Renewal' : 'New MTOP'}{row.mtop_number ? ` · ${row.mtop_number}` : ''}
+                      {row.toda} · {row.type === 'renewal' ? 'Renewal' : 'New MTOP'}{row.mtop_number ? ` · ${row.mtop_number}` : ''}{row.billing_statement_no ? ` · ${row.billing_statement_no}` : ''}
                     </Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
@@ -287,14 +305,14 @@ export const MtopBillingScreen = () => {
                 <View style={styles.detailGrid}>
                   <Detail label="BILLED" value={row.billedAt ? shortDate(row.billedAt) : 'Not yet'} />
                   <Detail
-                    label={row.state === 'paid' ? 'PAID ON' : 'OUTSTANDING'}
+                    label={row.state === 'paid' ? 'PAID ON' : 'DUE'}
                     value={row.state === 'paid'
-                      ? shortDate(row.payment_verified_at)
-                      : row.state === 'unpaid' && row.billedAt ? `${row.daysOutstanding} day${row.daysOutstanding === 1 ? '' : 's'}` : '—'}
+                      ? shortDate(row.paidOn)
+                      : row.dueDate ? `${shortDate(row.dueDate)}${row.state === 'unpaid' ? ` · ${row.daysOutstanding}d` : ''}` : '—'}
                     alert={row.overdue}
                   />
-                  <Detail label="METHOD" value={row.paid_method ?? (row.appointment_date ? 'Face-to-face' : '—')} />
-                  <Detail label="REFERENCE NO." value={row.payment_reference || '—'} />
+                  <Detail label="METHOD" value={(row.state === 'paid' || row.state === 'for_verification' ? row.methodLabel : null) ?? '—'} />
+                  <Detail label="OR / REFERENCE NO." value={row.payment_reference || '—'} />
                 </View>
 
                 {row.payment_review_status === 'rejected' && row.payment_rejection_reason && row.state === 'unpaid' ? (
@@ -304,7 +322,7 @@ export const MtopBillingScreen = () => {
                   </View>
                 ) : null}
 
-                {row.state === 'to_bill' || row.state === 'for_verification' ? (
+                {row.state !== 'paid' ? (
                   <TouchableOpacity
                     style={styles.openBtn}
                     onPress={() => navigation.navigate('AdminMain', { screen: 'MTOP' })}
@@ -312,7 +330,11 @@ export const MtopBillingScreen = () => {
                   >
                     <MaterialCommunityIcons name="open-in-new" size={16} color={colors.primary} />
                     <Text style={styles.openBtnText}>
-                      {row.state === 'to_bill' ? 'Send billing in MTOP Management' : 'Verify payment in MTOP Management'}
+                      {row.state === 'to_bill'
+                        ? 'Send billing in MTOP Management'
+                        : row.state === 'for_verification'
+                        ? 'Verify payment in MTOP Management'
+                        : 'Record payment in MTOP Management'}
                     </Text>
                   </TouchableOpacity>
                 ) : null}

@@ -116,13 +116,24 @@ const run = async () => {
   const decline = await db.from('franchise_applications').update({ status: 'rejected' }).eq('id', mtopId).select().single();
   expect(!!decline.error, 'MTOP cannot be declined after file confirmation');
   await login('driver@demo.com');
-  const invalidMtop = await db.rpc('submit_mtop_payment', { p_application_id: mtopId, p_method: 'in_person', p_reference: '', p_proof_url: '' });
-  expect(!!invalidMtop.error, 'MTOP payment requires proof and reference');
-  const mtopSubmitted = await db.rpc('submit_mtop_payment', { p_application_id: mtopId, p_method: 'in_person', p_reference: 'RECEIPT-123', p_proof_url: image });
-  expect(!mtopSubmitted.error && mtopSubmitted.data[0].payment_review_status === 'pending_review', 'driver submits MTOP payment proof for admin review');
+  const driverSubmit = await db.rpc('submit_mtop_payment', { p_application_id: mtopId, p_method: 'in_person', p_reference: 'RECEIPT-123', p_proof_url: image });
+  expect(!!driverSubmit.error, 'driver can no longer submit MTOP payment proof (B2: office records it)');
+  const driverRecord = await db.rpc('record_mtop_payment', { p_application_id: mtopId, p_amount: 1500, p_paid_on: '2026-01-02', p_method: 'cash', p_reference: 'OR-0001' });
+  expect(!!driverRecord.error, 'driver cannot record an MTOP payment');
   await login('admin@demo.com');
-  const mtopVerified = await db.rpc('review_mtop_payment', { p_application_id: mtopId, p_decision: 'verified', p_reason: null });
-  expect(!mtopVerified.error && mtopVerified.data[0].status === 'approved' && mtopVerified.data[0].payment_status === 'paid', 'admin verification advances MTOP payment to approved');
+  const unbilled = await db.rpc('record_mtop_payment', { p_application_id: mtopId, p_amount: 1500, p_paid_on: '2026-01-02', p_method: 'cash', p_reference: 'OR-0001' });
+  expect(!!unbilled.error, 'payment cannot be recorded before the billing is sent');
+  await db.from('franchise_applications').update({ selected_payment_methods: [{ id: 'office', method_type: 'face_to_face', display_name: 'Pay in Person' }] }).eq('id', mtopId);
+  const partial = await db.rpc('record_mtop_payment', { p_application_id: mtopId, p_amount: 1000, p_paid_on: '2026-01-02', p_method: 'cash', p_reference: 'OR-0001' });
+  expect(!!partial.error, 'partial MTOP payment is refused');
+  const mtopRecorded = await db.rpc('record_mtop_payment', { p_application_id: mtopId, p_amount: 1500, p_paid_on: '2026-01-02', p_method: 'cash', p_reference: 'or-0001' });
+  expect(
+    !mtopRecorded.error && mtopRecorded.data[0].status === 'approved' && mtopRecorded.data[0].payment_status === 'paid'
+      && mtopRecorded.data[0].payment_reference === 'OR-0001' && mtopRecorded.data[0].payment_paid_on === '2026-01-02',
+    'admin records the MTOP payment (OR no., date) and the application is approved'
+  );
+  const recordedTwice = await db.rpc('record_mtop_payment', { p_application_id: mtopId, p_amount: 1500, p_paid_on: '2026-01-02', p_method: 'cash', p_reference: 'OR-0002' });
+  expect(!!recordedTwice.error, 'a paid MTOP fee cannot be recorded twice');
 
   const addressId = `test-address-${Date.now()}`;
   await db.from('saved_addresses').insert({ id: addressId, user_id: 'demo-passenger', label: 'Pinned Home', full_address: 'Boac, Marinduque', latitude: 13.445211, longitude: 121.840122, is_default: false });

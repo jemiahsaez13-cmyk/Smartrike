@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment, reviewChangeOfUnit } from '@/controllers/slices/franchiseSlice';
+import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment, recordFranchisePayment, reviewChangeOfUnit } from '@/controllers/slices/franchiseSlice';
 import {
   FranchiseApplication,
   FranchiseDocument,
@@ -21,6 +21,8 @@ import {
   nextBodyNumber,
   SuccessionRequest,
   relationshipLabel,
+  mtopBillingState,
+  mtopDueDate,
 } from '@/models/entities/Franchise';
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -29,6 +31,7 @@ import { colors, spacing, typography, radius, shadows, gradients } from '@/views
 import { Loading } from '@/views/components/common/Loading';
 import { confirm, notify } from '@/utils/confirm';
 import { MtopBillingModal } from '@/views/components/payment/MtopBillingModal';
+import { MtopRecordPaymentModal, RecordPaymentInput } from '@/views/components/payment/MtopRecordPaymentModal';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { TodaService } from '@/models/services/TodaService';
@@ -208,6 +211,8 @@ export const FranchiseManagementScreen = () => {
   const [couImagePreview, setCouImagePreview] = useState<string | null>(null);
   // Billing modal
   const [billingApp, setBillingApp] = useState<FranchiseApplication | null>(null);
+  // B2: Record payment modal (the office records what the driver paid).
+  const [recordApp, setRecordApp] = useState<FranchiseApplication | null>(null);
   // Body numbers typed by the admin before issuing, keyed by application id.
   const [bodyDrafts, setBodyDrafts] = useState<Record<string, string>>({});
 
@@ -434,7 +439,7 @@ export const FranchiseManagementScreen = () => {
       decision === 'verified' ? 'Verify MTOP payment?' : 'Reject payment proof?',
       decision === 'verified'
         ? `Confirm ₱${Number(app.fees).toFixed(2)} with reference ${app.payment_reference}.`
-        : 'The registrant will be able to upload corrected proof.',
+        : 'Record the payment once the registrant pays at the office.',
       { confirmText: decision === 'verified' ? 'Verify Payment' : 'Reject Proof', destructive: decision === 'rejected' }
     );
     if (!okay) return;
@@ -445,7 +450,7 @@ export const FranchiseManagementScreen = () => {
         decision,
         reason: decision === 'rejected' ? 'Payment screenshot or reference could not be validated.' : undefined,
       })).unwrap();
-      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'The application is approved. Use the Issue MTOP button when the permit is ready.' : 'The registrant can submit corrected proof.');
+      await notify(decision === 'verified' ? 'Payment verified' : 'Payment proof rejected', decision === 'verified' ? 'The application is approved. Use the Issue MTOP button when the permit is ready.' : 'Use Record payment once the registrant pays at the office.');
     } catch (error: any) {
       await notify('Review failed', typeof error === 'string' ? error : error?.message || 'Please refresh and try again.');
     } finally { setActionBusy(null); }
@@ -475,6 +480,19 @@ export const FranchiseManagementScreen = () => {
       'Billing Sent',
       `Billing for ₱${Number(app.fees).toFixed(2)} sent to ${app.driver_name}.\n\nPayment method${methods.length !== 1 ? 's' : ''}: ${names}`
     );
+  };
+
+  const handleRecordPayment = async (app: FranchiseApplication, input: RecordPaymentInput) => {
+    try {
+      await dispatch(recordFranchisePayment({ id: app.id, ...input })).unwrap();
+      setRecordApp(null);
+      await notify(
+        'Payment recorded',
+        `₱${input.amount.toFixed(2)} from ${app.driver_name} (OR/ref. ${input.reference}). The application is approved. Use the Issue MTOP button when the permit is ready.`
+      );
+    } catch (error: any) {
+      await notify('Could not record payment', typeof error === 'string' ? error : error?.message || 'Please try again.');
+    }
   };
 
   const handleCouReview = async (app: FranchiseApplication, decision: 'approved' | 'rejected') => {
@@ -836,6 +854,7 @@ export const FranchiseManagementScreen = () => {
             const canReject = !app.documents_verified_at && !allDocumentsApproved(app.documents)
               && (app.status === 'submitted' || app.status === 'document_verification');
             const busy = actionBusy === app.id;
+            const billingState = mtopBillingState(app);
             // Issue MTOP stays locked until a body number is on the application
             // or typed in by the admin.
             const needsBody = next?.status === 'issued'
@@ -961,9 +980,9 @@ export const FranchiseManagementScreen = () => {
                         <Text style={styles.paymentSub}>
                           {app.payment_review_status === 'pending_review'
                             ? 'Proof submitted for review'
-                            : app.payment_review_status === 'rejected'
-                            ? 'Proof rejected — awaiting re-submission'
-                            : 'Waiting for registrant payment'}
+                            : billingState === 'to_bill'
+                            ? 'Billing not sent yet'
+                            : `${app.billing_statement_no ? `${app.billing_statement_no} · ` : ''}${billingState === 'overdue' ? 'Overdue' : 'Unpaid'} · due ${formatDate(mtopDueDate(app))}`}
                         </Text>
                       </View>
                     </View>
@@ -1058,7 +1077,8 @@ export const FranchiseManagementScreen = () => {
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.btnPrimary, busy && styles.btnDisabled]}
-                          onPress={() => reviewPayment(app, 'verified')}
+                          // Legacy in-person appointment (no screenshot): the office records the payment instead.
+                          onPress={() => (app.payment_proof_url ? reviewPayment(app, 'verified') : setRecordApp(app))}
                           disabled={busy}
                           activeOpacity={0.85}
                         >
@@ -1066,24 +1086,37 @@ export const FranchiseManagementScreen = () => {
                             <ActivityIndicator color="#fff" />
                           ) : (
                             <>
-                              <MaterialCommunityIcons name="check-decagram-outline" size={16} color="#fff" />
-                              <Text style={styles.btnPrimaryText}>Verify payment</Text>
+                              <MaterialCommunityIcons name={app.payment_proof_url ? 'check-decagram-outline' : 'cash-check'} size={16} color="#fff" />
+                              <Text style={styles.btnPrimaryText}>{app.payment_proof_url ? 'Verify payment' : 'Record payment'}</Text>
                             </>
                           )}
                         </TouchableOpacity>
                       </View>
                     ) : null}
 
-                    {/* Send Billing button — shown when the applicant hasn't submitted proof yet */}
+                    {/* B2: the office bills, then records the payment (no driver upload). */}
                     {(app.payment_review_status === 'awaiting_submission' || !app.payment_review_status || app.payment_review_status === 'rejected') ? (
                       <>
                         <Text style={styles.billingHint}>
-                          Sending billing notifies the applicant which payment method to use. Configure methods under Account → MTOP Billing Methods.
+                          {billingState === 'to_bill'
+                            ? 'Send the billing statement first: the applicant is notified of the amount, statement no. and due date. Configure methods under Account → MTOP Billing Methods.'
+                            : 'When the applicant pays at the office, record the payment with its OR or reference number. This approves the application.'}
                         </Text>
                         <TouchableOpacity style={styles.btnSoft} onPress={() => setBillingApp(app)} activeOpacity={0.8}>
                           <MaterialCommunityIcons name="send-outline" size={17} color={colors.primary} />
-                          <Text style={styles.btnSoftText}>Send billing</Text>
+                          <Text style={styles.btnSoftText}>{billingState === 'to_bill' ? 'Send billing' : 'Re-send billing'}</Text>
                         </TouchableOpacity>
+                        {billingState !== 'to_bill' ? (
+                          <TouchableOpacity
+                            style={[styles.btnPrimary, styles.recordPaymentBtn, busy && styles.btnDisabled]}
+                            onPress={() => setRecordApp(app)}
+                            disabled={busy}
+                            activeOpacity={0.85}
+                          >
+                            <MaterialCommunityIcons name="cash-check" size={16} color="#fff" />
+                            <Text style={styles.btnPrimaryText}>Record payment</Text>
+                          </TouchableOpacity>
+                        ) : null}
                       </>
                     ) : null}
                   </View>
@@ -1224,6 +1257,12 @@ export const FranchiseManagementScreen = () => {
         application={billingApp}
         onConfirm={handleSendBilling}
         onClose={() => setBillingApp(null)}
+      />
+      <MtopRecordPaymentModal
+        visible={!!recordApp}
+        application={recordApp}
+        onConfirm={handleRecordPayment}
+        onClose={() => setRecordApp(null)}
       />
 
       {/* Payment proof preview */}
@@ -1823,6 +1862,7 @@ const styles = StyleSheet.create({
   noticeText: { ...typography.bodySmall, lineHeight: 18 },
   noticeValue: { ...typography.label, fontSize: 13 },
   billingHint: { ...typography.bodySmall, fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 10 },
+  recordPaymentBtn: { flex: 0, marginTop: 8 },
 
   // ── Body number (before issuance) ──
   bodyPanel: {

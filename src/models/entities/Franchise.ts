@@ -118,7 +118,8 @@ export interface FranchiseApplication {
   documents: FranchiseDocument[];
   inspection_result: 'pending' | 'passed' | 'failed' | null;
   payment_status: 'pending' | 'paid';
-  payment_method?: 'in_person' | null;
+  /** 'in_person' on legacy driver-submitted proofs; otherwise how the office was paid (086). */
+  payment_method?: 'in_person' | MtopPaymentMethodKind | null;
   /**
    * Serialised JSON array of the AdminMtopPaymentMethod objects the admin
    * selected when they clicked "Send Billing". Stored as JSONB in Supabase.
@@ -145,6 +146,14 @@ export interface FranchiseApplication {
   appointment_date?: string | null;
   /** When the admin last sent the billing (migration 085); null on older rows. */
   billing_sent_at?: string | null;
+  /** Billing statement number, e.g. BS-2026-00012 (migration 086, server-stamped). */
+  billing_statement_no?: string | null;
+  /** Statement due date, YYYY-MM-DD: 30 days after the billing (086). */
+  billing_due_date?: string | null;
+  /** Payment recorded by the office with record_mtop_payment (086). */
+  payment_amount?: number | null;
+  payment_paid_on?: string | null;
+  payment_recorded_by?: string | null;
   fees: number;
   mtop_number: string | null;
   /** TODA-assigned tricycle body number shown to passengers after matching. */
@@ -194,6 +203,66 @@ export interface FranchiseApplication {
   vehicle_make?: string | null;
   vehicle_model?: string | null;
 }
+
+// ── MTOP billing & payment (B2 / C1, migration 086) ─────────────────────────
+// The office bills the driver and records the payment; the driver only views it.
+export type MtopPaymentMethodKind = 'cash' | 'gcash' | 'bank' | 'check';
+
+export const MTOP_PAYMENT_METHOD_LABEL: Record<MtopPaymentMethodKind, string> = {
+  cash: 'Cash',
+  gcash: 'GCash',
+  bank: 'Bank transfer',
+  check: 'Check',
+};
+
+/** How an MTOP fee was paid, for display. Legacy proofs use the method the driver picked. */
+export const mtopPaidMethodLabel = (
+  app: Pick<FranchiseApplication, 'payment_method' | 'chosen_payment_method_snapshot' | 'appointment_date'>
+): string | null => {
+  const method = app.payment_method;
+  if (method && method !== 'in_person') return MTOP_PAYMENT_METHOD_LABEL[method] ?? method;
+  return app.chosen_payment_method_snapshot?.display_name ?? (app.appointment_date ? 'Face-to-face' : null);
+};
+
+export type MtopBillingState = 'to_bill' | 'unpaid' | 'overdue' | 'for_verification' | 'paid';
+
+export const MTOP_BILLING_STATE_LABEL: Record<MtopBillingState, string> = {
+  to_bill: 'Waiting for billing',
+  unpaid: 'Unpaid',
+  overdue: 'Overdue',
+  for_verification: 'For verification',
+  paid: 'Paid',
+};
+
+/** When the billing went out; updated_at stands in for rows billed before 085. */
+export const mtopBilledAt = (
+  app: Pick<FranchiseApplication, 'billing_sent_at' | 'selected_payment_methods' | 'updated_at'>
+): string | null => app.billing_sent_at ?? (app.selected_payment_methods ? app.updated_at : null);
+
+/** Due date (YYYY-MM-DD): the statement's, else 30 days after the billing. */
+export const mtopDueDate = (
+  app: Pick<FranchiseApplication, 'billing_due_date' | 'billing_sent_at' | 'selected_payment_methods' | 'updated_at'>
+): string | null => {
+  if (app.billing_due_date) return app.billing_due_date.slice(0, 10);
+  const billed = mtopBilledAt(app);
+  if (!billed) return null;
+  const d = new Date(billed);
+  d.setDate(d.getDate() + 30);
+  return toISODate(d);
+};
+
+export const mtopBillingState = (
+  app: Pick<FranchiseApplication,
+    'status' | 'payment_status' | 'payment_review_status' | 'billing_due_date'
+    | 'billing_sent_at' | 'selected_payment_methods' | 'updated_at'>,
+  today: string = toISODate(new Date())
+): MtopBillingState => {
+  if (app.payment_status === 'paid' || app.payment_review_status === 'verified') return 'paid';
+  if (app.payment_review_status === 'pending_review') return 'for_verification';
+  if (!mtopBilledAt(app)) return 'to_bill';
+  const due = mtopDueDate(app);
+  return due && today > due ? 'overdue' : 'unpaid';
+};
 
 // Documents required by the LGU for an MTOP application.
 export const REQUIRED_DOCUMENTS = [

@@ -588,15 +588,28 @@ export const mockSupabase: any = {
       return { data: [clone(booking)], error: null };
     }
     if (fn === 'submit_mtop_payment') {
+      // Migration 086: payments are recorded by the office.
+      return { data: null, error: { message: 'MTOP payments are recorded by the FEDTODAB office. Pay at the office and keep your official receipt.' } };
+    }
+    if (fn === 'record_mtop_payment') {
       const app = (db.franchise_applications ?? []).find((row) => row.id === params?.p_application_id);
       const me = currentProfile();
-      if (!app || !me || app.driver_id !== me.id || app.status !== 'payment') return { data: null, error: { message: 'This application is not ready for payment.' } };
-      if (['pending_review', 'verified'].includes(app.payment_review_status)) return { data: null, error: { message: 'A payment is already pending review or verified.' } };
-      if (!/^[A-Za-z0-9][A-Za-z0-9 _-]{5,63}$/.test(String(params?.p_reference || '').trim())
-        || !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(String(params?.p_proof_url || ''))) {
-        return { data: null, error: { message: 'Valid payment proof and reference are required.' } };
-      }
-      Object.assign(app, { payment_method: params.p_method, payment_reference: params.p_reference, payment_proof_url: params.p_proof_url, payment_review_status: 'pending_review', payment_submitted_at: new Date().toISOString(), payment_rejection_reason: null });
+      if (!me || me.user_type !== 'admin') return { data: null, error: { message: 'Administrator permission required.' } };
+      if (!app || app.status !== 'payment' || app.payment_status === 'paid') return { data: null, error: { message: 'This MTOP application is not waiting for payment.' } };
+      if (!app.billing_sent_at && !app.selected_payment_methods) return { data: null, error: { message: 'Send the billing statement before recording the payment.' } };
+      if (!(Number(params?.p_amount) >= Number(app.fees))) return { data: null, error: { message: `Record the full fee of PHP ${Number(app.fees).toFixed(2)} (partial payments are not accepted).` } };
+      const reference = String(params?.p_reference || '').trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9 /_-]{2,63}$/.test(reference)) return { data: null, error: { message: 'Enter the OR or reference number (3 to 64 letters or digits).' } };
+      if (!['cash', 'gcash', 'bank', 'check'].includes(params?.p_method)) return { data: null, error: { message: 'Choose how the payment was made.' } };
+      const now = new Date().toISOString();
+      Object.assign(app, {
+        status: 'approved', payment_status: 'paid', payment_review_status: 'verified',
+        payment_verified_at: now, payment_verified_by: me.id, payment_rejection_reason: null,
+        payment_method: params.p_method, payment_reference: reference,
+        payment_amount: Number(params.p_amount), payment_paid_on: params.p_paid_on,
+        payment_recorded_by: me.id, updated_at: now,
+      });
+      verifyDriverForMtop(app);
       return { data: [clone(app)], error: null };
     }
     if (fn === 'submit_change_of_unit_request') {

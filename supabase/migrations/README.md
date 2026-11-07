@@ -403,3 +403,25 @@ Apply `085_succession_documents_and_billing_date.sql` after 084.
   cannot be approved while any document is not approved.
 - `franchise_applications.billing_sent_at` is stamped by a trigger whenever
   the admin sends the billing (used by the MTOP Billing & Payments screen).
+
+## Admin-managed MTOP billing & payment (086)
+
+Apply `086_admin_records_mtop_payment.sql` after 085. Drivers no longer pay in
+the app (no screenshot, reference or appointment); the office bills and records
+the payment.
+
+- Sending the billing stamps a statement number (`billing_statement_no`,
+  `BS-<year>-<00001>`) and a due date (`billing_due_date`, 30 days later,
+  Asia/Manila). Re-sending keeps both. Billings sent before 086 are backfilled.
+- `record_mtop_payment(id, amount, paid_on, method, reference)` (admin only):
+  full fee only, date not in the future, method `cash` / `gcash` / `bank` /
+  `check`, OR or reference number unique across recorded payments. Marks the
+  fee paid and moves the application to Approved. Stores `payment_amount`,
+  `payment_paid_on`, `payment_recorded_by`.
+- `enforce_mtop_workflow`: drivers cannot write any billing or payment field;
+  approval accepts a recorded payment without a screenshot; the recorded-payment
+  columns can only be written by `record_mtop_payment`.
+- `submit_mtop_payment` (038) now refuses. Legacy proofs already submitted can
+  still be verified or rejected with `review_mtop_payment` (055).
+- The driver is notified when a billing statement is sent and when the payment
+  is recorded.

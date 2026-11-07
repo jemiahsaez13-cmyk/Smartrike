@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchMyApplication, submitApplication, submitFranchisePayment, submitFaceToFaceAppointment, patchApplication, submitChangeOfUnit, resubmitDocument } from '@/controllers/slices/franchiseSlice';
+import { fetchMyApplication, submitApplication, submitChangeOfUnit, resubmitDocument } from '@/controllers/slices/franchiseSlice';
 import {
   REQUIRED_DOCUMENTS,
   FRANCHISE_FLOW,
@@ -24,6 +24,9 @@ import {
   SuccessionRequest,
   SuccessionDocumentKey,
   SUCCESSION_DOCUMENTS,
+  mtopBilledAt,
+  mtopBillingState,
+  mtopDueDate,
 } from '@/models/entities/Franchise';
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
@@ -35,6 +38,7 @@ import { Loading } from '@/views/components/common/Loading';
 import { Button } from '@/views/components/common/Button';
 import { Card } from '@/views/components/common/Card';
 import { TricycleIcon } from '@/views/components/common/TricycleIcon';
+import { MtopPaymentRecords } from '@/views/components/driver/MtopPaymentRecords';
 import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { SUPPORT } from '@/config/constants';
 import { TodaAssociation } from '@/models/entities/Toda';
@@ -44,220 +48,7 @@ const franchiseService = new FranchiseService();
 const todaService = new TodaService();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Inline date picker — renders a modal with a scrollable 30-day calendar strip
-// ─────────────────────────────────────────────────────────────────────────────
-const InlineDatePicker = ({
-  visible,
-  currentDate,
-  minDate,
-  onConfirm,
-  onClose,
-}: {
-  visible: boolean;
-  currentDate: Date;
-  minDate: Date;
-  onConfirm: (d: Date) => void;
-  onClose: () => void;
-}) => {
-  // Build a list of the next 30 days from minDate
-  const days: Date[] = Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(minDate);
-    d.setDate(d.getDate() + i);
-    d.setHours(currentDate.getHours(), currentDate.getMinutes(), 0, 0);
-    return d;
-  });
-  const [selected, setSelected] = useState<Date>(days[0]);
-  useEffect(() => {
-    if (visible) setSelected(days[0]);
-  }, [visible]);
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={pickerStyles.overlay}>
-        <View style={pickerStyles.sheet}>
-          <View style={pickerStyles.head}>
-            <Text style={pickerStyles.headTitle}>Select Date</Text>
-            <TouchableOpacity onPress={onClose} style={pickerStyles.closeBtn}>
-              <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={pickerStyles.listContent} showsVerticalScrollIndicator={false}>
-            {days.map((day, i) => {
-              const isSelected =
-                day.toDateString() === selected.toDateString();
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[pickerStyles.item, isSelected && pickerStyles.itemActive]}
-                  onPress={() => setSelected(day)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[pickerStyles.itemText, isSelected && pickerStyles.itemTextActive]}>
-                    {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                  </Text>
-                  {isSelected && <MaterialCommunityIcons name="check" size={18} color={colors.primary} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          <View style={pickerStyles.footer}>
-            <TouchableOpacity style={pickerStyles.confirmBtn} onPress={() => onConfirm(selected)} activeOpacity={0.85}>
-              <Text style={pickerStyles.confirmText}>Confirm Date</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Inline time picker — renders a modal with office-hour slots (7am – 5pm)
-// ─────────────────────────────────────────────────────────────────────────────
-const HOUR_SLOTS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17];
-const MINUTE_OPTS = [0, 30];
-
-const InlineTimePicker = ({
-  visible,
-  currentDate,
-  onConfirm,
-  onClose,
-}: {
-  visible: boolean;
-  currentDate: Date;
-  onConfirm: (d: Date) => void;
-  onClose: () => void;
-}) => {
-  const [selHour, setSelHour] = useState(9);
-  const [selMinute, setSelMinute] = useState(0);
-  useEffect(() => {
-    if (visible) {
-      setSelHour(Math.min(17, Math.max(7, currentDate.getHours())));
-      setSelMinute(currentDate.getMinutes() < 30 ? 0 : 30);
-    }
-  }, [visible]);
-
-  const fmtTime = (h: number, m: number) => {
-    const d = new Date();
-    d.setHours(h, m, 0, 0);
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={pickerStyles.overlay}>
-        <View style={pickerStyles.sheet}>
-          <View style={pickerStyles.head}>
-            <Text style={pickerStyles.headTitle}>Select Time</Text>
-            <TouchableOpacity onPress={onClose} style={pickerStyles.closeBtn}>
-              <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={pickerStyles.listContent} showsVerticalScrollIndicator={false}>
-            {HOUR_SLOTS.flatMap((h) =>
-              MINUTE_OPTS.map((m) => {
-                const isSelected = h === selHour && m === selMinute;
-                return (
-                  <TouchableOpacity
-                    key={`${h}-${m}`}
-                    style={[pickerStyles.item, isSelected && pickerStyles.itemActive]}
-                    onPress={() => { setSelHour(h); setSelMinute(m); }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[pickerStyles.itemText, isSelected && pickerStyles.itemTextActive]}>
-                      {fmtTime(h, m)}
-                    </Text>
-                    {isSelected && <MaterialCommunityIcons name="check" size={18} color={colors.primary} />}
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </ScrollView>
-          <View style={pickerStyles.footer}>
-            <TouchableOpacity
-              style={pickerStyles.confirmBtn}
-              onPress={() => {
-                const merged = new Date(currentDate);
-                merged.setHours(selHour, selMinute, 0, 0);
-                onConfirm(merged);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={pickerStyles.confirmText}>Confirm Time</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-const pickerStyles = StyleSheet.create({
-  // ── Loading state ──
-  loadingBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.xl,
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  sheet: {
-    maxHeight: '70%',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  headTitle: { ...typography.h2, fontSize: 18 },
-  closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  listContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 50,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    marginVertical: 2,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  itemActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  itemText: { ...typography.label, color: colors.textSecondary, fontSize: 15 },
-  itemTextActive: { color: colors.primary },
-  footer: {
-    padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  confirmBtn: {
-    height: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmText: { ...typography.button, color: '#fff' },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Payment Method Detail Card — shown when the driver taps a method in Pay Now
+// Payment method display (billing statement: how to pay, read-only)
 // ─────────────────────────────────────────────────────────────────────────────
 const METHOD_ICON: Record<string, string> = {
   gcash: 'cellphone',
@@ -275,406 +66,7 @@ const METHOD_COLOR: Record<string, string> = {
   face_to_face: '#E65100',
 };
 
-interface PayNowModalProps {
-  visible: boolean;
-  fees: number;
-  paymentProof: string;
-  paymentReference: string;
-  submitting: boolean;
-  paymentReviewStatus?: string | null;
-  paymentRejectionReason?: string | null;
-  onPickProof: () => void;
-  onChangeReference: (v: string) => void;
-  onSubmit: (method: AdminMtopPaymentMethod) => void;
-  /** Called when driver picks a face-to-face date — sends the appointment */
-  onSubmitAppointment: (method: AdminMtopPaymentMethod, date: Date) => void;
-  onClose: () => void;
-}
-
-// Format a Date to a human-readable local string
-const formatApptDate = (d: Date) =>
-  d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) +
-  ' ' +
-  d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-
 const paymentService = new AdminMtopPaymentService();
-
-const PayNowModal = ({
-  visible,
-  fees,
-  paymentProof,
-  paymentReference,
-  submitting,
-  paymentReviewStatus,
-  paymentRejectionReason,
-  onPickProof,
-  onChangeReference,
-  onSubmit,
-  onSubmitAppointment,
-  onClose,
-}: PayNowModalProps) => {
-  // Self-fetched enabled methods — driver always sees the live admin configuration
-  const [methods, setMethods] = useState<AdminMtopPaymentMethod[]>([]);
-  const [loadingMethods, setLoadingMethods] = useState(false);
-
-  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
-
-  // Date-picker state (face-to-face flow)
-  const minDate = new Date(Date.now() + 60 * 60 * 1000); // min = 1 hr from now
-  const buildDefault = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    return d;
-  };
-  const [appointmentDate, setAppointmentDate] = useState<Date>(buildDefault);
-  const [showDateModal, setShowDateModal] = useState(false);
-  const [showTimeModal, setShowTimeModal] = useState(false);
-
-  // Fetch enabled methods every time the modal opens
-  useEffect(() => {
-    if (!visible) return;
-    setSelectedMethodId(null);
-    setAppointmentDate(buildDefault());
-    setLoadingMethods(true);
-    paymentService
-      .listEnabledMethods()
-      .then((list) => {
-        setMethods(list);
-        // Auto-select when there's only one option
-        if (list.length === 1) setSelectedMethodId(list[0].id);
-      })
-      .catch(() => setMethods([]))
-      .finally(() => setLoadingMethods(false));
-  }, [visible]);
-
-  const selectedMethod = methods.find((m) => m.id === selectedMethodId) ?? null;
-  const isFaceToFace = selectedMethod?.method_type === 'face_to_face';
-
-  const canSubmitProof =
-    !!paymentProof && paymentReference.trim().length >= 6 && !submitting;
-  const canSubmitAppt =
-    isFaceToFace && !!selectedMethodId && !submitting && appointmentDate >= minDate;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={modalStyles.overlay}>
-        <View style={modalStyles.sheet}>
-          {/* Header */}
-          <View style={modalStyles.head}>
-            <View style={modalStyles.headIconBox}>
-              <MaterialCommunityIcons name="cash-multiple" size={22} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={modalStyles.headTitle}>MTOP Payment</Text>
-              <Text style={modalStyles.headSub}>
-                Amount due: <Text style={modalStyles.headFee}>₱{Number(fees).toFixed(2)}</Text>
-              </Text>
-            </View>
-            <TouchableOpacity style={modalStyles.closeBtn} onPress={onClose} disabled={submitting}>
-              <MaterialCommunityIcons name="close" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            contentContainerStyle={modalStyles.body}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* Rejection notice */}
-            {paymentReviewStatus === 'rejected' && (
-              <View style={modalStyles.rejectedBanner}>
-                <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
-                <Text style={modalStyles.rejectedText}>
-                  {paymentRejectionReason || 'Your previous proof was rejected. Please re-submit.'}
-                </Text>
-              </View>
-            )}
-
-            {/* Loading methods */}
-            {loadingMethods ? (
-              <View style={pickerStyles.loadingBox}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={pickerStyles.loadingText}>Loading payment methods…</Text>
-              </View>
-            ) : (
-
-            /* ── CASE A: Admin configured billed methods ── */
-            methods.length > 0 ? (
-              <>
-                <Text style={modalStyles.sectionLabel}>
-                  {methods.length === 1 ? 'PAYMENT METHOD' : 'SELECT PAYMENT METHOD'}
-                </Text>
-                {methods.length > 1 && (
-                  <Text style={modalStyles.sectionHint}>
-                    Tap the method you want to use. The payment instructions will expand below it.
-                  </Text>
-                )}
-
-                {methods.map((method) => {
-                  const active = selectedMethodId === method.id;
-                  const mColor = METHOD_COLOR[method.method_type] || colors.primary;
-                  const isF2F = method.method_type === 'face_to_face';
-
-                  return (
-                    <View key={method.id}>
-                      {/* ── Tap-to-select card ── */}
-                      <TouchableOpacity
-                        style={[
-                          modalStyles.methodCard,
-                          active && { borderColor: mColor, backgroundColor: mColor + '08', borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0 },
-                        ]}
-                        onPress={() => setSelectedMethodId(active ? null : method.id)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={[modalStyles.radio, active && { borderColor: mColor }]}>
-                          {active && <View style={[modalStyles.radioDot, { backgroundColor: mColor }]} />}
-                        </View>
-                        <View style={[modalStyles.methodIcon, { backgroundColor: mColor + '15' }]}>
-                          <MaterialCommunityIcons
-                            name={METHOD_ICON[method.method_type] as any}
-                            size={22}
-                            color={mColor}
-                          />
-                        </View>
-                        <View style={modalStyles.methodInfo}>
-                          <View style={modalStyles.methodTitleRow}>
-                            <Text style={[modalStyles.methodName, active && { color: mColor }]}>
-                              {method.display_name}
-                            </Text>
-                            <View style={[modalStyles.methodBadge, { backgroundColor: mColor + '15' }]}>
-                              <Text style={[modalStyles.methodBadgeText, { color: mColor }]}>
-                                {METHOD_LABEL[method.method_type]}
-                              </Text>
-                            </View>
-                          </View>
-                          <Text style={modalStyles.methodHolder}>{method.account_name}</Text>
-                          {!isF2F && method.account_number ? (
-                            <Text style={[modalStyles.methodNumber, { color: mColor }]}>
-                              {method.account_number}
-                            </Text>
-                          ) : null}
-                          {isF2F && method.address ? (
-                            <View style={modalStyles.methodAddressRow}>
-                              <MaterialCommunityIcons name="map-marker" size={13} color={colors.textMuted} />
-                              <Text style={modalStyles.methodAddress}>{method.address}</Text>
-                            </View>
-                          ) : null}
-                          {method.instructions ? (
-                            <Text style={modalStyles.methodNote}>{method.instructions}</Text>
-                          ) : null}
-                          {active && method.qr_code_url ? (
-                            <Image source={{ uri: method.qr_code_url }} style={modalStyles.qrCode} resizeMode="contain" />
-                          ) : null}
-                        </View>
-                      </TouchableOpacity>
-
-                      {/* ── Expanded action — only under the selected card ── */}
-                      {active && (
-                        <View style={[modalStyles.expandedAction, { borderColor: mColor + '30' }]}>
-                          {isF2F ? (
-                            /* ── Face-to-face: date + time picker ── */
-                            <>
-                              <Text style={[modalStyles.expandedTitle, { color: mColor }]}>
-                                📅  Schedule Your Visit
-                              </Text>
-                              <Text style={modalStyles.expandedHint}>
-                                Choose when you'll bring your payment to the office. The admin will be notified.
-                              </Text>
-
-                              <TouchableOpacity style={modalStyles.datePickerBtn} onPress={() => setShowDateModal(true)} activeOpacity={0.8}>
-                                <MaterialCommunityIcons name="calendar-month-outline" size={20} color={colors.primary} />
-                                <View style={{ flex: 1 }}>
-                                  <Text style={modalStyles.datePickerLabel}>Date</Text>
-                                  <Text style={modalStyles.datePickerValue}>
-                                    {appointmentDate.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                                  </Text>
-                                </View>
-                                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                              </TouchableOpacity>
-
-                              <TouchableOpacity style={modalStyles.datePickerBtn} onPress={() => setShowTimeModal(true)} activeOpacity={0.8}>
-                                <MaterialCommunityIcons name="clock-time-four-outline" size={20} color={colors.primary} />
-                                <View style={{ flex: 1 }}>
-                                  <Text style={modalStyles.datePickerLabel}>Time</Text>
-                                  <Text style={modalStyles.datePickerValue}>
-                                    {appointmentDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                  </Text>
-                                </View>
-                                <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                              </TouchableOpacity>
-
-                              <InlineDatePicker
-                                visible={showDateModal}
-                                currentDate={appointmentDate}
-                                minDate={minDate}
-                                onConfirm={(d) => { setShowDateModal(false); setAppointmentDate(d); }}
-                                onClose={() => setShowDateModal(false)}
-                              />
-                              <InlineTimePicker
-                                visible={showTimeModal}
-                                currentDate={appointmentDate}
-                                onConfirm={(d) => { setShowTimeModal(false); setAppointmentDate(d); }}
-                                onClose={() => setShowTimeModal(false)}
-                              />
-
-                              <View style={modalStyles.apptSummary}>
-                                <MaterialCommunityIcons name="calendar-check-outline" size={16} color={colors.primary} />
-                                <Text style={modalStyles.apptSummaryText}>
-                                  {formatApptDate(appointmentDate)}
-                                </Text>
-                              </View>
-
-                              <Button
-                                variant="primary"
-                                onPress={() => onSubmitAppointment(method, appointmentDate)}
-                                loading={submitting}
-                                disabled={!canSubmitAppt}
-                                style={modalStyles.submitBtn}
-                              >
-                                Notify Admin — Confirm Visit
-                              </Button>
-                            </>
-                          ) : (
-                            /* ── GCash / Bank: screenshot + reference ── */
-                            <>
-                              <Text style={[modalStyles.expandedTitle, { color: mColor }]}>
-                                📤  Upload Payment Screenshot
-                              </Text>
-                              <Text style={modalStyles.expandedHint}>
-                                Send payment to the account above, then upload your screenshot and enter the reference number.
-                              </Text>
-
-                              <TouchableOpacity style={modalStyles.proofPicker} onPress={onPickProof} activeOpacity={0.8}>
-                                {paymentProof ? (
-                                  <Image source={{ uri: paymentProof }} style={modalStyles.proofImage} resizeMode="contain" />
-                                ) : (
-                                  <>
-                                    <MaterialCommunityIcons name="image-plus" size={36} color={colors.primary} />
-                                    <Text style={modalStyles.proofPickerText}>Tap to upload receipt screenshot</Text>
-                                  </>
-                                )}
-                              </TouchableOpacity>
-                              {paymentProof ? (
-                                <TouchableOpacity onPress={onPickProof} style={modalStyles.replaceProof}>
-                                  <MaterialCommunityIcons name="image-edit-outline" size={15} color={colors.accent} />
-                                  <Text style={modalStyles.replaceProofText}>Replace screenshot</Text>
-                                </TouchableOpacity>
-                              ) : null}
-
-                              <Text style={modalStyles.sectionLabel}>REFERENCE / RECEIPT NUMBER</Text>
-                              <TextInput
-                                style={modalStyles.refInput}
-                                value={paymentReference}
-                                onChangeText={onChangeReference}
-                                placeholder="e.g. GCash ref 123456789 or OR No. 001"
-                                placeholderTextColor={colors.textMuted}
-                                autoCapitalize="characters"
-                                maxLength={64}
-                              />
-
-                              <Button
-                                variant="primary"
-                                onPress={() => onSubmit(method)}
-                                loading={submitting}
-                                disabled={!canSubmitProof}
-                                style={modalStyles.submitBtn}
-                              >
-                                Submit Payment for Verification
-                              </Button>
-                            </>
-                          )}
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </>
-            ) : (
-              /* ── CASE B: No billed methods saved — default face-to-face ── */
-              <>
-                <View style={modalStyles.fallbackBox}>
-                  <MaterialCommunityIcons name="map-marker-outline" size={32} color={METHOD_COLOR.face_to_face} />
-                  <Text style={modalStyles.fallbackTitle}>Pay in Person</Text>
-                  <Text style={modalStyles.fallbackText}>{SUPPORT.office}</Text>
-                  <Text style={modalStyles.fallbackAddress}>{SUPPORT.address}</Text>
-                </View>
-
-                <Text style={modalStyles.sectionLabel}>SCHEDULE YOUR VISIT</Text>
-                <Text style={modalStyles.sectionHint}>
-                  Choose when you'll bring your payment to the office. The admin will be notified.
-                </Text>
-
-                <TouchableOpacity style={modalStyles.datePickerBtn} onPress={() => setShowDateModal(true)} activeOpacity={0.8}>
-                  <MaterialCommunityIcons name="calendar-month-outline" size={20} color={colors.primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={modalStyles.datePickerLabel}>Date</Text>
-                    <Text style={modalStyles.datePickerValue}>
-                      {appointmentDate.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={modalStyles.datePickerBtn} onPress={() => setShowTimeModal(true)} activeOpacity={0.8}>
-                  <MaterialCommunityIcons name="clock-time-four-outline" size={20} color={colors.primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={modalStyles.datePickerLabel}>Time</Text>
-                    <Text style={modalStyles.datePickerValue}>
-                      {appointmentDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <InlineDatePicker
-                  visible={showDateModal}
-                  currentDate={appointmentDate}
-                  minDate={minDate}
-                  onConfirm={(d) => { setShowDateModal(false); setAppointmentDate(d); }}
-                  onClose={() => setShowDateModal(false)}
-                />
-                <InlineTimePicker
-                  visible={showTimeModal}
-                  currentDate={appointmentDate}
-                  onConfirm={(d) => { setShowTimeModal(false); setAppointmentDate(d); }}
-                  onClose={() => setShowTimeModal(false)}
-                />
-
-                <View style={modalStyles.apptSummary}>
-                  <MaterialCommunityIcons name="calendar-check-outline" size={16} color={colors.primary} />
-                  <Text style={modalStyles.apptSummaryText}>{formatApptDate(appointmentDate)}</Text>
-                </View>
-
-                <Button
-                  variant="primary"
-                  onPress={() => onSubmitAppointment(
-                    { id: 'face_to_face_default', admin_id: '', method_type: 'face_to_face', display_name: 'Pay in Person', account_name: '', account_number: null, address: SUPPORT.address, location_lat: null, location_lng: null, instructions: null, qr_code_url: null, is_enabled: true, created_at: '', updated_at: '' } as AdminMtopPaymentMethod,
-                    appointmentDate
-                  )}
-                  loading={submitting}
-                  disabled={submitting || appointmentDate < minDate}
-                  style={modalStyles.submitBtn}
-                >
-                  Notify Admin — Confirm Visit
-                </Button>
-              </>
-            )
-            /* close loadingMethods ternary */
-            )}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Pickers rendered outside ScrollView to avoid nesting issues */}
-    </Modal>
-  );
-};
 
 export const FranchiseScreen = () => {
   const dispatch = useAppDispatch();
@@ -703,10 +95,6 @@ export const FranchiseScreen = () => {
   const [loadingTodas, setLoadingTodas] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [renewalMode, setRenewalMode] = useState(false);
-  const [paymentReference, setPaymentReference] = useState('');
-  const [paymentProof, setPaymentProof] = useState('');
-  const [submittingPayment, setSubmittingPayment] = useState(false);
-  const [showPayNow, setShowPayNow] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -981,51 +369,6 @@ export const FranchiseScreen = () => {
     && !myApplication.documents_verified_at;
 
   const allUploaded = docs.every((d) => d.uploaded);
-
-  const pickPaymentProof = async () => {
-    try { const image = await pickImageDataUri(); if (image) setPaymentProof(image); }
-    catch (error: any) { void notify('Could not use image', error?.message || 'Choose another screenshot.'); }
-  };
-
-  const handlePaymentSubmit = async (method: AdminMtopPaymentMethod) => {
-    if (!myApplication) return;
-    setSubmittingPayment(true);
-    try {
-      await dispatch(submitFranchisePayment({ id: myApplication.id, method: 'in_person', method_id: method.id, reference: paymentReference, proofUrl: paymentProof })).unwrap();
-      // Store the chosen method so the driver card and admin card show the right details.
-      void dispatch(patchApplication({ id: myApplication.id, patch: { chosen_payment_method_snapshot: method } as any }));
-      setPaymentReference(''); setPaymentProof('');
-      setShowPayNow(false);
-      await notify('Payment proof submitted', 'An administrator will verify the screenshot and reference before approving your MTOP.');
-    } catch (error: any) { await notify('Could not submit payment', typeof error === 'string' ? error : error?.message || 'Check the proof and reference.'); }
-    finally { setSubmittingPayment(false); }
-  };
-
-  const handleAppointmentSubmit = async (method: AdminMtopPaymentMethod, date: Date) => {
-    if (!myApplication) return;
-    setSubmittingPayment(true);
-    try {
-      await dispatch(
-        submitFaceToFaceAppointment({
-          id: myApplication.id,
-          appointmentDate: date.toISOString(),
-          driverName: myApplication.driver_name,
-          plate: myApplication.plate_number,
-        })
-      ).unwrap();
-      // Store the chosen method so the driver card and admin card show the right details.
-      void dispatch(patchApplication({ id: myApplication.id, patch: { chosen_payment_method_snapshot: method } as any }));
-      setShowPayNow(false);
-      await notify(
-        'Visit scheduled',
-        `Your appointment on ${date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} has been sent to the administrator.\n\nHead to ${SUPPORT.office}, ${SUPPORT.address} at the scheduled time with your payment ready.`
-      );
-    } catch (error: any) {
-      await notify('Could not schedule appointment', typeof error === 'string' ? error : error?.message || 'Please try again.');
-    } finally {
-      setSubmittingPayment(false);
-    }
-  };
 
   const handleSubmit = async (type: FranchiseType) => {
     const normalizedPlate = accountPlate;
@@ -1761,6 +1104,8 @@ export const FranchiseScreen = () => {
             </View>
           </Modal>
 
+          {user?.id ? <MtopPaymentRecords driverId={user.id} refreshKey={`${myApplication?.id}:${myApplication?.updated_at}`} /> : null}
+
           <Text style={styles.note}>
             Renew every year from January 1 to March 31. One missed year suspends the MTOP; three missed years terminate it. Each term lasts 3 years from the date issued.
           </Text>
@@ -1778,6 +1123,12 @@ export const FranchiseScreen = () => {
     const billedMethods: AdminMtopPaymentMethod[] =
       storedMethods.length > 0 ? storedMethods : livePaymentMethods;
     const isPaymentStep = myApplication!.status === 'payment';
+    const billingState = mtopBillingState(myApplication!);
+    const dueDate = mtopDueDate(myApplication!);
+    const billedAt = mtopBilledAt(myApplication!);
+    const billedOn = billedAt
+      ? new Date(billedAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+      : '—';
 
     return (
       <View style={styles.container}>
@@ -1821,7 +1172,7 @@ export const FranchiseScreen = () => {
                     {active && !isPaymentNode && (
                       <Text style={styles.stepHint}>In progress with FEDTODAB / LGU</Text>
                     )}
-                    {/* Pay Now button inline with step 3 */}
+                    {/* B2: payment is recorded by the office; the driver only sees the status */}
                     {active && isPaymentNode && (
                       <View style={styles.payNowRow}>
                         {pendingReview ? (
@@ -1830,23 +1181,13 @@ export const FranchiseScreen = () => {
                             <Text style={styles.payNowPendingText}>Proof under review</Text>
                           </View>
                         ) : (
-                          <>
-                            <Text style={styles.stepHint}>
-                              {myApplication!.payment_review_status === 'rejected'
-                                ? 'Proof was rejected — re-submit below.'
-                                : billedMethods.length > 0
-                                ? `${billedMethods.length} payment method${billedMethods.length !== 1 ? 's' : ''} available`
-                                : 'Pay at the FEDTODAB office.'}
-                            </Text>
-                            <TouchableOpacity
-                              style={styles.payNowBtn}
-                              onPress={() => setShowPayNow(true)}
-                              activeOpacity={0.85}
-                            >
-                              <MaterialCommunityIcons name="cash-fast" size={15} color="#fff" />
-                              <Text style={styles.payNowBtnText}>Pay Now</Text>
-                            </TouchableOpacity>
-                          </>
+                          <Text style={styles.stepHint}>
+                            {billingState === 'to_bill'
+                              ? 'Waiting for the billing statement from the office.'
+                              : billingState === 'overdue'
+                              ? 'Overdue — pay at the FEDTODAB office.'
+                              : 'Pay at the FEDTODAB office; the office records it.'}
+                          </Text>
                         )}
                       </View>
                     )}
@@ -1926,22 +1267,47 @@ export const FranchiseScreen = () => {
                     ₱{Number(myApplication!.fees).toFixed(2)} due
                   </Text>
                 </View>
-                {myApplication!.payment_review_status === 'pending_review' ? (
-                  <View style={styles.pendingChip}>
-                    <MaterialCommunityIcons name="clock-outline" size={13} color={colors.warning} />
-                    <Text style={styles.pendingChipText}>Under Review</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.payNowCardBtn}
-                    onPress={() => setShowPayNow(true)}
-                    activeOpacity={0.85}
+                <View
+                  style={[
+                    styles.pendingChip,
+                    billingState === 'overdue' && { backgroundColor: colors.errorLight },
+                    billingState === 'to_bill' && { backgroundColor: colors.surfaceAlt },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={billingState === 'overdue' ? 'alert-circle-outline' : 'clock-outline'}
+                    size={13}
+                    color={billingState === 'overdue' ? colors.error : billingState === 'to_bill' ? colors.textMuted : colors.warning}
+                  />
+                  <Text
+                    style={[
+                      styles.pendingChipText,
+                      billingState === 'overdue' && { color: colors.error },
+                      billingState === 'to_bill' && { color: colors.textMuted },
+                    ]}
                   >
-                    <MaterialCommunityIcons name="cash-fast" size={16} color="#fff" />
-                    <Text style={styles.payNowCardBtnText}>Pay Now</Text>
-                  </TouchableOpacity>
-                )}
+                    {billingState === 'for_verification' ? 'Under Review' : billingState === 'to_bill' ? 'Not Billed Yet' : billingState === 'overdue' ? 'Overdue' : 'Unpaid'}
+                  </Text>
+                </View>
               </View>
+
+              {/* ── Billing statement (read-only) ── */}
+              {billingState !== 'to_bill' ? (
+                <>
+                  <View style={styles.billedMethodsDivider} />
+                  <Text style={styles.billedMethodsLabel}>BILLING STATEMENT</Text>
+                  {[
+                    { label: 'Statement no.', value: myApplication!.billing_statement_no || '—' },
+                    { label: 'Billed on', value: billedOn },
+                    { label: 'Due by', value: formatLongDate(dueDate), alert: billingState === 'overdue' },
+                  ].map((line) => (
+                    <View key={line.label} style={styles.billedMethodRow}>
+                      <Text style={[styles.billedMethodDetail, { flex: 1, marginTop: 0 }]}>{line.label}</Text>
+                      <Text style={[styles.billedMethodName, line.alert && { color: colors.error }]}>{line.value}</Text>
+                    </View>
+                  ))}
+                </>
+              ) : null}
 
               {/* ── After proof submitted: show only the chosen method ── */}
               {myApplication!.payment_review_status === 'pending_review' && myApplication!.chosen_payment_method_snapshot ? (() => {
@@ -1975,8 +1341,8 @@ export const FranchiseScreen = () => {
                 );
               })() : null}
 
-              {/* ── Before submission: show the billed methods the admin picked ── */}
-              {(!myApplication!.payment_review_status || myApplication!.payment_review_status === 'awaiting_submission' || myApplication!.payment_review_status === 'rejected') ? (
+              {/* ── Once billed: how to pay (methods the admin put on the billing, read-only) ── */}
+              {billingState !== 'to_bill' && (!myApplication!.payment_review_status || myApplication!.payment_review_status === 'awaiting_submission' || myApplication!.payment_review_status === 'rejected') ? (
                 loadingLiveMethods ? (
                   <>
                     <View style={styles.billedMethodsDivider} />
@@ -1988,7 +1354,7 @@ export const FranchiseScreen = () => {
                 ) : billedMethods.length > 0 ? (
                   <>
                     <View style={styles.billedMethodsDivider} />
-                    <Text style={styles.billedMethodsLabel}>AVAILABLE PAYMENT METHODS</Text>
+                    <Text style={styles.billedMethodsLabel}>HOW TO PAY</Text>
                     {billedMethods.map((method) => {
                       const mColor = METHOD_COLOR[method.method_type] || colors.primary;
                       return (
@@ -2018,6 +1384,19 @@ export const FranchiseScreen = () => {
                 ) : null
               ) : null}
 
+              {myApplication!.payment_review_status !== 'pending_review' ? (
+                <View style={styles.pendingPaymentRow}>
+                  <MaterialCommunityIcons name="information-outline" size={18} color={colors.info} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.pendingPaymentRef}>
+                      {billingState === 'to_bill'
+                        ? 'The office will send your billing statement with the amount and due date. You will get a notification.'
+                        : `Pay at ${SUPPORT.office}${billedMethods.length > 0 ? ' or with a method above' : ''} and keep your official receipt. The office records your payment; there is nothing to upload here.`}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
               {myApplication!.payment_review_status === 'pending_review' ? (
                 <View style={styles.pendingPaymentRow}>
                   <MaterialCommunityIcons name="clock-check-outline" size={18} color={colors.warning} />
@@ -2031,23 +1410,10 @@ export const FranchiseScreen = () => {
               ) : null}
             </View>
           ) : null}
+
+          {user?.id ? <MtopPaymentRecords driverId={user.id} refreshKey={`${myApplication!.id}:${myApplication!.updated_at}`} /> : null}
         </ScrollView>
 
-        {/* Pay Now Modal */}
-        <PayNowModal
-          visible={showPayNow}
-          fees={myApplication!.fees}
-          paymentProof={paymentProof}
-          paymentReference={paymentReference}
-          submitting={submittingPayment}
-          paymentReviewStatus={myApplication!.payment_review_status}
-          paymentRejectionReason={myApplication!.payment_rejection_reason}
-          onPickProof={pickPaymentProof}
-          onChangeReference={setPaymentReference}
-          onSubmit={handlePaymentSubmit}
-          onSubmitAppointment={handleAppointmentSubmit}
-          onClose={() => setShowPayNow(false)}
-        />
       </View>
     );
   }
@@ -2738,26 +2104,9 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: colors.text 
   },
-  // ── Stepper: Pay Now row ──
+  // ── Stepper: payment status row ──
   payNowRow: {
     marginTop: 4,
-  },
-  payNowBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-  },
-  payNowBtnText: {
-    ...typography.labelSmall,
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
   },
   payNowPendingChip: {
     flexDirection: 'row',
@@ -2811,22 +2160,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 17,
     marginTop: 2,
-  },
-  payNowCardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    flexShrink: 0,
-  },
-  payNowCardBtnText: {
-    ...typography.labelSmall,
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
   },
   pendingChip: {
     flexDirection: 'row',
@@ -2915,359 +2248,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary,
     marginTop: 2,
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Styles for the Pay Now bottom-sheet modal
-// ─────────────────────────────────────────────────────────────────────────────
-const modalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  sheet: {
-    maxHeight: '92%',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-  },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  headIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  headTitle: { ...typography.h2, fontSize: 19 },
-  headSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
-  headFee: { ...typography.label, color: colors.primary },
-  closeBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: {
-    padding: spacing.lg,
-    paddingBottom: 56,
-  },
-  // Rejection banner
-  rejectedBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    backgroundColor: colors.errorLight,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  rejectedText: {
-    ...typography.bodySmall,
-    color: colors.error,
-    flex: 1,
-    lineHeight: 18,
-  },
-  // Section labels
-  sectionLabel: {
-    ...typography.labelSmall,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  sectionHint: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
-  },
-  // Method cards
-  methodCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1.5,
-    borderColor: colors.borderLight,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 3,
-    flexShrink: 0,
-  },
-  radioDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  methodIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  methodInfo: { flex: 1, minWidth: 0 },
-  methodTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-    marginBottom: 2,
-  },
-  methodName: { ...typography.label, fontSize: 15, color: colors.text },
-  methodBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  methodBadgeText: { ...typography.labelSmall, fontSize: 10 },
-  methodHolder: { ...typography.bodySmall, color: colors.textSecondary },
-  methodNumber: { ...typography.label, marginTop: 3 },
-  methodAddressRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 4,
-    marginTop: 3,
-  },
-  methodAddress: { ...typography.bodySmall, color: colors.textMuted, flex: 1 },
-  methodNote: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  qrCode: {
-    width: '100%',
-    height: 180,
-    borderRadius: radius.md,
-    marginTop: spacing.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  // Fallback when no billing methods set
-  fallbackBox: {
-    alignItems: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  fallbackTitle: { ...typography.label, color: colors.text, fontSize: 15 },
-  fallbackText: { ...typography.label, color: colors.textSecondary },
-  fallbackAddress: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center' },
-  // Divider
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginVertical: spacing.lg,
-  },
-  // Proof picker
-  proofPicker: {
-    minHeight: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primaryLight,
-    overflow: 'hidden',
-    marginBottom: spacing.sm,
-  },
-  proofImage: {
-    width: '100%',
-    height: 170,
-  },
-  proofPickerText: {
-    ...typography.label,
-    color: colors.primary,
-    marginTop: spacing.sm,
-  },
-  replaceProof: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  replaceProofText: { ...typography.labelSmall, color: colors.accent, fontWeight: '700' },
-  // Reference input
-  refInput: {
-    ...typography.body,
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.md,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  submitBtn: {
-    marginTop: spacing.xs,
-  },
-  // ── Inline expanded action panel (renders under selected method card) ──
-  expandedAction: {
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
-    padding: spacing.md,
-    borderWidth: 1.5,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
-    backgroundColor: colors.surface,
-  },
-  expandedTitle: {
-    ...typography.label,
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  expandedHint: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
-    lineHeight: 18,
-  },
-  // ── Method detail box (shown after selection) ──
-  methodDetailBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-    borderWidth: 1.5,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.lg,
-  },
-  methodDetailIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  methodDetailName: {
-    ...typography.label,
-    fontSize: 15,
-    marginBottom: 2,
-  },
-  methodDetailHolder: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-  },
-  methodDetailNumber: {
-    ...typography.label,
-    marginTop: 3,
-    fontSize: 15,
-  },
-  methodDetailAddress: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  methodDetailNote: {
-    ...typography.bodySmall,
-    color: colors.textMuted,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  // ── QR full block ──
-  qrFullBox: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  qrLabel: {
-    ...typography.labelSmall,
-    color: colors.textMuted,
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-  },
-  qrFull: {
-    width: 200,
-    height: 200,
-    borderRadius: radius.md,
-  },
-  // ── Date/time picker buttons ──
-  datePickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 60,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  datePickerLabel: {
-    ...typography.labelSmall,
-    color: colors.textMuted,
-    fontSize: 10,
-    letterSpacing: 0.5,
-  },
-  datePickerValue: {
-    ...typography.label,
-    color: colors.text,
-    fontSize: 15,
-    marginTop: 1,
-  },
-  // ── Appointment confirmation summary ──
-  apptSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  apptSummaryText: {
-    ...typography.label,
-    color: colors.primary,
-    flex: 1,
-  },
-  // ── "Select a method first" prompt ──
-  selectPrompt: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.xl,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.lg,
-    marginTop: spacing.lg,
-  },
-  selectPromptText: {
-    ...typography.body,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
 });
 
