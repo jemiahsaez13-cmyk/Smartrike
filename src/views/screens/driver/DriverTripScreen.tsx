@@ -33,6 +33,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 import { DiscountIdCheck } from '@/views/components/booking/DiscountIdCheck';
+import { DriverDropoffChangePrompt } from '@/views/components/booking/DriverDropoffChangePrompt';
 
 const { height } = Dimensions.get('window');
 const userRepo = new UserRepository();
@@ -399,6 +400,12 @@ export const DriverTripScreen = () => {
       {/* Bottom panel */}
       <Animated.ScrollView style={[styles.panel, { transform: [{ translateY: slideAnim }] }]} contentContainerStyle={styles.panelContent} showsVerticalScrollIndicator={false}>
         <View style={styles.handle} />
+
+        {/* D7: passenger asked for a new drop-off → Accept / Decline. */}
+        <DriverDropoffChangePrompt
+          booking={currentBooking}
+          onBookingChanged={(booking) => dispatch(updateCurrentTrip(booking))}
+        />
 
         {/* Passenger info */}
         <View style={styles.passengerRow}>

@@ -55,3 +55,32 @@ export interface Rating {
   comment: string;
   created_at: Date;
 }
+
+/**
+ * A passenger's request to change the drop-off during the ride (D7,
+ * migration 087). Also the audit of the original drop-off and fare.
+ * Only an accepted request changes the booking.
+ */
+export type BookingRouteChangeStatus = 'pending' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+export interface BookingRouteChange {
+  id: string;
+  booking_id: string;
+  requested_by: string | null;
+  booking_status: BookingStatus;
+  old_dropoff_location: Location;
+  old_distance: number | null;
+  old_total_fare: number;
+  old_discount_amount: number;
+  new_dropoff_location: Location;
+  new_distance: number;
+  new_total_fare: number;
+  new_discount_amount: number;
+  new_estimated_duration: number | null;
+  via_location: { latitude: number; longitude: number } | null;
+  status: BookingRouteChangeStatus;
+  decline_reason: string | null;
+  requested_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+}

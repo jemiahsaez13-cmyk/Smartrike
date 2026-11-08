@@ -15,6 +15,7 @@ import { supabase } from '@/config/supabase';
 import { Booking, BookingStatus } from '@/models/types';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
+import { RouteChangeHistory } from '@/views/components/booking/RouteChangeHistory';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -443,6 +444,8 @@ const BookingCard = ({ booking: b, expanded, onToggle }: BookingCardProps) => {
               </Text>
             </View>
           ) : null}
+
+          <RouteChangeHistory bookingId={b.id} />
         </View>
       )}
     </Card>

@@ -72,6 +72,56 @@ const simulateDriverMatch = (bookingId: string) => {
 };
 
 // ---------------------------------------------------------------------------
+// D7 drop-off change (mirrors migration 087)
+// ---------------------------------------------------------------------------
+const kmBetween = (a: any, b: any) => {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.latitude - a.latitude) / 2) ** 2
+    + Math.cos(r(a.latitude)) * Math.cos(r(b.latitude)) * Math.sin(r(b.longitude - a.longitude) / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(h));
+};
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const routeChangeFare = (booking: Row, distance: number) => {
+  const km = Math.max(1, Math.ceil(distance || 0));
+  let route = round2((Number(booking.base_fare ?? 120) + (km - 1) * Number(booking.per_km_rate ?? 10)) * Number(booking.peak_hour_multiplier ?? 1));
+  if (booking.ride_type === 'priority') route += Math.max(12, route * 0.15);
+  const count = Math.min(5, Math.max(1, Number(booking.passenger_count ?? 1)));
+  const discount = round2(round2(route) * Number(booking.discount_pct ?? 0) / 100);
+  return { total_fare: round2(route * count - discount), discount_amount: discount, estimated_duration: Math.ceil((distance / 30) * 60) };
+};
+const notifyMock = (userId: string | null, title: string, body: string, bookingId: string) => {
+  if (!userId) return;
+  if (!db.notifications) db.notifications = [];
+  db.notifications.unshift({ id: genId('notifications'), user_id: userId, type: 'booking_update', title, body, booking_id: bookingId, read: false, created_at: new Date().toISOString() });
+};
+const paymentSent = (booking: Row) =>
+  booking.payment_status === 'completed'
+  || (db.ride_payment_submissions ?? []).some((p) => p.booking_id === booking.id && ['pending', 'verified'].includes(p.status));
+const applyRouteChange = (change: Row, booking: Row, driverId: string | null) => {
+  const fare = routeChangeFare(booking, Number(change.new_distance));
+  Object.assign(change, {
+    status: 'accepted', old_total_fare: booking.total_fare, old_discount_amount: booking.discount_amount ?? 0,
+    new_total_fare: fare.total_fare, new_discount_amount: fare.discount_amount, new_estimated_duration: fare.estimated_duration,
+    decided_at: new Date().toISOString(), decided_by: driverId,
+  });
+  Object.assign(booking, {
+    dropoff_location: change.new_dropoff_location, distance: change.new_distance,
+    estimated_duration: fare.estimated_duration, discount_amount: fare.discount_amount, total_fare: fare.total_fare,
+  });
+  notifyMock(booking.passenger_id, 'Drop-off changed', `Your driver accepted the new drop-off: ${booking.dropoff_location?.address || 'pinned on the map'}. New fare ₱${Number(booking.total_fare).toFixed(2)}.`, booking.id);
+  emitToChannel(`booking-${booking.id}`, { eventType: 'UPDATE', schema: 'public', table: 'bookings', new: clone(booking), old: clone(booking) });
+};
+// Offline there is no second phone, so the demo driver answers by itself.
+const simulateDriverRouteAnswer = (changeId: string) => {
+  setTimeout(() => {
+    const change = (db.booking_route_changes ?? []).find((c) => c.id === changeId);
+    const booking = change && db.bookings.find((b) => b.id === change.booking_id);
+    if (!change || !booking || change.status !== 'pending' || !['accepted', 'in-transit'].includes(booking.status) || paymentSent(booking)) return;
+    applyRouteChange(change, booking, booking.driver_id);
+  }, 6000);
+};
+
+// ---------------------------------------------------------------------------
 // Query builder
 // ---------------------------------------------------------------------------
 class QueryBuilder implements PromiseLike<Result> {
@@ -530,6 +580,10 @@ export const mockSupabase: any = {
       if (existing && ['pending', 'verified'].includes(existing.status)) {
         return { data: null, error: { message: 'A payment has already been submitted for this ride.' } };
       }
+      // Mirrors migration 087: pay only after the driver answered a drop-off change.
+      if ((db.booking_route_changes ?? []).some((c) => c.booking_id === booking.id && c.status === 'pending')) {
+        return { data: null, error: { message: 'Your driver has not answered your drop-off change yet. Wait for the answer, or withdraw the request, so you pay the right fare.' } };
+      }
       const row = existing ?? { id: genId('ride_payment_submissions'), booking_id: booking.id, created_at: new Date().toISOString() };
       Object.assign(row, {
         passenger_id: booking.passenger_id, driver_id: booking.driver_id,
@@ -638,6 +692,69 @@ export const mockSupabase: any = {
       else Object.assign(app, { payment_review_status: 'rejected', payment_rejection_reason: params.p_reason });
       verifyDriverForMtop(app);
       return { data: [clone(app)], error: null };
+    }
+    if (fn === 'request_dropoff_change') {
+      const me = currentProfile();
+      const booking = db.bookings.find((b) => b.id === params?.p_booking_id);
+      const fail = (message: string) => ({ data: null, error: { message } });
+      if (!booking || !me || booking.passenger_id !== me.id) return fail('Booking not found.');
+      if (!['accepted', 'in-transit'].includes(booking.status) || !booking.driver_id) return fail('The drop-off can only be changed while your driver is on the way or during the ride.');
+      if (paymentSent(booking)) return fail('A payment was already sent for this ride, so the drop-off and fare can no longer change. Ask your driver directly.');
+      if (!db.booking_route_changes) db.booking_route_changes = [];
+      const mine = db.booking_route_changes.filter((c) => c.booking_id === booking.id);
+      if (mine.some((c) => c.status === 'pending')) return fail('Your driver has not answered your last drop-off change yet. Wait for it, or withdraw it first.');
+      if (mine.length >= 5) return fail('You have reached the limit of 5 drop-off changes for this ride. Talk to your driver.');
+      const loc = params?.p_location ?? {};
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail('Choose a valid drop-off on the map.');
+      const next = { latitude: lat, longitude: lng, address: String(loc.address || 'Pinned destination').slice(0, 300), ...(loc.details ? { details: String(loc.details).slice(0, 120) } : {}) };
+      if (kmBetween(booking.dropoff_location, next) < 0.05) return fail('That is the same drop-off as now. Choose a different place.');
+      const driverAt = booking.status === 'in-transit' ? (db.driver_locations ?? []).find((d) => d.driver_id === booking.driver_id) : null;
+      const via = driverAt ? { latitude: Number(driverAt.latitude), longitude: Number(driverAt.longitude) } : null;
+      const straight = via ? kmBetween(booking.pickup_location, via) + kmBetween(via, next) : kmBetween(booking.pickup_location, next);
+      let distance = Number(params?.p_distance);
+      if (!Number.isFinite(distance) || distance < straight * 0.95 || distance > straight * 3 + 2) distance = straight;
+      distance = round2(distance);
+      const fare = routeChangeFare(booking, distance);
+      const change = {
+        id: genId('booking_route_changes'), booking_id: booking.id, requested_by: me.id, booking_status: booking.status,
+        old_dropoff_location: clone(booking.dropoff_location), old_distance: booking.distance, old_total_fare: booking.total_fare,
+        old_discount_amount: booking.discount_amount ?? 0, new_dropoff_location: next, new_distance: distance,
+        new_total_fare: fare.total_fare, new_discount_amount: fare.discount_amount, new_estimated_duration: fare.estimated_duration,
+        via_location: via, status: 'pending', decline_reason: null, requested_at: new Date().toISOString(), decided_at: null, decided_by: null,
+      };
+      db.booking_route_changes.push(change);
+      notifyMock(booking.driver_id, 'Passenger wants a new drop-off', `New drop-off: ${next.address}. New fare ₱${fare.total_fare.toFixed(2)} (was ₱${Number(booking.total_fare).toFixed(2)}). Open the trip to accept or decline.`, booking.id);
+      simulateDriverRouteAnswer(change.id);
+      return { data: clone(change), error: null };
+    }
+    if (fn === 'respond_dropoff_change') {
+      const me = currentProfile();
+      const change = (db.booking_route_changes ?? []).find((c) => c.id === params?.p_change_id);
+      const booking = change && db.bookings.find((b) => b.id === change.booking_id);
+      if (!change || !booking || !me || booking.driver_id !== me.id) return { data: null, error: { message: 'Drop-off change not found.' } };
+      if (change.status !== 'pending') return { data: null, error: { message: `This drop-off change was already ${change.status === 'cancelled' ? 'withdrawn by the passenger' : change.status}.` } };
+      if (!params?.p_accept) {
+        const reason = String(params?.p_reason ?? '').trim().slice(0, 300) || null;
+        Object.assign(change, { status: 'declined', decline_reason: reason, decided_at: new Date().toISOString(), decided_by: me.id });
+        notifyMock(booking.passenger_id, 'Drop-off change declined', `Your driver kept the original drop-off${reason ? ` (${reason})` : ''}. Fare stays ₱${Number(booking.total_fare).toFixed(2)}.`, booking.id);
+        return { data: clone(booking), error: null };
+      }
+      if (!['accepted', 'in-transit'].includes(booking.status)) return { data: null, error: { message: 'This ride is no longer in progress.' } };
+      if (paymentSent(booking)) return { data: null, error: { message: 'A payment was already sent for this ride, so the fare can no longer change. Decline the request and agree on it with the passenger.' } };
+      applyRouteChange(change, booking, me.id);
+      return { data: clone(booking), error: null };
+    }
+    if (fn === 'cancel_dropoff_change') {
+      const me = currentProfile();
+      const change = (db.booking_route_changes ?? []).find((c) => c.id === params?.p_change_id);
+      const booking = change && db.bookings.find((b) => b.id === change.booking_id);
+      if (!change || !booking || !me || booking.passenger_id !== me.id) return { data: null, error: { message: 'Drop-off change not found.' } };
+      if (change.status !== 'pending') return { data: null, error: { message: 'Your driver already answered this drop-off change.' } };
+      Object.assign(change, { status: 'cancelled', decided_at: new Date().toISOString(), decided_by: me.id });
+      notifyMock(booking.driver_id, 'Drop-off change withdrawn', 'The passenger kept the original drop-off.', booking.id);
+      return { data: clone(change), error: null };
     }
     return { data: [], error: null };
   },

@@ -42,6 +42,7 @@ import { PassengerRidePaymentModal } from '@/views/components/payment/PassengerR
 import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
+import { PassengerDropoffChange } from '@/views/components/booking/PassengerDropoffChange';
 
 const { height } = Dimensions.get('window');
 const realtimeService = new RealtimeService();
@@ -806,6 +807,14 @@ export const ActiveTripScreen = () => {
             </View>
           </View>
         </View>
+
+        {/* D7: ask the driver for a new drop-off (driver accepts or declines). */}
+        <PassengerDropoffChange
+          booking={currentBooking}
+          driverPosition={driverCoords}
+          locked={paidViaEMoney || currentBooking.payment_status === 'completed' || paymentReviewStatus === 'pending' || paymentReviewStatus === 'verified'}
+          onAccepted={refresh}
+        />
 
         {/* The driver marks the trip complete; the passenger just waits and is
             prompted to rate afterwards. Before pickup the passenger may cancel. */}
