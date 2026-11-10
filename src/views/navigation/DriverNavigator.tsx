@@ -40,6 +40,11 @@ const DriverTabs = () => (
       options={{ tabBarLabel: 'Trips', tabBarIcon: tabIcon('clipboard-list', 'clipboard-list-outline') }}
     />
     <Tab.Screen
+      name="Earnings"
+      component={EarningsScreen}
+      options={{ tabBarLabel: 'Earnings', tabBarIcon: tabIcon('chart-bar', 'chart-bar') }}
+    />
+    <Tab.Screen
       name="Franchise"
       component={FranchiseScreen}
       options={{ tabBarLabel: 'MTOP', tabBarIcon: tabIcon('card-account-details', 'card-account-details-outline') }}
@@ -59,7 +64,6 @@ export const DriverNavigator = () => (
     <Stack.Screen name="DriverTrip" component={DriverTripScreen} />
     <Stack.Screen name="Inbox" component={InboxScreen} />
     <Stack.Screen name="Chat" component={ChatScreen} />
-    <Stack.Screen name="Earnings" component={EarningsScreen} />
     <Stack.Screen name="EMoneyWallet" component={EMoneyWalletScreen} />
     <Stack.Screen name="Notifications" component={NotificationsScreen} />
     <Stack.Screen name="Settings" component={SettingsScreen} />

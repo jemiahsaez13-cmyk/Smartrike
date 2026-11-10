@@ -102,6 +102,36 @@ export class BookingRepository {
     return data;
   }
 
+  /**
+   * Completed-trip fares since an instant, oldest first (B8 income chart).
+   * Only the two columns the chart needs; paged past the 1000-row API cap.
+   */
+  async findCompletedFaresSince(
+    driverId: string,
+    sinceIso: string
+  ): Promise<Array<{ completed_at: string; total_fare: number }>> {
+    const PAGE = 1000;
+    const rows: Array<{ completed_at: string; total_fare: number }> = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id, completed_at, total_fare')
+        .eq('driver_id', driverId)
+        .eq('status', 'completed')
+        .gte('completed_at', sinceIso)
+        .order('completed_at', { ascending: true })
+        .order('id', { ascending: true }) // stable paging when times tie
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      const page = (data ?? []) as Array<{ completed_at: string | null; total_fare: number | string | null }>;
+      for (const row of page) {
+        if (row.completed_at) rows.push({ completed_at: row.completed_at, total_fare: Number(row.total_fare) || 0 });
+      }
+      if (page.length < PAGE) break;
+    }
+    return rows;
+  }
+
   async submitRating(
     id: string,
     rating: Rating,

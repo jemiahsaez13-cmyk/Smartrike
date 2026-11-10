@@ -35,6 +35,7 @@ import { MtopRecordPaymentModal, RecordPaymentInput } from '@/views/components/p
 import { AdminMtopPaymentMethod } from '@/models/entities/AdminMtopPaymentMethod';
 import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { TodaService } from '@/models/services/TodaService';
+import { MtopIncomePanel } from '@/views/components/admin/MtopIncomePanel';
 
 const todaService = new TodaService();
 const franchiseService = new FranchiseService();
@@ -111,14 +112,16 @@ const initialOf = (name?: string | null) => (name || '?').trim().charAt(0).toUpp
 
 // Segmented filter tab with a count badge. `alert` turns a non-zero count red
 // for requests waiting on the admin.
-const FilterChip = ({ label, count, active, onPress, alert = false }: { label: string; count: number; active: boolean; onPress: () => void; alert?: boolean }) => {
-  const urgent = alert && count > 0;
+const FilterChip = ({ label, count, active, onPress, alert = false }: { label: string; count?: number; active: boolean; onPress: () => void; alert?: boolean }) => {
+  const urgent = alert && (count ?? 0) > 0;
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={[styles.chip, active && styles.chipActive]}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75} style={[styles.chip, active && styles.chipActive, count == null && { paddingRight: 14 }]}>
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-      <View style={[styles.chipCount, active && styles.chipCountActive, urgent && styles.chipCountUrgent]}>
-        <Text style={[styles.chipCountText, active && styles.chipCountTextActive, urgent && styles.chipCountTextUrgent]}>{count}</Text>
-      </View>
+      {count != null ? (
+        <View style={[styles.chipCount, active && styles.chipCountActive, urgent && styles.chipCountUrgent]}>
+          <Text style={[styles.chipCountText, active && styles.chipCountTextActive, urgent && styles.chipCountTextUrgent]}>{count}</Text>
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 };
@@ -197,7 +200,7 @@ export const FranchiseManagementScreen = () => {
   // B13: one place for every request type. Change of Unit and Succession
   // filters show only those requests (third-party transfers and terminations
   // are recorded directly by the admin in the Registry, not requested).
-  const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'cou' | 'succession' | 'issued'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'cou' | 'succession' | 'issued' | 'income'>('all');
   const [successionRequests, setSuccessionRequests] = useState<SuccessionRequest[]>([]);
   // Derive the document-review modal target from the store so it auto-updates.
   const [reviewAppId, setReviewAppId] = useState<string | null>(null);
@@ -557,7 +560,9 @@ export const FranchiseManagementScreen = () => {
   // All issued franchises that have a pending COU request.
   const pendingCouApps = applications.filter((a) => a.cou_status === 'pending');
 
-  const requestFilter = filter === 'cou' || filter === 'succession';
+  // B8: the Income chip swaps the work queue for the MTOP income graph.
+  const incomeView = filter === 'income';
+  const requestFilter = filter === 'cou' || filter === 'succession' || incomeView;
   const filtered = applications.filter((a) => {
     if (requestFilter) return false;
     if (filter === 'pending') return a.status !== 'issued' && a.status !== 'rejected';
@@ -659,9 +664,12 @@ export const FranchiseManagementScreen = () => {
           <FilterChip label="Change of Unit" count={pendingCouApps.length} active={filter === 'cou'} onPress={() => setFilter('cou')} alert />
           <FilterChip label="Succession" count={successionRequests.length} active={filter === 'succession'} onPress={() => setFilter('succession')} alert />
           <FilterChip label="Issued" count={counts.issued} active={filter === 'issued'} onPress={() => setFilter('issued')} />
+          <FilterChip label="Income" active={incomeView} onPress={() => setFilter('income')} />
         </ScrollView>
 
         <View style={styles.body}>
+          {incomeView ? <MtopIncomePanel refreshKey={applications} /> : null}
+
           {/* ── Succession requests (B13 overview; reviewed in the Registry) ── */}
           {(filter === 'all' || filter === 'succession') && successionRequests.length > 0 ? (
             <View style={styles.section}>
@@ -704,7 +712,7 @@ export const FranchiseManagementScreen = () => {
             </View>
           ) : null}
 
-          {requestFilter && (filter === 'cou' ? pendingCouApps.length === 0 : successionRequests.length === 0) ? (
+          {requestFilter && !incomeView && (filter === 'cou' ? pendingCouApps.length === 0 : successionRequests.length === 0) ? (
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
                 <MaterialCommunityIcons name="inbox-outline" size={34} color={colors.primary} />
@@ -717,7 +725,7 @@ export const FranchiseManagementScreen = () => {
           ) : null}
 
           {/* ── Change of Unit Pending Requests ── */}
-          {filter !== 'succession' && pendingCouApps.length > 0 ? (
+          {filter !== 'succession' && !incomeView && pendingCouApps.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={[styles.sectionIcon, { backgroundColor: colors.warningLight }]}>
@@ -1565,12 +1573,11 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 110 },
 
   // ── Header ──
+  // Same flat header as the Command Center (no rounded bottom).
   header: {
     paddingHorizontal: spacing.screen,
     paddingTop: 40,
-    paddingBottom: 56,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingBottom: spacing.xl,
   },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   headerEyebrow: {
@@ -1600,7 +1607,7 @@ const styles = StyleSheet.create({
   statsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: -36,
+    marginTop: -20,
     marginHorizontal: spacing.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,

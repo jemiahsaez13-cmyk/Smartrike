@@ -10,6 +10,7 @@ import { ActivityLogService } from '@/models/services/ActivityLogService';
 import { ActivityLog } from '@/models/entities/ActivityLog';
 import { FranchiseService } from '@/models/services/FranchiseService';
 import { FranchiseApplication } from '@/models/entities/Franchise';
+import { MtopRevenueService } from '@/models/services/MtopRevenueService';
 import { colors, gradients, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 import { useAppSelector } from '@/controllers/store';
@@ -53,6 +54,8 @@ export const AdminDashboard = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [fare, setFare] = useState<FareMatrix | null>(null);
   const [openReports, setOpenReports] = useState(0);
+  // B8: the office's revenue is the MTOP fees it collected (trip fares are the drivers').
+  const [mtopRevenue, setMtopRevenue] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Franchise alert state
   const [expiringFranchises, setExpiringFranchises] = useState<FranchiseApplication[]>([]);
@@ -74,6 +77,12 @@ export const AdminDashboard = () => {
       setLogs(l);
       setFare(f);
       setOpenReports(r);
+
+      try {
+        setMtopRevenue(MtopRevenueService.total(await MtopRevenueService.getRevenue()));
+      } catch {
+        // Non-fatal — the card shows a dash
+      }
 
       // Franchise alerts — load registry and compute summary + expiring soon
       try {
@@ -119,7 +128,7 @@ export const AdminDashboard = () => {
   };
 
   const kpiData = [
-    { id: '1', title: 'Total Revenue', value: stats ? peso(stats.revenue) : '—', icon: 'cash-multiple' },
+    { id: '1', title: 'Total Revenue', value: mtopRevenue != null ? peso(mtopRevenue) : '—', icon: 'cash-multiple', route: 'RevenueDetails' },
     { id: '2', title: 'Active Drivers', value: stats ? `${stats.activeDrivers}` : '—', icon: 'car-hatchback' },
     { id: '3', title: 'Completed Trips', value: stats ? `${stats.completedTrips}` : '—', icon: 'check-circle-outline' },
     { id: '4', title: 'Total Users', value: stats ? `${stats.totalUsers}` : '—', icon: 'account-group-outline' },
@@ -156,17 +165,31 @@ export const AdminDashboard = () => {
   const weekLabels = analytics?.labels.Weekly ?? [];
   const maxBar = Math.max(1, ...weekBars);
 
-  const KPICard = ({ item }: { item: typeof kpiData[0] }) => (
-    <Card variant="elevated" padding="md" style={styles.kpiCard}>
-      <View style={styles.kpiHeader}>
-        <View style={styles.iconBox}>
-          <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
+  const KPICard = ({ item }: { item: typeof kpiData[0] }) => {
+    const card = (
+      <Card variant="elevated" padding="md" style={styles.kpiCard}>
+        <View style={styles.kpiHeader}>
+          <View style={styles.iconBox}>
+            <MaterialCommunityIcons name={item.icon as any} size={20} color={colors.primary} />
+          </View>
+          {item.route ? <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} /> : null}
         </View>
-      </View>
-      <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
-      <Text style={styles.kpiTitle}>{item.title}</Text>
-    </Card>
-  );
+        <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
+        <Text style={styles.kpiTitle}>{item.title}</Text>
+      </Card>
+    );
+    // Total Revenue opens the list of every fee collected.
+    return item.route ? (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => navigation.navigate(item.route)}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title} ${item.value}, see details`}
+      >
+        {card}
+      </TouchableOpacity>
+    ) : card;
+  };
 
   return (
     <View style={styles.container}>

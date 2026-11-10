@@ -24,6 +24,7 @@ import { FranchiseRegistryScreen } from '@/views/screens/admin/FranchiseRegistry
 import { ManagementReportsScreen } from '@/views/screens/admin/ManagementReportsScreen';
 import { RidePaymentManagementScreen } from '@/views/screens/admin/RidePaymentManagementScreen';
 import { MtopBillingScreen } from '@/views/screens/admin/MtopBillingScreen';
+import { RevenueDetailsScreen } from '@/views/screens/admin/RevenueDetailsScreen';
 import { AdminMtopPaymentSettingsScreen } from '@/views/screens/admin/AdminMtopPaymentSettingsScreen';
 import { AdminAnnouncementScreen } from '@/views/screens/admin/AdminAnnouncementScreen';
 import { BookingMonitoringScreen } from '@/views/screens/admin/BookingMonitoringScreen';
@@ -102,6 +103,7 @@ export const AdminNavigator = () => (
     <Stack.Screen name="ManagementReports" component={ManagementReportsScreen} />
     <Stack.Screen name="RidePaymentManagement" component={RidePaymentManagementScreen} />
     <Stack.Screen name="MtopBilling" component={MtopBillingScreen} />
+    <Stack.Screen name="RevenueDetails" component={RevenueDetailsScreen} />
     <Stack.Screen name="AdminMtopPaymentSettings" component={AdminMtopPaymentSettingsScreen} />
     <Stack.Screen name="ViolationManagement" component={ReportsAndViolationsScreen} />
     <Stack.Screen name="Announcements" component={AdminAnnouncementScreen} />

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   ScrollView,
@@ -9,7 +9,7 @@ import {
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAppSelector } from '@/controllers/store';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { Booking } from '@/models/types';
@@ -19,6 +19,8 @@ import { colors, gradients, layout, radius, shadows, spacing, typography } from 
 import { formatDate, formatTime, getWeekRange, getMonthRange, isTodayPHT } from '@/utils/dateUtils';
 import { DailyGoalCard } from '@/views/components/driver/DailyGoalCard';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
+import { IncomeChart } from '@/views/components/common/IncomeChart';
+import { IncomeEntry, incomeHistoryStart } from '@/utils/incomeUtils';
 
 type Period = 'today' | 'week' | 'month' | 'all';
 
@@ -30,12 +32,14 @@ const PERIODS: { key: Period; label: string }[] = [
 ];
 
 export const EarningsScreen = () => {
-  const navigation = useNavigation<any>();
   const { user } = useAppSelector(state => state.auth);
 
   const [loading, setLoading] = useState(true);
   const [allTrips, setAllTrips] = useState<Booking[]>([]);
   const [period, setPeriod] = useState<Period>('today');
+  // B8: every completed fare of the last 5 years, for the day/month/year chart.
+  const [fares, setFares] = useState<Array<{ completed_at: string; total_fare: number }>>([]);
+  const loadedOnce = useRef(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -45,23 +49,30 @@ export const EarningsScreen = () => {
       Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 30, friction: 8, useNativeDriver: true }),
     ]).start();
+  }, []);
 
-    if (user?.id) loadTrips();
+  const loadTrips = useCallback(async () => {
+    if (!user?.id) return;
+    // Full-screen loader only the first time; tab revisits refresh quietly.
+    if (!loadedOnce.current) setLoading(true);
+    const repo = new BookingRepository();
+    const [trips, history] = await Promise.allSettled([
+      repo.findByDriver(user.id, 200),
+      repo.findCompletedFaresSince(user.id, incomeHistoryStart()),
+    ]);
+    setAllTrips(trips.status === 'fulfilled' ? trips.value.filter(b => b.status === 'completed') : []);
+    setFares(history.status === 'fulfilled' ? history.value : []);
+    loadedOnce.current = true;
+    setLoading(false);
   }, [user?.id]);
 
-  const loadTrips = async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    try {
-      const repo = new BookingRepository();
-      const data = await repo.findByDriver(user.id, 200);
-      setAllTrips(data.filter(b => b.status === 'completed'));
-    } catch {
-      setAllTrips([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // This is a bottom tab now, so it stays mounted: reload on every visit.
+  useFocusEffect(useCallback(() => { void loadTrips(); }, [loadTrips]));
+
+  const incomeEntries = useMemo<IncomeEntry[]>(
+    () => fares.map(f => ({ at: f.completed_at, amount: f.total_fare })),
+    [fares]
+  );
 
   const filterTrips = (trips: Booking[], p: Period): Booking[] => {
     const now = new Date();
@@ -92,9 +103,6 @@ export const EarningsScreen = () => {
       <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         {/* Header */}
         <LinearGradient colors={gradients.brand} style={styles.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="chevron-left" size={24} color="#fff" />
-          </TouchableOpacity>
           <Text style={styles.headerTitle}>Earnings</Text>
 
           <Card variant="elevated" padding="lg" style={styles.earningsSummary}>
@@ -114,6 +122,10 @@ export const EarningsScreen = () => {
         >
           {/* Daily goal */}
           <DailyGoalCard earnings={todayEarnings} style={styles.goalCard} />
+
+          {/* Income per day / month / year, compared with the period before */}
+          <Text style={styles.sectionLabel}>INCOME COMPARISON</Text>
+          <IncomeChart entries={incomeEntries} countNoun="trip" style={styles.goalCard} />
 
           {/* Period filter */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
@@ -190,15 +202,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screen,
     paddingBottom: 80,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
   headerTitle: {
     ...typography.h1,
     color: '#fff',
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: spacing.screen,
     paddingTop: 64,
-    paddingBottom: 40,
+    paddingBottom: 110, // clears the floating tab bar
   },
   goalCard: { marginBottom: 24 },
   filterRow: { marginBottom: 24 },
