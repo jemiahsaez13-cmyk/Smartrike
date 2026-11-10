@@ -16,6 +16,7 @@ import { Booking, BookingStatus } from '@/models/types';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
 import { Card } from '@/views/components/common/Card';
 import { RouteChangeHistory } from '@/views/components/booking/RouteChangeHistory';
+import { baggageSummary } from '@/config/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -417,6 +418,7 @@ const BookingCard = ({ booking: b, expanded, onToggle }: BookingCardProps) => {
           <View style={styles.tripMetaRow}>
             <MetaChip icon="map-marker-distance" label={`${Number(b.distance).toFixed(1)} km`} />
             <MetaChip icon="account-group-outline" label={`${b.passenger_count} pax`} />
+            {baggageSummary(b) ? <MetaChip icon="bag-suitcase-outline" label={baggageSummary(b)!} /> : null}
             <MetaChip icon="star-outline" label={b.ride_type} />
           </View>
 

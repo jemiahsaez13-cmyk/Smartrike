@@ -756,6 +756,30 @@ export const mockSupabase: any = {
       notifyMock(booking.driver_id, 'Drop-off change withdrawn', 'The passenger kept the original drop-off.', booking.id);
       return { data: clone(change), error: null };
     }
+    // 089: the accepting driver approves or rejects the physical ID (senior / PWD / student).
+    if (fn === 'review_booking_discount') {
+      const me = currentProfile();
+      const booking = db.bookings.find((b) => b.id === params?.p_booking_id);
+      const fail = (message: string) => ({ data: null, error: { message } });
+      if (!booking || !me || booking.driver_id !== me.id) return fail('Booking not found.');
+      if (!['accepted', 'in-transit'].includes(booking.status)) return fail('The ID can only be checked during the ride.');
+      if (booking.discount_status !== 'pending') return fail('This ride has no discount ID waiting for your answer.');
+      if (paymentSent(booking)) return fail('A payment was already sent for this ride, so the fare can no longer change.');
+      const reason = String(params?.p_reason ?? '').trim().slice(0, 300);
+      if (!params?.p_approve && !reason) return fail('Give the reason the ID was not accepted.');
+      const label = ({ senior: 'Senior citizen', pwd: 'PWD', student: 'Student' } as Record<string, string>)[booking.passenger_type] ?? 'Fare';
+      const now = new Date().toISOString();
+      if (params?.p_approve) {
+        const fare = routeChangeFare({ ...booking, discount_pct: 20 }, Number(booking.distance));
+        Object.assign(booking, { discount_pct: 20, discount_amount: fare.discount_amount, total_fare: fare.total_fare, discount_status: 'approved', discount_reviewed_at: now, discount_reviewed_by: me.id });
+        notifyMock(booking.passenger_id, `${label} discount approved`, `Your driver approved your ID. ₱${fare.discount_amount.toFixed(2)} was taken off; you pay ₱${fare.total_fare.toFixed(2)}.`, booking.id);
+      } else {
+        Object.assign(booking, { discount_status: 'rejected', discount_reviewed_at: now, discount_reviewed_by: me.id, discount_revoked_at: now, discount_revoked_reason: reason });
+        notifyMock(booking.passenger_id, `${label} discount not approved`, `Your driver could not accept the ID (${reason}). The regular fare applies: ₱${Number(booking.total_fare).toFixed(2)}.`, booking.id);
+      }
+      emitToChannel(`booking-${booking.id}`, { eventType: 'UPDATE', schema: 'public', table: 'bookings', new: clone(booking), old: clone(booking) });
+      return { data: clone(booking), error: null };
+    }
     return { data: [], error: null };
   },
   channel: (name: string) => {

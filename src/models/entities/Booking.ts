@@ -37,6 +37,13 @@ export interface Booking {
   // (migration 081). total_fare is back to the regular fare.
   discount_revoked_at?: Date | string | null;
   discount_revoked_reason?: string | null;
+  // PWD / student: 'pending' until the accepting driver approves the ID
+  // (migration 089). total_fare is the regular fare until 'approved'.
+  discount_status?: 'pending' | 'approved' | 'rejected' | null;
+  discount_reviewed_at?: Date | string | null;
+  // Baggage the passenger declared (D3, migration 088). No extra charge.
+  baggage_count?: number | null;
+  baggage_size?: 'small' | 'medium' | 'large' | null;
 }
 
 export type BookingStatus = 'pending' | 'accepted' | 'in-transit' | 'completed' | 'cancelled';

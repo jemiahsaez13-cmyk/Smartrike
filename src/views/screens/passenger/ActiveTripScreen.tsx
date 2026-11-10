@@ -42,6 +42,7 @@ import { PassengerRidePaymentModal } from '@/views/components/payment/PassengerR
 import { CancelReasonSheet } from '@/views/components/booking/CancelReasonSheet';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
+import { BaggageNote } from '@/views/components/booking/BaggageNote';
 import { PassengerDropoffChange } from '@/views/components/booking/PassengerDropoffChange';
 
 const { height } = Dimensions.get('window');
@@ -373,13 +374,17 @@ export const ActiveTripScreen = () => {
     };
   }, [currentBooking?.id, dispatch, refresh]);
 
+  // 089: a PWD / student discount waits for the driver to check the ID; the
+  // fare to pay is only final after that, so payment waits too.
+  const discountPending = currentBooking?.discount_status === 'pending';
+
   // Show the assigned driver's real payment details as soon as a driver accepts.
   useEffect(() => {
-    if ((status === 'accepted' || status === 'in-transit') && onlineUnpaid && !autoPromptedPay.current) {
+    if ((status === 'accepted' || status === 'in-transit') && onlineUnpaid && !discountPending && !autoPromptedPay.current) {
       autoPromptedPay.current = true;
       setPayVisible(true);
     }
-  }, [status, onlineUnpaid]);
+  }, [status, onlineUnpaid, discountPending]);
 
   // When the driver completes the trip, prompt the passenger to rate it
   // (but never stack it on top of an open payment sheet).
@@ -804,6 +809,7 @@ export const ActiveTripScreen = () => {
                 {currentBooking?.passenger_count ?? 1} passenger{(currentBooking?.passenger_count ?? 1) > 1 ? 's' : ''}
                 {' • '}{paymentMethod === 'cash' ? 'Pay driver in cash' : providerLabel}
               </Text>
+              <BaggageNote booking={currentBooking} />
             </View>
           </View>
         </View>
@@ -820,7 +826,12 @@ export const ActiveTripScreen = () => {
             prompted to rate afterwards. Before pickup the passenger may cancel. */}
         {status === 'in-transit' ? (
           <>
-            {isOnline && (onlineUnpaid ? (
+            {isOnline && (onlineUnpaid && discountPending ? (
+              <View style={styles.waitBanner}>
+                <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.primary} />
+                <Text style={styles.waitText}>Your driver is checking your discount ID. You can pay once it is approved or not.</Text>
+              </View>
+            ) : onlineUnpaid ? (
               <TouchableOpacity
                 style={styles.payNowBanner}
                 onPress={() => setPayVisible(true)}

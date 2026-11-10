@@ -33,6 +33,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
 import { RidePaymentStatus } from '@/models/entities/RidePayment';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
 import { DiscountIdCheck } from '@/views/components/booking/DiscountIdCheck';
+import { BaggageNote } from '@/views/components/booking/BaggageNote';
 import { DriverDropoffChangePrompt } from '@/views/components/booking/DriverDropoffChangePrompt';
 
 const { height } = Dimensions.get('window');
@@ -236,6 +237,11 @@ export const DriverTripScreen = () => {
   };
 
   const handleDropOff = async () => {
+    // 089: the PWD / student discount must be decided before the ride ends.
+    if (currentBooking.discount_status === 'pending') {
+      await notify('Check the discount ID first', 'Approve or reject the passenger’s discount ID (the “Check ID” box on the fare card) before finishing the ride.');
+      return;
+    }
     if (isOnlinePay && !farePaid) {
       await notify('Payment verification required', proofStatus === 'pending' ? 'Review and verify the passenger’s submitted proof before completing this ride.' : 'Wait for the passenger to submit valid payment proof, or ask them to switch to cash.');
       if (proofStatus === 'pending') navigation.navigate('RidePaymentVerification');
@@ -448,9 +454,10 @@ export const DriverTripScreen = () => {
           <DiscountIdCheck
             booking={currentBooking}
             canRevert
-            style={{ alignSelf: 'center', marginBottom: 6 }}
-            onReverted={(booking) => dispatch(updateCurrentTrip(booking))}
+            style={{ marginBottom: spacing.sm }}
+            onChanged={(booking) => dispatch(updateCurrentTrip(booking))}
           />
+          <BaggageNote booking={currentBooking} forDriver style={{ marginTop: 0, marginBottom: spacing.sm }} />
           <View style={styles.fareRow}>
             <View style={styles.fareItem}>
               <Text style={styles.fareValue}>₱{(currentBooking.total_fare ?? 0).toFixed(2)}</Text>

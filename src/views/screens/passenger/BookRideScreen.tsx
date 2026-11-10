@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, useWindowDimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, useWindowDimensions, PanResponder, Platform, ScrollView, StyleSheet, TextInput as RNTextInput, TouchableOpacity, View } from 'react-native';
 import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,10 +17,20 @@ import { PopularPlaceService } from '@/models/services/PopularPlaceService';
 import { GeocodingService } from '@/models/services/GeocodingService';
 import { DirectionsService, RoadRoute } from '@/models/services/DirectionsService';
 import { AddressRepository } from '@/models/repositories/AddressRepository';
-import { DiscountIdService } from '@/models/services/DiscountIdService';
-import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { Location, SavedAddress } from '@/models/types';
-import { BookingPassengerType, PASSENGER_DISCOUNT_PCT, PASSENGER_TYPE_LABEL, PopularPlace } from '@/config/constants';
+import {
+  BAGGAGE_SIZES,
+  BAGGAGE_SIZE_HINT,
+  BAGGAGE_SIZE_LABEL,
+  BaggageSize,
+  BookingPassengerType,
+  MAX_BAGGAGE_COUNT,
+  PASSENGER_DISCOUNT_PCT,
+  PASSENGER_TYPE_LABEL,
+  PopularPlace,
+  DISCOUNT_ID_NAME,
+  discountNeedsApproval,
+} from '@/config/constants';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from '@/config/maps';
@@ -98,8 +108,13 @@ export const BookRideScreen = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [passengers, setPassengers] = useState(1);
   const [passengerType, setPassengerType] = useState<BookingPassengerType>('regular');
-  // D5: a student discount needs a photo of the school ID.
-  const [studentIdPhoto, setStudentIdPhoto] = useState<string | null>(null);
+  // 089: senior, PWD and student show the physical ID at pickup; the driver
+  // who accepted approves it in the app before the discount comes off.
+  // No photo is uploaded, so no ID is stored or shown to other drivers.
+  const needsIdCheck = discountNeedsApproval(passengerType);
+  // D3: baggage declaration so the driver knows (no extra charge). null = none.
+  const [baggageSize, setBaggageSize] = useState<BaggageSize | null>(null);
+  const [baggageCount, setBaggageCount] = useState(1);
   const [tripNote, setTripNote] = useState('');
   const [destinations, setDestinations] = useState<PopularPlace[]>([]);
   const [picking, setPicking] = useState(false);
@@ -276,7 +291,9 @@ export const BookRideScreen = () => {
           passengerType
         );
         const eta = Math.max(3, Math.ceil((distance / (rideType === 'priority' ? 30 : 25)) * 60));
-        if (active) setEstimate({ fare: quote.totalFare, distance, eta, discount: quote.discountAmount });
+        // PWD / student: the regular fare is what is charged until the driver approves the ID.
+        const fare = discountNeedsApproval(passengerType) ? quote.totalFare + quote.discountAmount : quote.totalFare;
+        if (active) setEstimate({ fare: Math.round(fare * 100) / 100, distance, eta, discount: quote.discountAmount });
       } catch {
         if (active) setEstimate(null);
       }
@@ -417,36 +434,31 @@ export const BookRideScreen = () => {
       void notify('Choose Destination', 'Set a drop-off — pick a place, tap the map, or use “Set on map”.');
       return;
     }
-    if (passengerType === 'student' && !studentIdPhoto) {
-      void notify('Student ID needed', 'Add a photo of your school ID for the student discount, or choose Regular.');
-      return;
-    }
     const noteParts: string[] = [];
     if (bookForOther && otherName.trim()) {
       noteParts.push(`For: ${otherName.trim()}${otherPhone.trim() ? ` (${otherPhone.trim()})` : ''}`);
     }
     if (passengers > 1) noteParts.push(`${passengers} passengers`);
-    if (passengerType !== 'regular') noteParts.push(`${PASSENGER_TYPE_LABEL[passengerType]} discount: driver checks ID`);
+    if (passengerType !== 'regular') {
+      noteParts.push(needsIdCheck
+        ? `${PASSENGER_TYPE_LABEL[passengerType]} discount: driver checks the ID at pickup`
+        : `${PASSENGER_TYPE_LABEL[passengerType]} discount: driver checks ID`);
+    }
     if (tripNote.trim()) noteParts.push(tripNote.trim());
     const notes = noteParts.join(' • ') || undefined;
 
     const proceed = async (method: 'cash' | 'online') => {
       try {
-        const booking = await bookRide(user!.id, ep, dropoff, {
+        await bookRide(user!.id, ep, dropoff, {
           notes,
           paymentMethod: method,
           passengerCount: passengers,
           rideType,
           distanceKm: estimate?.distance,
           passengerType,
+          baggageCount: baggageSize ? baggageCount : 0,
+          baggageSize,
         });
-        if (passengerType === 'student' && studentIdPhoto) {
-          try {
-            await DiscountIdService.attach(booking.id, studentIdPhoto);
-          } catch {
-            void notify('ID photo not sent', 'Your ride is booked, but the ID photo did not upload. Show your school ID to the driver at pickup.');
-          }
-        }
         navigation.navigate('ConfirmBooking');
       } catch (error: any) {
         const message = typeof error === 'string' ? error : error?.message;
@@ -860,32 +872,69 @@ export const BookRideScreen = () => {
             </View>
             {passengerType !== 'regular' && (
               <Text style={styles.cashHint}>
-                {PASSENGER_DISCOUNT_PCT[passengerType]}% off one passenger's fare. Show a valid {passengerType === 'student' ? 'school' : passengerType === 'pwd' ? 'PWD' : 'senior citizen'} ID to the driver at pickup, or the regular fare applies.
+                {`${PASSENGER_DISCOUNT_PCT[passengerType]}% off one passenger's fare once the driver approves your ID. Until then the regular fare applies.`}
               </Text>
             )}
-            {passengerType === 'student' && (
-              <TouchableOpacity
-                style={styles.idPhotoRow}
-                activeOpacity={0.8}
-                onPress={async () => {
-                  try {
-                    const image = await pickImageDataUri();
-                    if (image) setStudentIdPhoto(image);
-                  } catch (error: any) {
-                    void notify('Student ID', error?.message || 'The photo could not be used.');
-                  }
-                }}
-              >
-                {studentIdPhoto ? (
-                  <Image source={{ uri: studentIdPhoto }} style={styles.idPhotoThumb} />
-                ) : (
-                  <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.textSecondary} />
-                )}
+            {needsIdCheck && (
+              <View style={styles.idPhotoRow}>
+                <MaterialCommunityIcons name="card-account-details-outline" size={20} color={colors.textSecondary} />
                 <Text style={styles.idPhotoText}>
-                  {studentIdPhoto ? 'School ID added · Change photo' : 'Add a photo of your school ID (required)'}
+                  Show your {DISCOUNT_ID_NAME[passengerType]} to the driver at pickup. No ID, no discount.
                 </Text>
-              </TouchableOpacity>
+              </View>
             )}
+          </View>
+
+          {/* Baggage declaration (D3): tells the driver, no extra charge */}
+          <View style={styles.discountGroup}>
+            <Text style={styles.controlLabel}>Baggage</Text>
+            <View style={styles.paymentRow}>
+              {([null, ...BAGGAGE_SIZES] as Array<BaggageSize | null>).map((size) => {
+                const active = baggageSize === size;
+                return (
+                  <TouchableOpacity
+                    key={size ?? 'none'}
+                    style={[styles.paymentPill, active && styles.paymentPillActive]}
+                    onPress={() => setBaggageSize(size)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.paymentText, active && styles.paymentTextActive]}>
+                      {size ? BAGGAGE_SIZE_LABEL[size] : 'None'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {baggageSize ? (
+              <>
+                <Text style={styles.cashHint}>Biggest bag: {BAGGAGE_SIZE_HINT[baggageSize]}</Text>
+                <View style={[styles.stepperRow, styles.baggageStepper]}>
+                  <Text style={styles.controlLabel}>How many bags</Text>
+                  <View style={styles.baggageStepperControls}>
+                    <TouchableOpacity
+                      style={styles.stepperBtn}
+                      onPress={() => setBaggageCount(Math.max(1, baggageCount - 1))}
+                      activeOpacity={0.76}
+                      accessibilityLabel="Remove one bag"
+                    >
+                      <MaterialCommunityIcons name="minus" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.passengerCount}>{baggageCount}</Text>
+                    <TouchableOpacity
+                      style={styles.stepperBtn}
+                      onPress={() => setBaggageCount(Math.min(MAX_BAGGAGE_COUNT, baggageCount + 1))}
+                      activeOpacity={0.76}
+                      accessibilityLabel="Add one bag"
+                    >
+                      <MaterialCommunityIcons name="plus" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            ) : null}
+            <Text style={styles.cashHint}>No extra charge. This only lets the driver know before accepting.</Text>
           </View>
 
           <View style={styles.noteBox}>
@@ -945,9 +994,15 @@ export const BookRideScreen = () => {
             <View style={styles.farePriceWrap}>
               <Text style={[styles.farePrice, typography.currency]}>{estimate ? `₱${estimate.fare.toFixed(2)}` : '—'}</Text>
               {estimate && estimate.discount > 0 ? (
-                <Text style={[styles.fareBreakdown, { color: colors.success }]}>
-                  −₱{estimate.discount.toFixed(2)} {PASSENGER_TYPE_LABEL[passengerType]}
-                </Text>
+                needsIdCheck ? (
+                  <Text style={[styles.fareBreakdown, { color: '#9A6700' }]}>
+                    −₱{estimate.discount.toFixed(2)} if your ID is approved
+                  </Text>
+                ) : (
+                  <Text style={[styles.fareBreakdown, { color: colors.success }]}>
+                    −₱{estimate.discount.toFixed(2)} {PASSENGER_TYPE_LABEL[passengerType]}
+                  </Text>
+                )
               ) : null}
               {estimate && passengers > 1 ? (
                 <Text style={styles.fareBreakdown}>Total for {passengers}</Text>
@@ -1673,6 +1728,8 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 18,
   },
+  baggageStepper: { marginTop: spacing.sm },
+  baggageStepperControls: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   capacityHint: {
     ...typography.bodySmall,
     color: colors.textMuted,
@@ -1720,14 +1777,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderStyle: 'dashed',
     borderColor: colors.border,
     backgroundColor: colors.surface,
-  },
-  idPhotoThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
   },
   idPhotoText: {
     ...typography.bodySmall,

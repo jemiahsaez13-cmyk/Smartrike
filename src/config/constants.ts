@@ -236,3 +236,52 @@ export const PASSENGER_TYPE_LABEL: Record<BookingPassengerType, string> = {
   pwd: 'PWD',
   student: 'Student',
 };
+
+// Migration 089: senior citizen, PWD and student show the physical ID at
+// pickup (no photo is uploaded), and the discount only comes off once the
+// driver who accepted the ride approves it. Until then the regular fare applies.
+export const DISCOUNT_NEEDS_DRIVER_APPROVAL: BookingPassengerType[] = ['senior', 'pwd', 'student'];
+
+/** What the passenger's ID is called: "senior citizen ID", "PWD ID", "school ID". */
+export const DISCOUNT_ID_NAME: Record<BookingPassengerType, string> = {
+  regular: 'ID',
+  senior: 'senior citizen ID',
+  pwd: 'PWD ID',
+  student: 'school ID',
+};
+
+export const discountNeedsApproval = (type: BookingPassengerType | null | undefined): boolean =>
+  !!type && DISCOUNT_NEEDS_DRIVER_APPROVAL.includes(type);
+
+export type DiscountStatus = 'pending' | 'approved' | 'rejected';
+
+// ─── Baggage declaration (D3, migration 088) ──────────────────────────────────
+// The passenger declares how many bags and the size of the biggest one so the
+// driver knows before accepting. Information only: no extra charge.
+export type BaggageSize = 'small' | 'medium' | 'large';
+
+export const MAX_BAGGAGE_COUNT = 10;
+
+export const BAGGAGE_SIZES: BaggageSize[] = ['small', 'medium', 'large'];
+
+export const BAGGAGE_SIZE_LABEL: Record<BaggageSize, string> = {
+  small: 'Small',
+  medium: 'Medium',
+  large: 'Large',
+};
+
+export const BAGGAGE_SIZE_HINT: Record<BaggageSize, string> = {
+  small: 'Backpack or handbag. Fits on your lap.',
+  medium: 'Box, grocery bags or a small suitcase. Fits at your feet.',
+  large: 'Rice sack, big box or luggage. Needs space at the back or on top.',
+};
+
+/** "2 bags · biggest is Large", or null when nothing was declared. */
+export const baggageSummary = (
+  booking: { baggage_count?: number | null; baggage_size?: BaggageSize | string | null } | null | undefined
+): string | null => {
+  const count = Math.floor(Number(booking?.baggage_count ?? 0));
+  const size = booking?.baggage_size as BaggageSize | null | undefined;
+  if (!(count > 0) || !size || !BAGGAGE_SIZE_LABEL[size]) return null;
+  return `${count} bag${count === 1 ? '' : 's'} · ${count === 1 ? '' : 'biggest is '}${BAGGAGE_SIZE_LABEL[size]}`;
+};

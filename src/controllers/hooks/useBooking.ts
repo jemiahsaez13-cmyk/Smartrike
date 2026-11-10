@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { createBooking, acceptBooking, startTrip, completeTrip, cancelBooking } from '../slices/bookingSlice';
 import { Location } from '@/models/types';
-import { BookingPassengerType } from '@/config/constants';
+import { BaggageSize, BookingPassengerType } from '@/config/constants';
 
 export const useBooking = () => {
   const dispatch = useAppDispatch();
@@ -20,6 +20,8 @@ export const useBooking = () => {
         rideType?: 'standard' | 'priority';
         distanceKm?: number;
         passengerType?: BookingPassengerType;
+        baggageCount?: number;
+        baggageSize?: BaggageSize | null;
       }
     ) => {
       return dispatch(
@@ -33,6 +35,8 @@ export const useBooking = () => {
           rideType: options?.rideType,
           distanceKm: options?.distanceKm,
           passengerType: options?.passengerType,
+          baggageCount: options?.baggageCount,
+          baggageSize: options?.baggageSize,
         })
       ).unwrap();
     },

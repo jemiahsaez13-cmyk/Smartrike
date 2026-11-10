@@ -1,127 +1,148 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleProp, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
-import { Text } from 'react-native-paper';
+import { ActivityIndicator, Modal, StyleProp, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { Surface, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { PASSENGER_TYPE_LABEL } from '@/config/constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { DISCOUNT_ID_NAME, PASSENGER_TYPE_LABEL } from '@/config/constants';
 import { Booking } from '@/models/types';
 import { DiscountIdService } from '@/models/services/DiscountIdService';
-import { confirm, notify } from '@/utils/confirm';
+import { pendingDiscount } from '@/views/components/booking/FareDiscountNote';
+import { notify } from '@/utils/confirm';
 import { colors, radius, spacing, typography } from '@/views/styles/theme';
 
-const REVERT_REASONS = ['No ID shown', 'ID expired', 'Not the passenger\'s ID', 'Not a valid ID'];
+const REJECT_REASONS = ['No ID shown', 'ID expired', 'Not the passenger\'s ID', 'Not a valid ID'];
+// Amber text on a light fill needs a darker shade than the theme's amber.
+const AMBER_TEXT = '#9A6700';
 
 interface Props {
-  booking: Pick<Booking, 'id' | 'status' | 'passenger_type' | 'discount_amount' | 'total_fare'> | null | undefined;
-  /** Assigned driver during the ride: may remove the discount. */
+  booking: Pick<
+    Booking,
+    'id' | 'status' | 'passenger_type' | 'discount_amount' | 'total_fare' | 'passenger_count' | 'discount_status'
+  > | null | undefined;
+  /** Assigned driver during the ride. */
   canRevert?: boolean;
-  onReverted?: (booking: Booking) => void;
+  /** Called with the updated booking after the approval or rejection. */
+  onChanged?: (booking: Booking) => void;
   style?: StyleProp<ViewStyle>;
 }
 
+const peso = (n: number) => `₱${n.toFixed(2)}`;
+
 /**
- * Driver's ID check for a discounted booking (D5): opens the ID photo the
- * passenger uploaded and, during the ride, lets the driver charge the regular
- * fare when the ID is missing or not valid. Renders nothing for a regular fare.
+ * The accepting driver's check of the passenger's physical ID (migration 089).
+ * One tap decides: Approve → the discount comes off; tap a reason → the
+ * regular fare stays. The popup closes by itself and the decision is final,
+ * so the box disappears once the ID is decided.
  */
-export const DiscountIdCheck = ({ booking, canRevert, onReverted, style }: Props) => {
+export const DiscountIdCheck = ({ booking, canRevert, onChanged, style }: Props) => {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [reason, setReason] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null); // 'approve' or the reason
 
   const type = booking?.passenger_type;
-  const discount = Number(booking?.discount_amount ?? 0);
-  if (!booking || !type || type === 'regular' || discount <= 0) return null;
-  const revertable = !!canRevert && (booking.status === 'accepted' || booking.status === 'in-transit');
+  const duringRide = !!canRevert && (booking?.status === 'accepted' || booking?.status === 'in-transit');
+  if (!booking || !type || type === 'regular' || booking.discount_status !== 'pending' || !duringRide) return null;
 
-  const show = async () => {
-    setOpen(true);
-    setReason(null);
-    setLoading(true);
-    try {
-      setPhoto(await DiscountIdService.get(booking.id));
-    } catch (error: any) {
-      setPhoto(null);
-      void notify('ID photo', error?.message || 'The ID photo could not be loaded.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const regular = Number(booking.total_fare ?? 0);
+  const off = pendingDiscount(booking);
+  const discounted = Math.max(0, regular - off);
+  const label = PASSENGER_TYPE_LABEL[type];
 
-  const revert = async () => {
-    if (!reason) return;
-    const regular = Number(booking.total_fare ?? 0) + discount;
-    const ok = await confirm(
-      'Charge regular fare?',
-      `The ${PASSENGER_TYPE_LABEL[type]} discount will be removed (${reason}). The fare becomes ₱${regular.toFixed(2)} and the passenger is notified.`,
-      { confirmText: 'Charge regular fare', destructive: true }
-    );
-    if (!ok) return;
-    setBusy(true);
+  const decide = async (approve: boolean, reason?: string) => {
+    if (busy) return;
+    setBusy(approve ? 'approve' : reason ?? 'reject');
     try {
-      const updated = await DiscountIdService.revert(booking.id, reason);
+      const updated = await DiscountIdService.review(booking.id, approve, reason);
       setOpen(false);
-      onReverted?.(updated);
+      onChanged?.(updated);
     } catch (error: any) {
-      void notify('Fare not changed', error?.message || 'The fare could not be changed.');
+      void notify(approve ? 'Discount not approved' : 'Fare not changed', error?.message || 'Please try again.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
   return (
     <>
-      <TouchableOpacity style={[styles.link, style]} onPress={show} activeOpacity={0.7} accessibilityRole="button">
-        <MaterialCommunityIcons name="card-account-details-outline" size={16} color={colors.primary} />
-        <Text style={styles.linkText}>{revertable ? 'Check ID' : 'View ID photo'}</Text>
+      <TouchableOpacity style={[styles.box, style]} onPress={() => setOpen(true)} activeOpacity={0.8} accessibilityRole="button">
+        <MaterialCommunityIcons name="card-account-details-star-outline" size={20} color={AMBER_TEXT} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.boxTitle}>Check {label} ID</Text>
+          <Text style={styles.boxSub}>Ask to see it at pickup · {peso(off)} off if valid</Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={AMBER_TEXT} />
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.sheet}>
-            <View style={styles.header}>
-              <Text style={styles.title}>{PASSENGER_TYPE_LABEL[type]} ID</Text>
-              <TouchableOpacity onPress={() => setOpen(false)} accessibilityLabel="Close" hitSlop={10}>
-                <MaterialCommunityIcons name="close" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={{ paddingBottom: spacing.sm }}>
-              {loading ? (
-                <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.xl }} />
-              ) : photo ? (
-                <Image source={{ uri: photo }} style={styles.photo} resizeMode="contain" />
-              ) : (
-                <Text style={styles.empty}>No ID photo was uploaded. Check the physical ID at pickup.</Text>
-              )}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => !busy && setOpen(false)}>
+        <View style={styles.overlay}>
+          <Surface style={styles.card} elevation={5}>
+            <TouchableOpacity
+              style={styles.close}
+              onPress={() => setOpen(false)}
+              disabled={!!busy}
+              hitSlop={10}
+              accessibilityLabel="Close"
+            >
+              <MaterialCommunityIcons name="close" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
 
-              {revertable && (
-                <>
-                  <Text style={styles.label}>ID not valid? Charge the regular fare</Text>
-                  <View style={styles.reasons}>
-                    {REVERT_REASONS.map((r) => (
-                      <TouchableOpacity
-                        key={r}
-                        style={[styles.reason, reason === r && styles.reasonActive]}
-                        onPress={() => setReason(r)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.reasonText, reason === r && styles.reasonTextActive]}>{r}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.revertBtn, (!reason || busy) && { opacity: 0.5 }]}
-                    onPress={revert}
-                    disabled={!reason || busy}
-                    activeOpacity={0.8}
-                  >
-                    {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.revertText}>Charge regular fare</Text>}
-                  </TouchableOpacity>
-                </>
-              )}
-            </ScrollView>
-          </View>
+            <View style={styles.icon}>
+              <MaterialCommunityIcons name="card-account-details-outline" size={34} color={AMBER_TEXT} />
+            </View>
+            <Text style={styles.title}>Check {label} ID</Text>
+            <Text style={styles.subtitle}>
+              Ask to see the {DISCOUNT_ID_NAME[type]}. The name and picture should match the passenger, and it should not be expired.
+            </Text>
+
+            {/* Regular vs discounted */}
+            <View style={styles.fareRow}>
+              <View style={styles.fareCol}>
+                <Text style={styles.fareLabel}>REGULAR</Text>
+                <Text style={styles.fareValue}>{peso(regular)}</Text>
+              </View>
+              <MaterialCommunityIcons name="arrow-right" size={18} color={colors.textLight} />
+              <View style={styles.fareCol}>
+                <Text style={styles.fareLabel}>WITH DISCOUNT</Text>
+                <Text style={[styles.fareValue, { color: colors.success }]}>{peso(discounted)}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.approveBtn, !!busy && busy !== 'approve' && { opacity: 0.5 }]}
+              onPress={() => decide(true)}
+              disabled={!!busy}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <LinearGradient colors={[colors.success, '#2C4A3A']} style={styles.approveGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                {busy === 'approve' ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="check-circle" size={20} color="#fff" />
+                    <Text style={styles.approveText}>Valid · Approve {peso(off)} off</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>NOT VALID? TAP THE REASON · REGULAR FARE STAYS</Text>
+            <View style={styles.reasonWrap}>
+              {REJECT_REASONS.map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => decide(false, r)}
+                  disabled={!!busy}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  style={[styles.reasonChip, busy === r && styles.reasonChipBusy, !!busy && busy !== r && { opacity: 0.5 }]}
+                >
+                  {busy === r
+                    ? <ActivityIndicator size="small" color={colors.error} />
+                    : <Text style={styles.reasonChipText}>{r}</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Surface>
         </View>
       </Modal>
     </>
@@ -129,20 +150,67 @@ export const DiscountIdCheck = ({ booking, canRevert, onReverted, style }: Props
 };
 
 const styles = StyleSheet.create({
-  link: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingVertical: 6, minHeight: 32 },
-  linkText: { ...typography.label, fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
-  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.md },
-  sheet: { maxHeight: '90%', backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-  title: { ...typography.subtitle, color: colors.text },
-  photo: { width: '100%', height: 280, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
-  empty: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginVertical: spacing.lg },
-  label: { ...typography.labelSmall, color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.xs },
-  reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  reason: { paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  reasonActive: { borderColor: colors.error, backgroundColor: colors.errorLight },
-  reasonText: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary },
-  reasonTextActive: { color: colors.error },
-  revertBtn: { marginTop: spacing.md, height: 44, borderRadius: radius.md, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center' },
-  revertText: { ...typography.button, color: '#fff' },
+  box: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 52,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningLight,
+    borderWidth: 1,
+    borderColor: '#E9C46A',
+  },
+  boxTitle: { ...typography.label, fontSize: 14, color: AMBER_TEXT },
+  boxSub: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.lg },
+  card: { backgroundColor: colors.surface, borderRadius: 24, padding: spacing.xl, alignItems: 'center' },
+  close: { position: 'absolute', top: spacing.md, right: spacing.md, zIndex: 1 },
+  icon: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.warningLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  title: { ...typography.title, fontSize: 21, color: colors.text, textAlign: 'center' },
+  subtitle: { ...typography.body, fontSize: 13, color: colors.textSecondary, marginTop: 4, textAlign: 'center', lineHeight: 19 },
+
+  fareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 14,
+    backgroundColor: colors.background,
+  },
+  fareCol: { flex: 1, alignItems: 'center' },
+  fareLabel: { ...typography.labelSmall, fontSize: 9, letterSpacing: 1, color: colors.textMuted },
+  fareValue: { ...typography.label, fontSize: 17, color: colors.text, marginTop: 2 },
+
+  approveBtn: { alignSelf: 'stretch', height: 52, borderRadius: 14, overflow: 'hidden', marginTop: spacing.md },
+  approveGradient: { flex: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', alignItems: 'center' },
+  approveText: { ...typography.label, color: '#fff', fontSize: 15 },
+
+  label: { ...typography.labelSmall, fontSize: 9, color: colors.textMuted, letterSpacing: 1, marginTop: spacing.lg, marginBottom: spacing.sm, textAlign: 'center' },
+  reasonWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  reasonChip: {
+    minWidth: 96,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reasonChipBusy: { backgroundColor: colors.errorLight },
+  reasonChipText: { ...typography.label, fontSize: 12, color: colors.error },
 });

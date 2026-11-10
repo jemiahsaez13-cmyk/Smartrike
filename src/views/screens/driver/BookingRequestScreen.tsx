@@ -10,7 +10,7 @@ import { colors, layout, radius, spacing, shadows, typography } from '@/views/st
 import { LinearGradient } from 'expo-linear-gradient';
 import { notify } from '@/utils/confirm';
 import { FareDiscountNote } from '@/views/components/booking/FareDiscountNote';
-import { DiscountIdCheck } from '@/views/components/booking/DiscountIdCheck';
+import { BaggageNote } from '@/views/components/booking/BaggageNote';
 
 export const BookingRequestScreen = () => {
   const dispatch = useAppDispatch();
@@ -78,7 +78,7 @@ export const BookingRequestScreen = () => {
             </View>
 
             <FareDiscountNote booking={request} forDriver style={{ textAlign: 'right' }} />
-            <DiscountIdCheck booking={request} />
+            <BaggageNote booking={request} forDriver />
 
             <View style={styles.divider} />
 

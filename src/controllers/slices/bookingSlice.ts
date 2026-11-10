@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { BookingService, isStalePendingBooking } from '@/models/services/BookingService';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { ActivityLogService } from '@/models/services/ActivityLogService';
-import { BookingPassengerType, NO_DRIVER_CANCELLATION_REASON } from '@/config/constants';
+import { BaggageSize, BookingPassengerType, NO_DRIVER_CANCELLATION_REASON } from '@/config/constants';
 import { Booking, Location, Rating } from '@/models/types';
 
 const bookingService = new BookingService();
@@ -60,6 +60,8 @@ export const createBooking = createAsyncThunk(
       rideType?: 'standard' | 'priority';
       distanceKm?: number;
       passengerType?: BookingPassengerType;
+      baggageCount?: number;
+      baggageSize?: BaggageSize | null;
     },
     { rejectWithValue }
   ) => {
@@ -72,6 +74,8 @@ export const createBooking = createAsyncThunk(
         rideType: payload.rideType,
         distanceKm: payload.distanceKm,
         passengerType: payload.passengerType,
+        baggageCount: payload.baggageCount,
+        baggageSize: payload.baggageSize,
       });
       void ActivityLogService.logActivity({
         user_id: payload.passengerId,

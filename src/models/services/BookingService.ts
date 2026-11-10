@@ -4,7 +4,16 @@ import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculati
 import { NotificationService } from './NotificationService';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
-import { BookingPassengerType, NO_DRIVER_CANCELLATION_REASON, REQUEST_FRESHNESS_MINUTES } from '@/config/constants';
+import {
+  BAGGAGE_SIZES,
+  BaggageSize,
+  BookingPassengerType,
+  MAX_BAGGAGE_COUNT,
+  NO_DRIVER_CANCELLATION_REASON,
+  REQUEST_FRESHNESS_MINUTES,
+  baggageSummary,
+  discountNeedsApproval,
+} from '@/config/constants';
 
 // Parses a timestamp as UTC when it arrives without a timezone suffix.
 const toMs = (value: unknown): number => {
@@ -40,6 +49,9 @@ export class BookingService {
       rideType?: 'standard' | 'priority';
       distanceKm?: number;
       passengerType?: BookingPassengerType;
+      /** D3: bags declared by the passenger (0 = none) and the biggest one's size. */
+      baggageCount?: number;
+      baggageSize?: BaggageSize | null;
     } = {}
   ): Promise<Booking> {
     // One ride at a time. An expired search is closed first so it never blocks
@@ -59,6 +71,14 @@ export class BookingService {
     if (passengerCount < 1 || passengerCount > MAX_TRICYCLE_PASSENGERS) {
       throw new Error(`A tricycle can carry 1 to ${MAX_TRICYCLE_PASSENGERS} passengers.`);
     }
+    const baggageCount = Math.floor(options.baggageCount ?? 0);
+    if (baggageCount < 0 || baggageCount > MAX_BAGGAGE_COUNT) {
+      throw new Error(`Declare 0 to ${MAX_BAGGAGE_COUNT} bags.`);
+    }
+    const baggageSize = baggageCount > 0 ? options.baggageSize ?? null : null;
+    if (baggageCount > 0 && (!baggageSize || !BAGGAGE_SIZES.includes(baggageSize))) {
+      throw new Error('Choose the size of your biggest bag.');
+    }
     const rideType = options.rideType ?? 'standard';
     const rawDistance = options.distanceKm && options.distanceKm > 0
       ? options.distanceKm
@@ -77,10 +97,15 @@ export class BookingService {
       rideType,
       passengerType
     );
-    const totalFare = quote.totalFare;
+    // 089: PWD / student pay the regular fare until the accepting driver
+    // approves the ID; the server prices it the same way.
+    const needsApproval = discountNeedsApproval(passengerType);
+    const totalFare = needsApproval
+      ? this.fareService.quoteFare(distance, baseFare, perKmRate, passengerCount, multiplier, rideType, 'regular').totalFare
+      : quote.totalFare;
     const estimatedDuration = Math.ceil(distance / 30 * 60);
 
-    const booking = await this.bookingRepo.create({
+    const row: Omit<Booking, 'id' | 'created_at'> = {
       passenger_id: passengerId,
       driver_id: null,
       pickup_location: pickup,
@@ -107,12 +132,39 @@ export class BookingService {
       // Discount columns only exist after migration 080; a regular booking
       // leaves them out so it still works on an older database.
       ...(passengerType !== 'regular'
-        ? { passenger_type: passengerType, discount_pct: quote.discountPct, discount_amount: quote.discountAmount }
+        ? needsApproval
+          ? { passenger_type: passengerType, discount_pct: 0, discount_amount: 0, discount_status: 'pending' as const }
+          : { passenger_type: passengerType, discount_pct: quote.discountPct, discount_amount: quote.discountAmount }
         : {}),
+      // Baggage columns only exist after migration 088; no baggage leaves them out.
+      ...(baggageCount > 0 ? { baggage_count: baggageCount, baggage_size: baggageSize } : {}),
       accepted_at: null,
       started_at: null,
       completed_at: null
-    });
+    };
+
+    // On a database without the newest columns, drop them and try again so
+    // the passenger can still book: before 089 the discount is applied at
+    // booking (080); before 088 the baggage goes into the notes.
+    let attempt = row;
+    let booking: Booking | null = null;
+    for (let tries = 0; !booking; tries += 1) {
+      try {
+        booking = await this.bookingRepo.create(attempt);
+      } catch (error: any) {
+        const message = String(error?.message || '');
+        if (tries < 2 && 'discount_status' in attempt && /discount_status/.test(message)) {
+          const { discount_status: _status, ...rest } = attempt;
+          attempt = rest;
+        } else if (tries < 2 && 'baggage_count' in attempt && /baggage_(count|size)/.test(message)) {
+          const { baggage_count: _count, baggage_size: _size, ...rest } = attempt;
+          const note = `Baggage: ${baggageSummary({ baggage_count: baggageCount, baggage_size: baggageSize })}`;
+          attempt = { ...rest, notes: [rest.notes, note].filter(Boolean).join(' • ') };
+        } else {
+          throw error;
+        }
+      }
+    }
 
     // Best-effort driver notification — the booking is already created, so a
     // notification/RLS hiccup must not fail the whole request. Drivers also
