@@ -856,7 +856,14 @@ export const TodaManagementScreen = () => {
                             <View style={styles.memberRow}>
                               <View style={styles.masterBody}>
                                 <Text style={styles.masterBodyLabel}>BODY</Text>
-                                <Text style={styles.masterBodyValue} numberOfLines={1}>{e.bodyNumber ?? '—'}</Text>
+                                <Text
+                                  style={styles.masterBodyValue}
+                                  numberOfLines={1}
+                                  adjustsFontSizeToFit
+                                  minimumFontScale={0.7}
+                                >
+                                  {e.bodyNumber ?? '—'}
+                                </Text>
                               </View>
                               <View style={styles.memberInfo}>
                                 <Text style={styles.memberName} numberOfLines={1}>{e.driverName}</Text>
@@ -1452,9 +1459,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface,
   },
   masterExportText: { ...typography.label, fontSize: 13, color: colors.primary },
+  // Grows with the body number (e.g. "FED-0123") instead of clipping it.
   masterBody: {
-    width: 52, height: 44, borderRadius: radius.sm, backgroundColor: colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
+    minWidth: 52, maxWidth: 112, height: 44, flexShrink: 0, borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm,
   },
   masterBodyLabel: { ...typography.labelSmall, fontSize: 8, letterSpacing: 1, color: colors.primary },
   masterBodyValue: { ...typography.label, fontSize: 14, color: colors.primary },
