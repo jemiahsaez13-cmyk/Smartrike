@@ -46,6 +46,16 @@ export const fetchAllApplications = createAsyncThunk(
   }
 );
 
+/** Full row (with document scans) for an application from the light list. */
+export const fetchApplicationFiles = createAsyncThunk(
+  'franchise/fetchFiles',
+  async (id: string, { rejectWithValue }) => {
+    const app = await service.getById(id);
+    if (!app) return rejectWithValue('The MTOP application could not be loaded.');
+    return app;
+  }
+);
+
 export const submitApplication = createAsyncThunk(
   'franchise/submit',
   async (payload: Partial<FranchiseApplication>, { rejectWithValue }) => {
@@ -223,7 +233,23 @@ const franchiseSlice = createSlice({
       })
       .addCase(fetchAllApplications.fulfilled, (state, action) => {
         state.loading = false;
-        state.applications = action.payload;
+        // Keep full rows already loaded for unchanged applications so an open
+        // document review keeps its scans when the light list refreshes.
+        const loaded = new Map(
+          state.applications.filter((a) => !a.files_omitted).map((a) => [a.id, a])
+        );
+        state.applications = action.payload.map((row) => {
+          const full = loaded.get(row.id);
+          return row.files_omitted && full && full.updated_at === row.updated_at ? full : row;
+        });
+      })
+      .addCase(fetchAllApplications.rejected, (state) => {
+        // Without this the admin screen stayed on "Loading applications…"
+        // forever after a failed or timed-out load.
+        state.loading = false;
+      })
+      .addCase(fetchApplicationFiles.fulfilled, (state, action) => {
+        upsert(state.applications, action.payload);
       })
       .addCase(submitApplication.fulfilled, (state, action) => {
         state.myApplication = action.payload;

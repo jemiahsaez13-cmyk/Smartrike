@@ -479,6 +479,12 @@ export const mockSupabase: any = {
   auth,
   rpc: async (fn: string, params: any) => {
     const currentProfile = () => db.users.find((u) => u.auth_id === currentAuthUser?.id || u.id === currentAuthUser?.id);
+    if (fn === 'franchise_applications_overview') {
+      // Migration 090 strips scans for the network; the mock keeps full rows.
+      const rows = [...(db.franchise_applications ?? [])]
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+      return { data: clone(rows), error: null };
+    }
     if (fn === 'admin_delete_user') {
       const me = currentProfile();
       if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can delete accounts.' } };

@@ -110,7 +110,19 @@ export class FranchiseService {
     return this.withDerivedRecordStatus(data[0]);
   }
 
+  /**
+   * Every application for the admin screens, without the document scans
+   * (migration 090): rows carry files_omitted and are completed with getById
+   * when the admin opens the documents. Falls back to the full rows before 090.
+   */
   async getAll(): Promise<FranchiseApplication[]> {
+    const light = await supabase.rpc('franchise_applications_overview');
+    if (!light.error) return (light.data ?? []) as FranchiseApplication[];
+    if (!/franchise_applications_overview|could not find the function|PGRST202/i.test(
+      `${light.error.code ?? ''} ${light.error.message ?? ''}`
+    )) {
+      throw light.error;
+    }
     const { data, error } = await supabase
       .from('franchise_applications')
       .select('*')
@@ -346,6 +358,17 @@ export class FranchiseService {
     return (data?.[0] as SuccessionRequest) ?? null;
   }
 
+  /** Pending requests without their uploaded documents (for list badges). */
+  async getPendingSuccessionSummaries(): Promise<SuccessionRequest[]> {
+    const { data, error } = await supabase
+      .from('franchise_succession_requests')
+      .select('id, franchise_id, requested_by, requested_by_name, successor_id, successor_name, relationship, status, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as unknown as SuccessionRequest[];
+  }
+
   /** Requests waiting for an admin decision, newest first. */
   async getPendingSuccessionRequests(): Promise<SuccessionRequest[]> {
     const { data, error } = await supabase
@@ -524,6 +547,7 @@ export class FranchiseService {
     if (status !== current.status && !allowed[current.status]?.includes(status)) {
       throw new Error(`Invalid MTOP transition from ${current.status} to ${status}.`);
     }
+    patch = this.withStoredFiles(patch, current);
     const { data, error } = await supabase
       .from('franchise_applications')
       .update({ status, ...patch, updated_at: new Date().toISOString() })
@@ -548,6 +572,7 @@ export class FranchiseService {
     if (patch.documents_verified_at && (!patch.documents || !allDocumentsApproved(patch.documents))) {
       throw new Error('Every required file must be approved before confirmation.');
     }
+    patch = this.withStoredFiles(patch, current);
     const { data, error } = await supabase
       .from('franchise_applications')
       .update({ ...patch, updated_at: new Date().toISOString() })
@@ -572,6 +597,26 @@ export class FranchiseService {
         : message);
     }
     return Number(data ?? 0);
+  }
+
+  /**
+   * Documents built from a light list row (migration 090) have no file_url.
+   * Restore each scan from the stored row so a verdict never erases it, and
+   * never write the client-only files_omitted flag.
+   */
+  private withStoredFiles(
+    patch: Partial<FranchiseApplication>,
+    current: FranchiseApplication
+  ): Partial<FranchiseApplication> {
+    const { files_omitted: _omit, ...clean } = patch;
+    if (!clean.documents) return clean;
+    const stored = new Map((current.documents ?? []).map((d) => [d.name, d.file_url]));
+    return {
+      ...clean,
+      documents: clean.documents.map((d) =>
+        d.file_url || !stored.get(d.name) ? d : { ...d, file_url: stored.get(d.name) }
+      ),
+    };
   }
 
   async getById(id: string): Promise<FranchiseApplication | null> {

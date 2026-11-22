@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppDispatch, useAppSelector } from '@/controllers/store';
-import { fetchAllApplications, advanceApplication, patchApplication, reviewFranchisePayment, recordFranchisePayment, reviewChangeOfUnit } from '@/controllers/slices/franchiseSlice';
+import { fetchAllApplications, fetchApplicationFiles, advanceApplication, patchApplication, reviewFranchisePayment, recordFranchisePayment, reviewChangeOfUnit } from '@/controllers/slices/franchiseSlice';
 import {
   FranchiseApplication,
   FranchiseDocument,
@@ -224,15 +224,37 @@ export const FranchiseManagementScreen = () => {
   const [couRejectApp, setCouRejectApp]   = useState<FranchiseApplication | null>(null);
   const [couRejectReason, setCouRejectReason] = useState('');
 
-  useEffect(() => {
-    dispatch(fetchAllApplications());
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadApplications = React.useCallback(() => {
+    setLoadFailed(false);
+    dispatch(fetchAllApplications())
+      .unwrap()
+      .catch(() => setLoadFailed(true));
   }, [dispatch]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
+
+  // The list leaves out document scans (migration 090); load the full row
+  // when the admin opens an application's documents.
+  const [filesLoadingId, setFilesLoadingId] = useState<string | null>(null);
+  const reviewNeedsFiles = !!reviewApp?.files_omitted;
+  useEffect(() => {
+    if (!reviewAppId || !reviewNeedsFiles) return;
+    let active = true;
+    setFilesLoadingId(reviewAppId);
+    dispatch(fetchApplicationFiles(reviewAppId))
+      .finally(() => { if (active) setFilesLoadingId(null); });
+    return () => { active = false; };
+  }, [dispatch, reviewAppId, reviewNeedsFiles]);
 
   // Pending succession requests (reviewed in the Registry). Refreshed with the
   // application list; optional so the screen works before migration 074.
+  // Only the names are shown here, so the uploaded documents are not loaded.
   useEffect(() => {
     let active = true;
-    franchiseService.getPendingSuccessionRequests()
+    franchiseService.getPendingSuccessionSummaries()
       .then((rows) => { if (active) setSuccessionRequests(rows); })
       .catch(() => { if (active) setSuccessionRequests([]); });
     return () => { active = false; };
@@ -240,17 +262,24 @@ export const FranchiseManagementScreen = () => {
 
   // Keep the admin queue current while this screen is open. New renewal
   // submissions appear without requiring the administrator to refresh.
+  // Changes are coalesced: one save fires several row events (status, then
+  // documents), and each used to trigger its own full reload.
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel('admin_franchise_applications')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'franchise_applications' },
-        () => dispatch(fetchAllApplications())
+        () => {
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(() => { dispatch(fetchAllApplications()); }, 800);
+        }
       )
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       void supabase.removeChannel(channel);
     };
   }, [dispatch]);
@@ -1246,8 +1275,17 @@ export const FranchiseManagementScreen = () => {
               <View style={styles.emptyIcon}>
                 <MaterialCommunityIcons name="file-search-outline" size={34} color={colors.primary} />
               </View>
-              <Text style={styles.emptyTitle}>No applications here</Text>
-              <Text style={styles.emptyText}>New MTOP applications and renewals will show up in this list.</Text>
+              <Text style={styles.emptyTitle}>{loadFailed ? 'Could not load applications' : 'No applications here'}</Text>
+              <Text style={styles.emptyText}>
+                {loadFailed
+                  ? 'Check the connection, then try again.'
+                  : 'New MTOP applications and renewals will show up in this list.'}
+              </Text>
+              {loadFailed ? (
+                <TouchableOpacity style={[styles.btnPrimary, { marginTop: spacing.md }]} onPress={loadApplications} activeOpacity={0.85}>
+                  <Text style={styles.btnPrimaryText}>Try again</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           )}
         </View>
@@ -1256,6 +1294,7 @@ export const FranchiseManagementScreen = () => {
       <DocumentReviewModal
         app={reviewApp}
         busyDoc={docBusy}
+        filesLoading={!!reviewApp && filesLoadingId === reviewApp.id}
         onClose={() => setReviewAppId(null)}
         onSetReview={setDocReview}
         onApproveAll={approveAllDocs}
@@ -1360,15 +1399,20 @@ interface DocumentReviewModalProps {
   app: FranchiseApplication | null;
   /** Name of the document with a verdict in flight ('*all*' for bulk). */
   busyDoc: string | null;
+  /** The document scans are still being fetched (light list row). */
+  filesLoading: boolean;
   onClose: () => void;
   onSetReview: (app: FranchiseApplication, docName: string, status: DocumentReviewStatus) => void;
   onApproveAll: (app: FranchiseApplication) => void;
 }
 
-const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll }: DocumentReviewModalProps) => {
-  const [preview, setPreview] = useState<FranchiseDocument | null>(null);
+const DocumentReviewModal = ({ app, busyDoc, filesLoading, onClose, onSetReview, onApproveAll }: DocumentReviewModalProps) => {
+  const [previewName, setPreviewName] = useState<string | null>(null);
+  const setPreview = (doc: FranchiseDocument | null) => setPreviewName(doc?.name ?? null);
 
   if (!app) return null;
+  // Looked up by name so the preview shows the scan once the full row arrives.
+  const preview = previewName ? app.documents.find((d) => d.name === previewName) ?? null : null;
   const sum = summarizeDocuments(app.documents);
   const verified = allDocumentsApproved(app.documents);
   const locked = !!app.documents_verified_at || ['payment', 'approved', 'issued'].includes(app.status);
@@ -1425,6 +1469,8 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
                     >
                       {isHttp(doc.file_url) ? (
                         <Image source={{ uri: doc.file_url! }} style={styles.docThumbImg} resizeMode="cover" />
+                      ) : doc.uploaded && filesLoading ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
                         <MaterialCommunityIcons
                           name={doc.uploaded ? 'file-document-outline' : 'file-remove-outline'}
@@ -1548,6 +1594,10 @@ const DocumentReviewModal = ({ app, busyDoc, onClose, onSetReview, onApproveAll 
             </View>
             {isHttp(preview?.file_url) ? (
               <Image source={{ uri: preview!.file_url! }} style={styles.previewImg} resizeMode="contain" />
+            ) : filesLoading ? (
+              <View style={styles.previewPlaceholder}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
             ) : (
               <View style={styles.previewPlaceholder}>
                 <View style={styles.emptyIcon}>

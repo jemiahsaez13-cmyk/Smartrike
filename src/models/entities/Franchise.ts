@@ -202,6 +202,12 @@ export interface FranchiseApplication {
   cou_unit_image?: string | null;
   vehicle_make?: string | null;
   vehicle_model?: string | null;
+  /**
+   * Set on rows from the light admin list (migration 090): document scans and
+   * images not shown inline were left out. Load the full row (getById) before
+   * showing or editing documents.
+   */
+  files_omitted?: boolean;
 }
 
 // ── MTOP billing & payment (B2 / C1, migration 086) ─────────────────────────
