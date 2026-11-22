@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Dimensions, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
 import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +17,6 @@ import { useAppSelector } from '@/controllers/store';
 import { useAdminPendingCounts } from '@/controllers/hooks/useAdminPendingCounts';
 import { CountBadge } from '@/views/components/common/CountBadge';
 
-const CARD_WIDTH = (Dimensions.get('window').width - 24 * 2 - 16) / 2;
 
 const adminService = new AdminService();
 const reportService = new ReportService();
@@ -174,13 +173,21 @@ export const AdminDashboard = () => {
           </View>
           {item.route ? <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textLight} /> : null}
         </View>
-        <Text style={[styles.kpiValue, typography.currency]}>{item.value}</Text>
-        <Text style={styles.kpiTitle}>{item.title}</Text>
+        <Text
+          style={[styles.kpiValue, typography.currency]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
+          {item.value}
+        </Text>
+        <Text style={styles.kpiTitle} numberOfLines={1}>{item.title}</Text>
       </Card>
     );
     // Total Revenue opens the list of every fee collected.
     return item.route ? (
       <TouchableOpacity
+        style={styles.kpiCell}
         activeOpacity={0.8}
         onPress={() => navigation.navigate(item.route)}
         accessibilityRole="button"
@@ -188,7 +195,7 @@ export const AdminDashboard = () => {
       >
         {card}
       </TouchableOpacity>
-    ) : card;
+    ) : <View style={styles.kpiCell}>{card}</View>;
   };
 
   return (
@@ -693,8 +700,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.md,
   },
+  // Two cells per row that always fill the same width as the Reports card,
+  // whatever the current screen width (the old fixed width was measured once
+  // at load and overflowed after a resize or on wider/narrower screens).
+  kpiCell: {
+    flexGrow: 1,
+    flexBasis: '40%',
+    minWidth: 0,
+  },
   kpiCard: {
-    width: CARD_WIDTH,
+    width: '100%',
     minHeight: 130,
   },
   kpiHeader: {
