@@ -281,6 +281,10 @@ class QueryBuilder implements PromiseLike<Result> {
         const suspending = this.table === 'users' && this.payload.status === 'suspended' && row.status !== 'suspended';
         Object.assign(row, this.payload);
         if (suspending) Object.assign(row, { conduct_action: 'suspended', conduct_action_at: new Date().toISOString() });
+        // Migration 092: reactivating clears the suspension record.
+        if (this.table === 'users' && this.payload.status && this.payload.status !== 'suspended') {
+          Object.assign(row, { suspended_at: null, suspended_until: null, suspension_reason: null, suspended_by: null });
+        }
         if (this.table === 'franchise_applications') verifyDriverForMtop(row);
       });
       data = rows;
@@ -517,6 +521,38 @@ export const mockSupabase: any = {
         conduct_action_at: new Date().toISOString(),
       });
       return { data: clone(target), error: null };
+    }
+    if (fn === 'admin_suspend_user') {
+      // Migration 092: a suspension has a duration and a reason.
+      const me = currentProfile();
+      if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can suspend accounts.' } };
+      if (me.id === params?.p_user_id) return { data: null, error: { message: 'You cannot suspend your own account.' } };
+      const days = Number(params?.p_days);
+      if (!Number.isInteger(days) || days < 1 || days > 365) return { data: null, error: { message: 'The suspension must last from 1 to 365 days.' } };
+      if (String(params?.p_reason ?? '').trim().length < 5) return { data: null, error: { message: 'Give the reason for the suspension.' } };
+      const target = db.users.find((u) => u.id === params?.p_user_id && !['suspended', 'deactivated'].includes(u.status));
+      if (!target) return { data: null, error: { message: 'Only an account that is not suspended or deactivated can be suspended.' } };
+      const now = new Date();
+      Object.assign(target, {
+        status: 'suspended',
+        suspended_at: now.toISOString(),
+        suspended_until: new Date(now.getTime() + days * 86_400_000).toISOString(),
+        suspension_reason: String(params.p_reason).trim().slice(0, 500),
+        suspended_by: me.id,
+        current_status: 'offline',
+        conduct_action: 'suspended',
+        conduct_action_at: now.toISOString(),
+      });
+      return { data: clone(target), error: null };
+    }
+    if (fn === 'lift_my_expired_suspension') {
+      const me = currentProfile();
+      if (!me) return { data: null, error: { message: 'Sign in first.' } };
+      const row = db.users.find((u) => u.id === me.id);
+      if (row?.status === 'suspended' && row.suspended_until && new Date(row.suspended_until).getTime() <= Date.now()) {
+        Object.assign(row, { status: 'active', suspended_at: null, suspended_until: null, suspension_reason: null, suspended_by: null });
+      }
+      return { data: clone(row), error: null };
     }
     if (fn === 'admin_record_conduct_warning') {
       // Migration 091: the warning closes the account's conduct flag.

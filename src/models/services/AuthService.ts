@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase';
 import { UserRepository } from '@/models/repositories/UserRepository';
+import { suspensionEnded, suspensionMessage } from '@/utils/suspension';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   isValidEmail,
@@ -323,20 +324,32 @@ export class AuthService {
     await this.clearAttempts('login');
 
     // Look up by auth_id (UUID from the session)
-    const user = await this.userRepo.findByAuthId(data.user.id);
-    if (!user) {
+    const found = await this.userRepo.findByAuthId(data.user.id);
+    if (!found) {
       // Handle edge case: Auth exists but profile doesn't
       throw new Error('Your profile was not found. Please contact support.');
     }
-    
+    const user = await this.liftEndedSuspension(found);
+
     if (user.status !== 'active') {
       // The password was correct, so Supabase already stored a session. Drop
       // it, or the next app launch would restore it and skip this check.
       await supabase.auth.signOut({ scope: 'local' });
-      throw new Error(this.inactiveMessage(user.status));
+      throw new Error(user.status === 'suspended' ? suspensionMessage(user) : this.inactiveMessage(user.status));
     }
 
     return { user, session: data.session };
+  }
+
+  /**
+   * 092: a suspension whose end date passed is lifted at sign-in instead of
+   * waiting for the server's 10-minute job.
+   */
+  private async liftEndedSuspension<T extends { status: string; suspended_until?: string | null }>(user: T): Promise<T> {
+    if (user.status !== 'suspended' || !suspensionEnded(user as any)) return user;
+    const { data, error } = await supabase.rpc('lift_my_expired_suspension');
+    if (error || !data) return user;
+    return { ...user, ...(Array.isArray(data) ? data[0] : data) };
   }
 
   private inactiveMessage(status: string): string {
@@ -427,8 +440,9 @@ export class AuthService {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return null;
     
-    const user = await this.userRepo.findByAuthId(session.user.id);
-    if (!user) return null;
+    const found = await this.userRepo.findByAuthId(session.user.id);
+    if (!found) return null;
+    const user = await this.liftEndedSuspension(found);
 
     // A restored session must not bypass a suspension made after sign-in.
     if (user.status !== 'active') {

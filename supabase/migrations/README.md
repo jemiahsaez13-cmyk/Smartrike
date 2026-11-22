@@ -441,3 +441,27 @@ flagged account, the flag and its admin alert stop.
   count, so three new ones flag the account again.
 - Suspended and deactivated accounts are never flagged and raise no alert.
   Existing suspended / deactivated accounts are backfilled.
+
+## Successor license, renewal any time, timed suspension (092)
+
+Apply `092_license_renewal_suspension.sql` after 091.
+
+- **Succession:** `request_franchise_succession` takes `p_successor_license`
+  (LTO format `A01-23-456789`, stored in
+  `franchise_succession_requests.successor_license_number`) and requires a
+  `successor_drivers_license` photo with the other documents. The 8-argument
+  version is dropped.
+- **MTOP renewal any time:** the January 1 – March 31 window and the yearly
+  renewal are gone. An approved renewal sets the expiry to the current expiry
+  plus 3 years (`mtop_renewed_expiry`); if that is already past, 3 years from
+  approval. One renewal in review at a time. The daily cycle now sets
+  `pending_renewal` within 60 days of expiry, `expired` after it, and
+  `terminated` 3 years after expiry without renewal. The migration re-runs the
+  cycle, so MTOPs suspended under the old yearly rule are re-graded.
+- **Timed suspension:** `admin_suspend_user(id, days, reason)` (admin only,
+  1–365 days, reason required) fills `users.suspended_at`, `suspended_until`,
+  `suspension_reason`, `suspended_by`. Direct API writes cannot suspend or edit
+  these columns; reactivating clears them. pg_cron job
+  `lift-expired-suspensions` reactivates ended suspensions every 10 minutes, and
+  `lift_my_expired_suspension()` lifts one at sign-in. The sign-in screen shows
+  the suspended user the period and reason.

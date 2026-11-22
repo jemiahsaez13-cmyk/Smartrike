@@ -53,7 +53,7 @@ export const relationshipLabel = (value: string | null | undefined): string =>
 export type ChangeOfUnitStatus = 'pending' | 'approved' | 'rejected';
 
 /** Supporting documents of a succession request (migration 085). */
-export type SuccessionDocumentKey = 'proof_of_relationship' | 'successor_valid_id' | 'supporting';
+export type SuccessionDocumentKey = 'proof_of_relationship' | 'successor_valid_id' | 'successor_drivers_license' | 'supporting';
 
 export const SUCCESSION_DOCUMENTS: Array<{ key: SuccessionDocumentKey; label: string; hint: string; required: boolean }> = [
   {
@@ -66,6 +66,13 @@ export const SUCCESSION_DOCUMENTS: Array<{ key: SuccessionDocumentKey; label: st
     key: 'successor_valid_id',
     label: 'Successor’s valid ID',
     hint: 'Any government-issued ID of your successor',
+    required: true,
+  },
+  {
+    // 092: the successor will drive the unit.
+    key: 'successor_drivers_license',
+    label: 'Successor’s driver’s license',
+    hint: 'Clear photo of the front of their LTO driver’s license',
     required: true,
   },
   {
@@ -315,12 +322,13 @@ export const FRANCHISE_RECORD_STATUS_LABEL: Record<FranchiseRecordStatus, string
   renewed: 'Renewed',
 };
 
-// ── MTOP term and annual renewal rules (mirrors migration 073) ─────────────
-// A term runs 3 years from issuance. Every year the MTOP is renewed between
-// January 1 and March 31: January is the regular period, February–March the
-// grace period. One missed year suspends the MTOP; three terminate it.
+// ── MTOP term and renewal rules (mirrors migration 092) ────────────────────
+// A new MTOP runs 3 years from issuance. The driver may renew any time; an
+// approved renewal adds 3 years to the current expiry date. An expired MTOP
+// cannot go online, and 3 years after expiry without renewal it is terminated.
 export const MTOP_TERM_YEARS = 3;
-export const RENEWAL_LAST_MONTH = 3; // March
+/** Days before expiry the MTOP shows as Due for Renewal. */
+export const RENEWAL_DUE_DAYS = 60;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toISODate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -337,29 +345,44 @@ export const mtopExpiryFrom = (issuedAt: string): string => {
   return toISODate(d);
 };
 
+/**
+ * Expiry after an approved renewal: 3 years on top of the current expiry
+ * (2027 → 2030). When even that is already past, 3 years from `today`.
+ * Must match public.mtop_renewed_expiry() (migration 092).
+ */
+export const renewedExpiryDate = (currentExpiry: string | null | undefined, today: Date = new Date()): string => {
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const base = parseISODate(currentExpiry);
+  const next = base ? new Date(base) : new Date(startOfToday);
+  next.setFullYear(next.getFullYear() + MTOP_TERM_YEARS);
+  if (base && next.getTime() < startOfToday.getTime()) {
+    const fresh = new Date(startOfToday);
+    fresh.setFullYear(fresh.getFullYear() + MTOP_TERM_YEARS);
+    return toISODate(fresh);
+  }
+  return toISODate(next);
+};
+
 export const formatLongDate = (value?: string | null): string => {
   const d = parseISODate(value);
   return d ? d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '—';
 };
-
-export type RenewalPhase = 'regular' | 'grace' | 'closed';
 
 export interface RenewalStanding {
   issuedAt: string | null;
   expiryDate: string | null;
   /** Whole days until expiry (negative once expired). */
   daysToExpiry: number | null;
-  /** Latest year this franchise is renewed for (the issue year counts). */
-  coveredYear: number | null;
-  phase: RenewalPhase;
-  /** This year's renewal is still outstanding. */
-  dueThisYear: boolean;
-  /** The driver may file a renewal today. */
+  /** Date of the latest approved renewal, if any. */
+  lastRenewedAt: string | null;
+  /** Expiry within RENEWAL_DUE_DAYS, or already past. */
+  dueSoon: boolean;
+  /** The driver may file a renewal today (any time, while the franchise exists). */
   canRenew: boolean;
-  /** Renewal years that passed March 31 unrenewed. */
-  missedYears: number;
-  /** Next January 1 the renewal window opens, when it is closed now. */
-  nextWindowYear: number;
+  /** Expiry the MTOP gets if a renewal is approved today. */
+  renewedExpiry: string;
+  /** Last day to renew an expired MTOP before it is terminated. */
+  terminationDate: string | null;
 }
 
 /**
@@ -415,33 +438,29 @@ export const isInactiveBodyNumber = (
   && (app.franchise_status === 'terminated' || app.franchise_status === 'transferred');
 
 export const renewalStanding = (
-  app: Pick<FranchiseApplication, 'issued_at' | 'expiry_date' | 'renewal_year' | 'franchise_status'>,
+  app: Pick<FranchiseApplication, 'issued_at' | 'expiry_date' | 'franchise_status' | 'last_renewed_at'>,
   today: Date = new Date()
 ): RenewalStanding => {
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const issued = parseISODate(app.issued_at);
   const expiryDate = app.expiry_date ? String(app.expiry_date).slice(0, 10) : app.issued_at ? mtopExpiryFrom(app.issued_at) : null;
   const expiry = parseISODate(expiryDate);
-  const startOfToday = new Date(year, today.getMonth(), today.getDate());
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const daysToExpiry = expiry ? Math.round((expiry.getTime() - startOfToday.getTime()) / 86_400_000) : null;
-  const coveredYear = app.renewal_year ?? (issued ? issued.getFullYear() : null);
-  const phase: RenewalPhase = month === 1 ? 'regular' : month <= RENEWAL_LAST_MONTH ? 'grace' : 'closed';
-  const dueThisYear = coveredYear !== null && coveredYear < year;
-  const missedYears = coveredYear === null
-    ? 0
-    : Math.max(0, year - coveredYear - (month <= RENEWAL_LAST_MONTH ? 1 : 0));
   const blocked = app.franchise_status === 'terminated' || app.franchise_status === 'transferred' || app.franchise_status === 'renewed';
+  let terminationDate: string | null = null;
+  if (expiry) {
+    const t = new Date(expiry);
+    t.setFullYear(t.getFullYear() + MTOP_TERM_YEARS);
+    terminationDate = toISODate(t);
+  }
   return {
     issuedAt: app.issued_at ? String(app.issued_at).slice(0, 10) : null,
     expiryDate,
     daysToExpiry,
-    coveredYear,
-    phase,
-    dueThisYear,
-    canRenew: phase !== 'closed' && dueThisYear && !blocked,
-    missedYears,
-    nextWindowYear: phase === 'closed' ? year + 1 : year,
+    lastRenewedAt: app.last_renewed_at ? String(app.last_renewed_at).slice(0, 10) : null,
+    dueSoon: daysToExpiry !== null && daysToExpiry <= RENEWAL_DUE_DAYS,
+    canRenew: !blocked,
+    renewedExpiry: renewedExpiryDate(expiryDate, today),
+    terminationDate,
   };
 };
 
@@ -487,6 +506,8 @@ export interface SuccessionRequest {
   successor_name: string;
   successor_email: string | null;
   successor_phone: string | null;
+  /** Successor's LTO license number (migration 092). Null on older requests. */
+  successor_license_number?: string | null;
   relationship: SuccessorRelationship;
   reason: string;
   /** Supporting documents, reviewed one by one (migration 085). Empty on older requests. */

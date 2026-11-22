@@ -25,6 +25,7 @@ import {
   SuccessionDocument,
   DOCUMENT_REVIEW_LABEL,
   renewalStanding,
+  renewedExpiryDate,
   isInactiveBodyNumber,
 } from '@/models/entities/Franchise';
 import { FranchiseService, SuccessorAccount } from '@/models/services/FranchiseService';
@@ -146,7 +147,8 @@ export const FranchiseRegistryScreen = () => {
     setBodyNumber(record.body_number || '');
     setHolderName(record.current_holder_name || record.driver_name);
     setRecordStatus(record.franchise_status || 'active');
-    setExpiryDate(record.expiry_date || nextYear());
+    // 092: a renewal adds 3 years to the current expiry.
+    setExpiryDate(nextAction === 'renewal' ? renewedExpiryDate(record.expiry_date) : record.expiry_date || nextYear());
     setEffectiveDate(today());
     setRecipientName('');
     setRelationship('spouse');
@@ -454,8 +456,8 @@ export const FranchiseRegistryScreen = () => {
                       <Text style={styles.identifierValue}>{shortDate(standing.expiryDate)}</Text>
                     </View>
                     <View style={styles.identifier}>
-                      <Text style={styles.identifierLabel}>RENEWED FOR</Text>
-                      <Text style={styles.identifierValue}>{standing.coveredYear ?? '—'}</Text>
+                      <Text style={styles.identifierLabel}>LAST RENEWED</Text>
+                      <Text style={styles.identifierValue}>{standing.lastRenewedAt ? shortDate(standing.lastRenewedAt) : '—'}</Text>
                     </View>
                   </View>
                 );
@@ -483,6 +485,11 @@ export const FranchiseRegistryScreen = () => {
                     <Text style={styles.requestLine}>
                       <Text style={styles.requestKey}>Successor: </Text>{request.successor_name} ({SUCCESSOR_RELATIONSHIP_LABEL[request.relationship] ?? request.relationship})
                     </Text>
+                    {request.successor_license_number ? (
+                      <Text style={styles.requestLine}>
+                        <Text style={styles.requestKey}>Driver's license no.: </Text>{request.successor_license_number}
+                      </Text>
+                    ) : null}
                     <Text style={styles.requestLine}>
                       <Text style={styles.requestKey}>Has app account: </Text>
                       {request.successor_has_account
@@ -612,6 +619,11 @@ export const FranchiseRegistryScreen = () => {
                   <Text style={styles.requestLine}>
                     <Text style={styles.requestKey}>Successor (as typed): </Text>{activeRequest.successor_name}
                   </Text>
+                  {activeRequest.successor_license_number ? (
+                    <Text style={styles.requestLine}>
+                      <Text style={styles.requestKey}>Driver's license no.: </Text>{activeRequest.successor_license_number}
+                    </Text>
+                  ) : null}
                   <Text style={styles.requestLine}>
                     <Text style={styles.requestKey}>Has app account: </Text>
                     {activeRequest.successor_has_account

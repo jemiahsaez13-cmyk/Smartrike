@@ -18,6 +18,12 @@ export interface User {
   // counts only what comes after conduct_action_at.
   conduct_action?: 'warning' | 'suspended' | 'deactivated' | null;
   conduct_action_at?: string | null;
+  // Current suspension, set only by admin_suspend_user (migration 092) and
+  // cleared when the account is reactivated. suspended_until is null on
+  // suspensions made before 092 (they last until an admin reactivates).
+  suspended_at?: string | null;
+  suspended_until?: string | null;
+  suspension_reason?: string | null;
   rating: number;
   total_trips: number;
   // Primary address captured during profile setup.

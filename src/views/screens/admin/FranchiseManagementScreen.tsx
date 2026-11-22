@@ -18,6 +18,7 @@ import {
   summarizeDocuments,
   mtopExpiryFrom,
   renewalStanding,
+  renewedExpiryDate,
   nextBodyNumber,
   SuccessionRequest,
   relationshipLabel,
@@ -413,9 +414,12 @@ export const FranchiseManagementScreen = () => {
       patch.mtop_number = app.mtop_number || `MTOP-${year}-${Math.floor(1000 + Math.random() * 9000)}`;
       patch.franchise_status = 'active';
       patch.issued_at = new Date().toISOString().slice(0, 10);
-      // The server (migration 073) recomputes both dates; a renewal inside a
-      // running term keeps the original issue and expiry dates.
-      patch.expiry_date = mtopExpiryFrom(patch.issued_at);
+      // The server (migration 092) recomputes both dates; a renewal adds
+      // 3 years to the expiry of the MTOP it renews.
+      patch.expiry_date = app.type === 'renewal'
+        ? renewedExpiryDate(applications.find((a) => a.driver_id === app.driver_id && a.id !== app.id && a.status === 'issued'
+            && !['renewed', 'transferred'].includes(a.franchise_status || 'active'))?.expiry_date)
+        : mtopExpiryFrom(patch.issued_at);
       patch.original_holder_name = app.original_holder_name || app.driver_name;
       patch.current_holder_name = app.driver_name;
     }

@@ -33,8 +33,8 @@ export const LocationChooser: React.FC<Props> = ({
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState<Pending | null>(null);
   const [resolving, setResolving] = useState(false);
-  // Purok / sitio / landmark for a barangay drop-off — a barangay alone is
-  // too broad for the driver to find the passenger's exact stop.
+  // Purok / sitio / landmark for a barangay pickup or drop-off — a barangay
+  // alone is too broad for the driver to find the passenger's exact spot.
   const [spot, setSpot] = useState('');
 
   const town = townIdx != null ? MARINDUQUE_TOWNS[townIdx] : null;
@@ -45,7 +45,7 @@ export const LocationChooser: React.FC<Props> = ({
   }, [town, query]);
 
   const reset = () => { setTownIdx(null); setQuery(''); setPending(null); setSpot(''); };
-  const needsSpot = target === 'dropoff' && !!pending?.barangay;
+  const needsSpot = !!pending?.barangay;
   const spotReady = !needsSpot || spot.trim().length >= 2;
   const close = () => { reset(); onClose(); };
 
@@ -230,7 +230,9 @@ export const LocationChooser: React.FC<Props> = ({
                 returnKeyType="done"
                 onSubmitEditing={confirm}
               />
-              <Text style={styles.spotHint}>Your driver sees this so they know exactly where to drop you off.</Text>
+              <Text style={styles.spotHint}>
+                Your driver sees this so they know exactly where to {target === 'pickup' ? 'pick you up' : 'drop you off'}.
+              </Text>
             </View>
           ) : null}
           {pending ? null : (

@@ -63,7 +63,8 @@ export const LoginScreen = () => {
         navigation.navigate('EmailVerification', { email: cleanEmail, sendCode: true });
         return;
       }
-      notify('Sign in failed', msg);
+      // 092: a suspended user sees the suspension's duration and reason.
+      notify(msg.startsWith('Your account is suspended') ? 'Account suspended' : 'Sign in failed', msg);
     }
   };
 

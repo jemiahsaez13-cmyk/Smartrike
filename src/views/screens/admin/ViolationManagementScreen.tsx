@@ -20,8 +20,11 @@ import { ConductService, ConductSummary, InvalidCancellation } from '@/models/se
 import { CONDUCT_WINDOW_DAYS } from '@/config/constants';
 import { confirm, notify } from '@/utils/confirm';
 import { colors, layout, radius, spacing, typography } from '@/views/styles/theme';
-import { Card } from '@/views/components/common/Card';
 import { User } from '@/models/types';
+import {
+  EmptyState, Initials, ListHeading, SummaryTile, SummaryTiles,
+  Toolbar, cardStyles, contentFrame, recordStyles, useReportsLayout,
+} from '@/views/components/admin/ReportsUi';
 
 const violationService = new ViolationService();
 const adminService = new AdminService();
@@ -45,6 +48,8 @@ const STATUS_META: Record<ViolationStatus, { label: string; color: string; bg: s
   resolved:  { label: 'Resolved',  color: colors.success, bg: colors.successLight, icon: 'check-circle-outline' },
   dismissed: { label: 'Dismissed', color: colors.textMuted, bg: colors.surfaceAlt, icon: 'close-circle-outline' },
 };
+
+const STATUS_ORDER: ViolationStatus[] = ['open', 'confirmed', 'resolved', 'dismissed'];
 
 const PRESET_VIOLATIONS = [
   'Overcharging passenger',
@@ -73,6 +78,7 @@ const formatDate = (iso: string) =>
 export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boolean }) => {
   const navigation = useNavigation<any>();
   const actor = useAppSelector((state) => state.auth.user);
+  const { columns, compact, tilesInRow } = useReportsLayout();
 
   const [violations, setViolations] = useState<DriverViolation[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -136,10 +142,11 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
   );
 
   // ─── Derived stats ───────────────────────────────────────────────
-  const countOpen      = violations.filter((v) => v.status === 'open').length;
-  const countConfirmed = violations.filter((v) => v.status === 'confirmed').length;
-  const countResolved  = violations.filter((v) => v.status === 'resolved').length;
-  const countDismissed = violations.filter((v) => v.status === 'dismissed').length;
+  const counts = STATUS_ORDER.reduce((acc, key) => {
+    acc[key] = violations.filter((v) => v.status === key).length;
+    return acc;
+  }, {} as Record<ViolationStatus, number>);
+  const toggleFilter = (key: ViolationStatus) => setFilter((current) => (current === key ? 'all' : key));
 
   const filtered = filter === 'all'
     ? violations
@@ -250,20 +257,35 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, embedded && { paddingTop: spacing.md, paddingLeft: spacing.screen, gap: spacing.sm }]}>
-        {!embedded && <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-        </TouchableOpacity>}
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>Violations</Text>
-          <Text style={styles.headerSub}>Driver and passenger records & resolution</Text>
+      {/* Header (embedded: the shared toolbar under the Reports and Violations tabs) */}
+      {embedded ? (
+        <Toolbar
+          title="Violation records"
+          subtitle="Driver and passenger records & resolution"
+          action={
+            <TouchableOpacity style={styles.addBtn} onPress={() => openForm()} activeOpacity={0.85} accessibilityLabel="Record violation">
+              <MaterialCommunityIcons name="plus" size={18} color="#fff" />
+              <Text style={styles.addBtnText}>{compact ? 'Record' : 'Record violation'}</Text>
+            </TouchableOpacity>
+          }
+        />
+      ) : (
+        <View style={styles.header}>
+          <View style={styles.headerInner}>
+            <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
+            </TouchableOpacity>
+            <View style={styles.headerCopy}>
+              <Text style={styles.headerTitle} numberOfLines={1}>Violations</Text>
+              <Text style={styles.headerSub} numberOfLines={1}>Driver and passenger records & resolution</Text>
+            </View>
+            <TouchableOpacity style={styles.addBtn} onPress={() => openForm()} activeOpacity={0.85} accessibilityLabel="Record violation">
+              <MaterialCommunityIcons name="plus" size={18} color="#fff" />
+              <Text style={styles.addBtnText}>{compact ? 'Record' : 'Record violation'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => openForm()} activeOpacity={0.8}>
-          <MaterialCommunityIcons name="plus" size={20} color="#fff" />
-          <Text style={styles.addBtnText}>Record</Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -276,89 +298,79 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
           />
         }
       >
-        {/* Summary stats */}
-        <View style={styles.statsRow}>
-          <StatCard icon="alert-circle" label="Open" value={countOpen} color={colors.error} bg={colors.errorLight} />
-          <StatCard icon="alert-decagram" label="Confirmed" value={countConfirmed} color="#8A5A00" bg={colors.warningLight} />
-          <StatCard icon="check-circle" label="Resolved" value={countResolved} color={colors.success} bg={colors.successLight} />
-          <StatCard icon="close-circle" label="Dismissed" value={countDismissed} color={colors.textMuted} bg={colors.surfaceAlt} />
-        </View>
+        {/* Summary tiles: each one filters the list; tap again to show all */}
+        <SummaryTiles>
+          {STATUS_ORDER.map((key) => (
+            <SummaryTile
+              key={key}
+              icon={STATUS_META[key].icon}
+              label={STATUS_META[key].label}
+              value={counts[key]}
+              color={STATUS_META[key].color}
+              bg={STATUS_META[key].bg}
+              active={filter === key}
+              inRow={tilesInRow}
+              onPress={() => toggleFilter(key)}
+            />
+          ))}
+        </SummaryTiles>
 
         {/* Users who crossed the weekly threshold — review only, no auto-restriction */}
         {needsReview.length > 0 && (
           <View style={styles.reviewBox}>
             <View style={styles.reviewHeader}>
-              <MaterialCommunityIcons name="flag" size={16} color={colors.error} />
-              <Text style={styles.reviewTitle}>NEEDS ADMIN REVIEW · LAST {CONDUCT_WINDOW_DAYS} DAYS</Text>
+              <View style={styles.reviewHeaderIcon}>
+                <MaterialCommunityIcons name="flag" size={14} color="#fff" />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.reviewTitle}>Needs admin review</Text>
+                <Text style={styles.reviewHint}>Last {CONDUCT_WINDOW_DAYS} days · flags are for review only, no restriction until you act.</Text>
+              </View>
             </View>
-            {needsReview.map((c) => {
-              const u = userById(c.userId);
-              return (
-                <View key={c.userId} style={styles.reviewRow}>
-                  <View style={styles.reviewCopy}>
-                    <Text style={styles.reviewName} numberOfLines={1}>
-                      {u?.name ?? 'User'}{u ? ` · ${u.user_type === 'driver' ? 'Driver' : 'Passenger'}` : ''}
-                    </Text>
-                    {c.flagged && <Text style={styles.reviewMeta}>{c.confirmedViolations} confirmed violations</Text>}
-                    {c.repeatedCancellations && (
-                      <Text style={styles.reviewMeta}>{c.invalidCancellations} cancellations without a valid reason</Text>
-                    )}
+            <View style={[styles.reviewGrid, columns > 1 && styles.reviewGridWide]}>
+              {needsReview.map((c) => {
+                const u = userById(c.userId);
+                return (
+                  <View key={c.userId} style={[styles.reviewRow, columns > 1 && styles.reviewRowWide]}>
+                    <Initials name={u?.name} color={colors.error} bg={colors.errorLight} />
+                    <View style={styles.reviewCopy}>
+                      <Text style={styles.reviewName} numberOfLines={1}>
+                        {u?.name ?? 'User'}{u ? ` · ${u.user_type === 'driver' ? 'Driver' : 'Passenger'}` : ''}
+                      </Text>
+                      {c.flagged && <Text style={styles.reviewMeta}>{c.confirmedViolations} confirmed violations</Text>}
+                      {c.repeatedCancellations && (
+                        <Text style={styles.reviewMeta}>{c.invalidCancellations} cancellations without a valid reason</Text>
+                      )}
+                    </View>
+                    <View style={[styles.reviewActions, compact && styles.reviewActionsStacked]}>
+                      {c.repeatedCancellations && (
+                        <TouchableOpacity style={styles.reviewBtn} onPress={() => recordRepeatedCancellations(c)} activeOpacity={0.8}>
+                          <Text style={styles.reviewBtnText}>Record</Text>
+                        </TouchableOpacity>
+                      )}
+                      {c.flagged && (
+                        <TouchableOpacity
+                          style={styles.reviewBtn}
+                          onPress={() => navigation.navigate('UserManagement', { filter: 'flagged' })}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.reviewBtnText}>Review</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
-                  {c.repeatedCancellations && (
-                    <TouchableOpacity style={styles.reviewBtn} onPress={() => recordRepeatedCancellations(c)} activeOpacity={0.8}>
-                      <Text style={styles.reviewBtnText}>Record</Text>
-                    </TouchableOpacity>
-                  )}
-                  {c.flagged && (
-                    <TouchableOpacity
-                      style={styles.reviewBtn}
-                      onPress={() => navigation.navigate('UserManagement', { filter: 'flagged' })}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.reviewBtnText}>Review</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })}
-            <Text style={styles.reviewHint}>
-              Flags are for review only. No restriction is applied until you act on the account.
-            </Text>
+                );
+              })}
+            </View>
           </View>
         )}
 
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContent}
-        >
-          {FILTERS.map(({ key, label }) => {
-            const active = filter === key;
-            const count =
-              key === 'all' ? violations.length
-              : key === 'open' ? countOpen
-              : key === 'confirmed' ? countConfirmed
-              : key === 'resolved' ? countResolved
-              : countDismissed;
-            return (
-              <TouchableOpacity
-                key={key}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setFilter(key)}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-                <View style={[styles.chipBadge, active && styles.chipBadgeActive]}>
-                  <Text style={[styles.chipBadgeText, active && styles.chipBadgeTextActive]}>{count}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <Text style={styles.resultCount}>SHOWING {filtered.length} RECORDS</Text>
+        <ListHeading
+          title={filter === 'all' ? 'All violations' : `${STATUS_META[filter].label} violations`}
+          count={filtered.length}
+          filtered={filter !== 'all'}
+          onClear={() => setFilter('all')}
+        />
 
         {/* List */}
         {loading ? (
@@ -366,23 +378,24 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
             <ActivityIndicator color={colors.primary} size="large" />
           </View>
         ) : filtered.length === 0 ? (
-          <View style={styles.empty}>
-            <MaterialCommunityIcons name="shield-check-outline" size={52} color={colors.textLight} />
-            <Text style={styles.emptyTitle}>No {filter === 'all' ? '' : filter} violations</Text>
-            <Text style={styles.emptyText}>
-              Tap <Text style={{ color: colors.primary, fontWeight: '700' }}>Record</Text> to log a driver or passenger violation.
-            </Text>
-          </View>
+          <EmptyState
+            icon="shield-check-outline"
+            title={`No ${filter === 'all' ? '' : `${STATUS_META[filter].label.toLowerCase()} `}violations`}
+            body={<>Tap <Text style={{ color: colors.primary, fontWeight: '700' }}>Record</Text> to log a driver or passenger violation.</>}
+          />
         ) : (
-          filtered.map((v) => (
-            <ViolationCard
-              key={v.id}
-              violation={v}
-              flagged={!!conduct.get((v.driver_id || v.passenger_id) ?? '')?.flagged}
-              busy={statusBusy === v.id}
-              onChangeStatus={changeStatus}
-            />
-          ))
+          <View style={cardStyles.grid}>
+            {filtered.map((v) => (
+              <View key={v.id} style={columns > 1 ? cardStyles.cell2 : cardStyles.cell1}>
+                <ViolationCard
+                  violation={v}
+                  flagged={!!conduct.get((v.driver_id || v.passenger_id) ?? '')?.flagged}
+                  busy={statusBusy === v.id}
+                  onChangeStatus={changeStatus}
+                />
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -599,18 +612,6 @@ export const ViolationManagementScreen = ({ embedded = false }: { embedded?: boo
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-const StatCard = ({
-  icon, label, value, color, bg,
-}: {
-  icon: string; label: string; value: number; color: string; bg: string;
-}) => (
-  <View style={[styles.statCard, { backgroundColor: bg }]}>
-    <MaterialCommunityIcons name={icon as any} size={20} color={color} />
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
-    <Text style={[styles.statLabel, { color }]}>{label}</Text>
-  </View>
-);
-
 interface ViolationCardProps {
   violation: DriverViolation;
   flagged: boolean;
@@ -620,97 +621,99 @@ interface ViolationCardProps {
 
 const ViolationCard = ({ violation: v, flagged, busy, onChangeStatus }: ViolationCardProps) => {
   const meta = STATUS_META[v.status];
+  const isPassenger = !!v.passenger_id;
+  const name = v.subject_name ?? v.driver_name ?? 'User';
   return (
-    <Card variant="elevated" padding="md" style={styles.card}>
-      {/* Card header */}
-      <View style={styles.cardHeader}>
-        <View style={styles.cardAvatar}>
-          <MaterialCommunityIcons name="account-alert-outline" size={22} color={colors.error} />
+    <View style={[cardStyles.card, recordStyles.cardFill]}>
+      <View style={[cardStyles.accent, { backgroundColor: meta.color }]} />
+      <View style={cardStyles.body}>
+        {/* Who + status */}
+        <View style={recordStyles.cardHeader}>
+          <Initials
+            name={name}
+            color={isPassenger ? '#1D5FA8' : colors.primary}
+            bg={isPassenger ? '#E8F1FC' : colors.primaryLight}
+          />
+          <View style={recordStyles.cardNames}>
+            <Text style={recordStyles.cardDriverName} numberOfLines={1}>{name}</Text>
+            <View style={recordStyles.cardMetaRow}>
+              <Text style={recordStyles.rolePill}>{isPassenger ? 'Passenger' : 'Driver'}</Text>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={12} color={colors.textMuted} />
+              <Text style={recordStyles.cardDate}>{formatDate(v.incident_date)}</Text>
+            </View>
+          </View>
+          <View style={[recordStyles.statusBadge, { backgroundColor: meta.bg }]}>
+            <MaterialCommunityIcons name={meta.icon as any} size={12} color={meta.color} />
+            <Text style={[recordStyles.statusText, { color: meta.color }]}>{meta.label}</Text>
+          </View>
         </View>
-        <View style={styles.cardNames}>
-          <Text style={styles.cardDriverName}>
-            {v.subject_name ?? v.driver_name ?? 'User'}
-          </Text>
-          <Text style={styles.cardDate}>{v.passenger_id ? 'Passenger' : 'Driver'} / {formatDate(v.incident_date)}</Text>
-          {flagged && (
-            <View style={styles.flagPill}>
-              <MaterialCommunityIcons name="flag" size={10} color={colors.error} />
-              <Text style={styles.flagPillText}>FLAGGED THIS WEEK</Text>
+
+        {/* What happened */}
+        <View style={recordStyles.violationTypeRow}>
+          <MaterialCommunityIcons name="alert-outline" size={16} color={colors.error} />
+          <Text style={recordStyles.violationType}>{v.violation_type}</Text>
+        </View>
+        {v.description ? <Text style={recordStyles.description}>{v.description}</Text> : null}
+
+        {(v.penalty || flagged || v.report_id) ? (
+          <View style={recordStyles.tagRow}>
+            {v.penalty ? (
+              <View style={recordStyles.penaltyBox}>
+                <MaterialCommunityIcons name="gavel" size={13} color="#8A5A00" />
+                <Text style={recordStyles.penaltyText}>{v.penalty}</Text>
+              </View>
+            ) : null}
+            {flagged ? (
+              <View style={recordStyles.flagPill}>
+                <MaterialCommunityIcons name="flag" size={11} color={colors.error} />
+                <Text style={recordStyles.flagPillText}>Flagged this week</Text>
+              </View>
+            ) : null}
+            {v.report_id ? (
+              <View style={recordStyles.sourcePill}>
+                <MaterialCommunityIcons name="link-variant" size={11} color={colors.textSecondary} />
+                <Text style={recordStyles.sourcePillText}>From user report</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Status actions */}
+        <View style={recordStyles.cardFooter}>
+          {busy ? (
+            <View style={recordStyles.busyRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={recordStyles.busyText}>Updating…</Text>
+            </View>
+          ) : v.status === 'open' ? (
+            <View style={recordStyles.actions}>
+              <TouchableOpacity style={recordStyles.resolveBtn} onPress={() => onChangeStatus(v, 'confirmed')} activeOpacity={0.85}>
+                <MaterialCommunityIcons name="check" size={16} color="#fff" />
+                <Text style={recordStyles.resolveBtnText}>Confirm Violation</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={recordStyles.dismissBtn} onPress={() => onChangeStatus(v, 'dismissed')} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="close" size={16} color={colors.error} />
+                <Text style={recordStyles.dismissBtnText}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          ) : v.status === 'confirmed' ? (
+            <View style={recordStyles.actions}>
+              <TouchableOpacity style={recordStyles.resolveBtn} onPress={() => onChangeStatus(v, 'resolved')} activeOpacity={0.85}>
+                <MaterialCommunityIcons name="check-all" size={16} color="#fff" />
+                <Text style={recordStyles.resolveBtnText}>Mark Resolved</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={recordStyles.closedRow}>
+              <MaterialCommunityIcons name={meta.icon as any} size={14} color={colors.textMuted} />
+              <Text style={recordStyles.closedNote}>
+                {v.status === 'resolved' ? 'Resolved' : 'Dismissed'} · No further action needed
+              </Text>
             </View>
           )}
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
-          <MaterialCommunityIcons name={meta.icon as any} size={12} color={meta.color} />
-          <Text style={[styles.statusText, { color: meta.color }]}>{meta.label.toUpperCase()}</Text>
-        </View>
       </View>
-
-      {v.report_id && <Text style={styles.description}>Source: user report {v.report_id.slice(0, 8)}</Text>}
-
-      {/* Violation type */}
-      <View style={styles.violationTypeRow}>
-        <MaterialCommunityIcons name="alert-outline" size={16} color={colors.error} />
-        <Text style={styles.violationType}>{v.violation_type}</Text>
-      </View>
-
-      {/* Description */}
-      {v.description ? (
-        <Text style={styles.description}>{v.description}</Text>
-      ) : null}
-
-      {/* Penalty */}
-      {v.penalty ? (
-        <View style={styles.penaltyBox}>
-          <MaterialCommunityIcons name="gavel" size={14} color={colors.textSecondary} />
-          <Text style={styles.penaltyText}>{v.penalty}</Text>
-        </View>
-      ) : null}
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Status actions */}
-      {busy ? (
-        <View style={styles.busyRow}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.busyText}>Updating…</Text>
-        </View>
-      ) : v.status === 'open' ? (
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.dismissBtn}
-            onPress={() => onChangeStatus(v, 'dismissed')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="close" size={15} color="#fff" />
-            <Text style={styles.dismissBtnText}>Dismiss</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.resolveBtn}
-            onPress={() => onChangeStatus(v, 'confirmed')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="check" size={15} color="#fff" />
-            <Text style={styles.resolveBtnText}>Confirm Violation</Text>
-          </TouchableOpacity>
-        </View>
-      ) : v.status === 'confirmed' ? (
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.resolveBtn}
-            onPress={() => onChangeStatus(v, 'resolved')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="check-all" size={15} color="#fff" />
-            <Text style={styles.resolveBtnText}>Mark Resolved</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <Text style={styles.closedNote}>
-          {v.status === 'resolved' ? '✓ Resolved' : '— Dismissed'} · No further action needed
-        </Text>
-      )}
-    </Card>
+    </View>
   );
 };
 
@@ -722,219 +725,90 @@ const styles = StyleSheet.create({
   roleOption: { flex: 1, minHeight: 44, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceAlt,
   },
 
   // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingTop: layout.headerTop,
     paddingBottom: spacing.md,
-    paddingRight: spacing.screen,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  headerInner: {
+    ...contentFrame,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
   back: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -spacing.sm,
   },
   headerCopy: { flex: 1, minWidth: 0 },
   headerTitle: { ...typography.h2, fontSize: 22 },
-  headerSub: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 1 },
+  headerSub: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     backgroundColor: colors.error,
     paddingHorizontal: spacing.md,
-    minHeight: 38,
+    minHeight: 44,
     borderRadius: radius.md,
   },
   addBtnText: { ...typography.label, color: '#fff', fontSize: 13 },
 
   // Scroll
-  scrollContent: { paddingBottom: 100 },
-
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.screen,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: 4,
-  },
-  statValue: { fontSize: 24, fontWeight: '800', fontFamily: 'Poppins_700Bold' },
-  statLabel: {
-    ...typography.labelSmall,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  scrollContent: {
+    ...contentFrame,
+    paddingHorizontal: spacing.md,
+    paddingBottom: layout.contentBottom,
   },
 
   // Weekly review flags
   reviewBox: {
-    marginHorizontal: spacing.screen,
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.errorLight,
+    borderWidth: 1,
+    borderColor: '#FFD6D1',
     gap: spacing.sm,
   },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  reviewTitle: { ...typography.labelSmall, fontSize: 10, fontWeight: '800', letterSpacing: 1, color: colors.error },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  reviewHeaderIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: colors.error,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  reviewTitle: { ...typography.label, fontSize: 14, color: colors.error },
+  reviewHint: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary },
+  reviewGrid: { gap: spacing.sm },
+  reviewGridWide: { flexDirection: 'row', flexWrap: 'wrap' },
   reviewRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
     backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.sm,
   },
+  reviewRowWide: { flexBasis: '48%', flexGrow: 1, minWidth: 0 },
   reviewCopy: { flex: 1, minWidth: 0 },
   reviewName: { ...typography.label, fontSize: 14, color: colors.text },
   reviewMeta: { ...typography.bodySmall, fontSize: 12, color: colors.error, marginTop: 1 },
+  reviewActions: { flexDirection: 'row', gap: spacing.xs },
+  reviewActionsStacked: { flexDirection: 'column' },
   reviewBtn: {
     minHeight: 36, paddingHorizontal: spacing.md, borderRadius: radius.md,
     backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center',
   },
   reviewBtnText: { ...typography.label, fontSize: 12, color: '#fff' },
-  reviewHint: { ...typography.bodySmall, fontSize: 11, color: colors.textSecondary },
-  flagPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start',
-    marginTop: 4, paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: radius.sm, backgroundColor: colors.errorLight,
-  },
-  flagPillText: { ...typography.labelSmall, fontSize: 9, fontWeight: '800', color: colors.error, letterSpacing: 0.5 },
-
-  // Filter chips
-  filterScroll: { marginTop: spacing.sm },
-  filterContent: {
-    paddingHorizontal: spacing.screen,
-    gap: spacing.sm,
-    paddingBottom: spacing.xs,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.label, fontSize: 13, color: colors.textSecondary },
-  chipTextActive: { color: '#fff' },
-  chipBadge: {
-    minWidth: 20, height: 20, borderRadius: 10,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5,
-  },
-  chipBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  chipBadgeText: { ...typography.labelSmall, fontSize: 10, fontWeight: '800', color: colors.textSecondary },
-  chipBadgeTextActive: { color: '#fff' },
-
-  resultCount: {
-    ...typography.labelSmall,
-    color: colors.textMuted,
-    fontSize: 10,
-    letterSpacing: 1.5,
-    marginHorizontal: spacing.screen,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-
-  // Violation card
-  card: {
-    marginHorizontal: spacing.screen,
-    marginBottom: spacing.md,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  cardAvatar: {
-    width: 40, height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.errorLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  cardNames: { flex: 1, minWidth: 0 },
-  cardDriverName: { ...typography.label, fontSize: 15, color: colors.text },
-  cardDate: { ...typography.bodySmall, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 5,
-    borderRadius: radius.sm,
-  },
-  statusText: { ...typography.labelSmall, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-
-  violationTypeRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    marginBottom: spacing.sm,
-  },
-  violationType: { ...typography.label, fontSize: 14, color: colors.text, flex: 1 },
-
-  description: {
-    ...typography.body,
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
-  },
-
-  penaltyBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: colors.warningLight,
-    paddingHorizontal: spacing.sm, paddingVertical: 6,
-    borderRadius: radius.sm,
-    marginBottom: spacing.sm,
-  },
-  penaltyText: { flex: 1, ...typography.labelSmall, fontSize: 12, color: '#8A5A00' },
-
-  divider: { height: 1, backgroundColor: colors.borderLight, marginBottom: spacing.sm },
-
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  dismissBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 8,
-    backgroundColor: colors.error,
-    borderRadius: radius.md,
-  },
-  dismissBtnText: { ...typography.label, fontSize: 13, color: '#fff', flexShrink: 1, textAlign: 'center' },
-  resolveBtn: {
-    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, minHeight: 44, paddingVertical: 10, paddingHorizontal: 8,
-    backgroundColor: colors.primary, borderRadius: radius.md,
-  },
-  resolveBtnText: { ...typography.label, fontSize: 13, color: '#fff', flexShrink: 1, textAlign: 'center' },
-  busyRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: spacing.sm, minHeight: 44,
-  },
-  busyText: { ...typography.label, fontSize: 13, color: colors.textSecondary },
-  closedNote: {
-    ...typography.bodySmall, fontSize: 12,
-    color: colors.textMuted, fontStyle: 'italic',
-    textAlign: 'center', paddingVertical: 6,
-  },
 
   // States
   center: { alignItems: 'center', paddingVertical: 60 },
-  empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: spacing.screen },
-  emptyTitle: { ...typography.h3, marginTop: spacing.md },
   emptyText: { ...typography.body, color: colors.textMuted, textAlign: 'center', marginTop: spacing.xs, lineHeight: 20 },
 
   // Add violation sheet
@@ -949,6 +823,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     maxHeight: '92%',
     paddingBottom: spacing.lg,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   sheetHandle: {
     width: 40, height: 4, borderRadius: 2,

@@ -41,6 +41,7 @@ import { TricycleIcon } from '@/views/components/common/TricycleIcon';
 import { MtopPaymentRecords } from '@/views/components/driver/MtopPaymentRecords';
 import { pickImageDataUri } from '@/utils/pickImageDataUri';
 import { SUPPORT } from '@/config/constants';
+import { LICENSE_NUMBER_FORMAT, isValidDriverLicenseNumber, normalizeDriverLicenseNumber } from '@/utils/validationUtils';
 import { TodaAssociation } from '@/models/entities/Toda';
 import { TodaService } from '@/models/services/TodaService';
 
@@ -140,6 +141,8 @@ export const FranchiseScreen = () => {
   const [successorName, setSuccessorName] = useState('');
   const [successorEmail, setSuccessorEmail] = useState('');
   const [successorPhone, setSuccessorPhone] = useState('');
+  const [successorLicense, setSuccessorLicense] = useState('');
+  const successorLicenseValid = isValidDriverLicenseNumber(successorLicense);
   const [successionRelationship, setSuccessionRelationship] = useState<SuccessorRelationship>('child');
   const [successionReason, setSuccessionReason] = useState('');
   const [successionDocs, setSuccessionDocs] = useState<Partial<Record<SuccessionDocumentKey, string>>>({});
@@ -173,6 +176,7 @@ export const FranchiseScreen = () => {
         successorName,
         successorEmail,
         successorPhone,
+        successorLicense,
         relationship: successionRelationship,
         reason: successionReason,
         documents: SUCCESSION_DOCUMENTS
@@ -185,6 +189,7 @@ export const FranchiseScreen = () => {
       setSuccessorName('');
       setSuccessorEmail('');
       setSuccessorPhone('');
+      setSuccessorLicense('');
       setSuccessionReason('');
       await notify('Request sent', `Your succession request to ${request.successor_name} was sent to the administrator for review.`);
     } catch (error: any) {
@@ -415,21 +420,13 @@ export const FranchiseScreen = () => {
 
   const handleRenew = async () => {
     if (myApplication) {
-      const standing = renewalStanding(myApplication);
       if (myApplication.franchise_status === 'terminated') {
-        void notify('MTOP terminated', 'This MTOP was terminated after 3 years without renewal. Submit a new franchise application instead.');
-        return;
-      }
-      if (!standing.dueThisYear) {
-        void notify('Already renewed', `Your MTOP is already renewed for ${standing.coveredYear}. The next renewal period is January 1 – March 31, ${(standing.coveredYear ?? new Date().getFullYear()) + 1}.`);
-        return;
-      }
-      if (standing.phase === 'closed') {
-        void notify('Renewal period closed', `MTOP renewal is only accepted from January 1 to March 31. The next renewal period opens January 1, ${standing.nextWindowYear}.`);
+        void notify('MTOP terminated', 'This MTOP was terminated because it was not renewed within 3 years after it expired. Submit a new franchise application instead.');
         return;
       }
     }
-    const yes = await confirm('Renew Franchise', 'You must upload new, updated copies of all MTOP requirements. Continue?', {
+    const renewedTo = myApplication ? renewalStanding(myApplication).renewedExpiry : null;
+    const yes = await confirm('Renew Franchise', `You must upload new, updated copies of all MTOP requirements.${renewedTo ? ` Once the administrator approves the renewal, your MTOP is valid until ${formatLongDate(renewedTo)} (3 years added to your current expiry).` : ''} Continue?`, {
       confirmText: 'Continue',
       cancelText: 'Cancel',
     });
@@ -521,24 +518,20 @@ export const FranchiseScreen = () => {
   // --- Active MTOP ---
   if (isActive && !renewalMode) {
     const standing = renewalStanding(myApplication!);
-    const yearNow = new Date().getFullYear();
     const renewalNotice = recordStatus === 'terminated'
       ? { icon: 'close-octagon-outline', fg: colors.error, bg: colors.errorLight, title: 'MTOP terminated',
-          body: 'Terminated after 3 years without renewal. Submit a new franchise application to operate again.' }
+          body: 'Not renewed within 3 years after it expired. Submit a new franchise application to operate again.' }
       : recordStatus === 'expired'
       ? { icon: 'calendar-remove-outline', fg: colors.error, bg: colors.errorLight, title: 'MTOP expired',
-          body: `The 3-year term ended on ${formatLongDate(standing.expiryDate)}. Renew between January 1 and March 31 to start a new term. You cannot go online until then.` }
+          body: `Expired on ${formatLongDate(standing.expiryDate)}. You cannot go online until it is renewed. Renew now; once approved, it is valid until ${formatLongDate(standing.renewedExpiry)}.${standing.terminationDate ? ` It is terminated if not renewed by ${formatLongDate(standing.terminationDate)}.` : ''}` }
       : recordStatus === 'suspended'
       ? { icon: 'pause-octagon-outline', fg: '#B42318', bg: '#FEF0C7', title: 'MTOP suspended',
-          body: `Not renewed by March 31. You cannot go online until you renew (January 1 – March 31, ${standing.nextWindowYear}). ${3 - standing.missedYears > 0 ? `Termination after ${3 - standing.missedYears} more missed year${3 - standing.missedYears === 1 ? '' : 's'}.` : ''}` }
-      : standing.dueThisYear && standing.phase === 'regular'
-      ? { icon: 'calendar-clock', fg: colors.primary, bg: colors.primaryLight, title: `${yearNow} renewal is open`,
-          body: `Renewal period: January 1 – March 31, ${yearNow}. Deadline: March 31, ${yearNow}. February–March is the grace period; unrenewed MTOPs are suspended starting April 1.` }
-      : standing.dueThisYear && standing.phase === 'grace'
-      ? { icon: 'timer-sand', fg: '#9A6700', bg: colors.warningLight, title: 'Renewal grace period',
-          body: `Your ${yearNow} renewal is not yet filed. Deadline: March 31, ${yearNow}. Unrenewed MTOPs are suspended starting April 1.` }
-      : { icon: 'check-decagram-outline', fg: colors.primary, bg: colors.primaryLight, title: `Renewed for ${standing.coveredYear ?? yearNow}`,
-          body: `Next renewal: January 1 – March 31, ${(standing.coveredYear ?? yearNow) + 1} (February–March is the grace period).` + (standing.daysToExpiry !== null && standing.daysToExpiry <= 60 ? ` Your 3-year term ends ${formatLongDate(standing.expiryDate)}.` : '') };
+          body: 'You cannot go online while the MTOP is suspended. Contact the FEDTODAB office for details.' }
+      : standing.dueSoon
+      ? { icon: 'timer-sand', fg: '#9A6700', bg: colors.warningLight, title: 'MTOP expiring soon',
+          body: `Expires on ${formatLongDate(standing.expiryDate)}${standing.daysToExpiry !== null ? ` (${standing.daysToExpiry} day${standing.daysToExpiry === 1 ? '' : 's'} left)` : ''}. Renew now; once approved, it is valid until ${formatLongDate(standing.renewedExpiry)}.` }
+      : { icon: 'check-decagram-outline', fg: colors.primary, bg: colors.primaryLight, title: `Valid until ${formatLongDate(standing.expiryDate)}`,
+          body: `You can renew any time. Once approved, 3 years are added to your expiry: valid until ${formatLongDate(standing.renewedExpiry)}.` };
     return (
       <View style={styles.container}>
         <Header subtitle={`Operational status: ${recordStatusLabel}`} />
@@ -614,11 +607,7 @@ export const FranchiseScreen = () => {
               style={styles.renewBtn}
             >
               <MaterialCommunityIcons name="autorenew" size={18} color={standing.canRenew ? colors.primary : colors.textMuted} style={{ marginRight: 8 }} />
-              {standing.canRenew
-                ? `Renew for ${new Date().getFullYear()}`
-                : standing.dueThisYear
-                ? `Renewal opens Jan 1, ${standing.nextWindowYear}`
-                : `Renewed for ${standing.coveredYear}`}
+              Renew MTOP
             </Button>
           ) : null}
 
@@ -800,6 +789,22 @@ export const FranchiseScreen = () => {
                         autoCapitalize="words"
                         maxLength={255}
                       />
+
+                      <Text style={couModalStyles.label}>SUCCESSOR'S DRIVER'S LICENSE NO.</Text>
+                      <TextInput
+                        style={couModalStyles.input}
+                        value={successorLicense}
+                        onChangeText={setSuccessorLicense}
+                        onBlur={() => setSuccessorLicense((value) => (value.trim() ? normalizeDriverLicenseNumber(value) : value))}
+                        placeholder="e.g. A01-23-456789"
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        maxLength={20}
+                      />
+                      {successorLicense.trim() && !successorLicenseValid ? (
+                        <Text style={[couModalStyles.hint, { color: colors.error }]}>{LICENSE_NUMBER_FORMAT}</Text>
+                      ) : null}
                     </>
                   ) : null}
 
@@ -907,6 +912,7 @@ export const FranchiseScreen = () => {
                     disabled={
                       successorHasAccount === null
                       || successorName.trim().length < 2
+                      || !successorLicenseValid
                       || (successorHasAccount && !successorEmail.trim())
                       || successionReason.trim().length < 3
                       || !successionDocsReady
@@ -1107,7 +1113,7 @@ export const FranchiseScreen = () => {
           {user?.id ? <MtopPaymentRecords driverId={user.id} refreshKey={`${myApplication?.id}:${myApplication?.updated_at}`} /> : null}
 
           <Text style={styles.note}>
-            Renew every year from January 1 to March 31. One missed year suspends the MTOP; three missed years terminate it. Each term lasts 3 years from the date issued.
+            You can renew your MTOP any time. Each approved renewal adds 3 years to the current expiry date. An expired MTOP cannot go online, and it is terminated 3 years after expiry without renewal.
           </Text>
         </ScrollView>
       </View>

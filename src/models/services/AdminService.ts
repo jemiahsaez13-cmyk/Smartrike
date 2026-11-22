@@ -84,7 +84,7 @@ export class AdminService {
     );
   }
 
-  async updateUserStatus(id: string, status: 'active' | 'inactive' | 'suspended'): Promise<User> {
+  async updateUserStatus(id: string, status: 'active' | 'inactive'): Promise<User> {
     const { data, error } = await supabase
       .from('users')
       .update({ status })
@@ -161,6 +161,23 @@ export class AdminService {
   // (which cascades from auth.users). Deleting only the profile row used to
   // leave the login behind, so the person could neither sign in ("profile not
   // found") nor sign up again ("already registered") with that email.
+  /** Suspends an account for `days` days with a reason the user sees at sign-in (092). */
+  async suspendUser(id: string, days: number, reason: string): Promise<User> {
+    const { data, error } = await supabase.rpc('admin_suspend_user', {
+      p_user_id: id,
+      p_days: Math.round(days),
+      p_reason: reason.trim(),
+    });
+    if (error) {
+      const message = String(error.message || '');
+      if (/function .*admin_suspend_user|could not find the function/i.test(message)) {
+        throw new Error('Suspending with a duration needs database migration 092. Apply it in the Supabase SQL editor, then try again.');
+      }
+      throw new Error(message || 'The account could not be suspended.');
+    }
+    return (Array.isArray(data) ? data[0] : data) as User;
+  }
+
   /** Permanent: the account can never be reactivated or deleted from the app. */
   async deactivateUser(id: string, reason: string): Promise<User> {
     const { data, error } = await supabase.rpc('admin_deactivate_user', { p_user_id: id, p_reason: reason.trim() });

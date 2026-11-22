@@ -14,6 +14,7 @@ import {
   allDocumentsApproved,
 } from '@/models/entities/Franchise';
 import { User } from '@/models/entities/User';
+import { LICENSE_NUMBER_FORMAT, isValidDriverLicenseNumber, normalizeDriverLicenseNumber } from '@/utils/validationUtils';
 
 export type SuccessorAccount = Pick<User, 'id' | 'name' | 'email' | 'phone'> & {
   license_number: string | null;
@@ -290,11 +291,15 @@ export class FranchiseService {
     successorName: string;
     successorEmail?: string;
     successorPhone?: string;
+    successorLicense: string;
     relationship: SuccessorRelationship;
     reason: string;
     documents: Array<{ key: SuccessionDocumentKey; file_url: string }>;
   }): Promise<SuccessionRequest> {
     if (input.successorName.trim().length < 2) throw new Error('Enter your successor’s full name.');
+    if (!isValidDriverLicenseNumber(input.successorLicense)) {
+      throw new Error(`Enter your successor’s driver’s license number. ${LICENSE_NUMBER_FORMAT}`);
+    }
     if (input.hasAccount && !input.successorEmail?.trim()) {
       throw new Error('Enter the email your successor uses in the Smart Trike app.');
     }
@@ -308,6 +313,7 @@ export class FranchiseService {
       p_relationship: input.relationship,
       p_reason: input.reason.trim(),
       p_documents: input.documents,
+      p_successor_license: normalizeDriverLicenseNumber(input.successorLicense),
     });
     if (error) throw new Error(error.message);
     return data as SuccessionRequest;

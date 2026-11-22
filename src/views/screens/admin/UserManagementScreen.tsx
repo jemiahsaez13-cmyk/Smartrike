@@ -24,6 +24,7 @@ import { CountBadge } from '@/views/components/common/CountBadge';
 import { colors, spacing, typography, radius } from '@/views/styles/theme';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
+import { SUSPENSION_MAX_DAYS, SUSPENSION_PRESET_DAYS, dayLabel, describeSuspension } from '@/utils/suspension';
 
 const adminService = new AdminService();
 const conductService = new ConductService();
@@ -66,6 +67,12 @@ export const UserManagementScreen = () => {
   // Permanent deactivation form
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
   const [deactivateReason, setDeactivateReason] = useState('');
+
+  // Suspension form (092): duration and reason are both required.
+  const [suspendTarget, setSuspendTarget] = useState<User | null>(null);
+  const [suspendDays, setSuspendDays] = useState<number | null>(null);
+  const [suspendCustom, setSuspendCustom] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
 
   // Opened again from the Violations review list with a filter preset.
   useEffect(() => {
@@ -138,23 +145,77 @@ export const UserManagementScreen = () => {
     return matchesQuery && matchesFilter;
   });
 
-  const applyStatus = async (user: User, status: 'active' | 'suspended') => {
+  const reactivate = async (user: User) => {
     setWorking(true);
     try {
-      const updated = await adminService.updateUserStatus(user.id, status);
+      const updated = await adminService.updateUserStatus(user.id, 'active');
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
       setSelected(updated);
-      // 091: a suspension is the penalty, so the account's flag closes.
-      if (status === 'suspended') void load();
       void ActivityLogService.logActivity({
         action_type: 'user_action',
         entity_type: 'user',
         entity_id: user.id,
-        description: `Admin ${status === 'suspended' ? 'suspended' : 'reactivated'} ${user.name}.`,
-        severity: status === 'suspended' ? 'warning' : 'success',
+        description: `Admin reactivated ${user.name}.`,
+        severity: 'success',
       });
     } catch (e: any) {
       notify('Action failed', e?.message || 'Could not update the user.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const openSuspend = async (user: User) => {
+    // Close the action sheet first; only one modal can show at a time.
+    setSelected(null);
+    await new Promise((r) => setTimeout(r, 300));
+    setSuspendDays(null);
+    setSuspendCustom('');
+    setSuspendReason('');
+    setSuspendTarget(user);
+  };
+
+  const chosenSuspendDays = suspendDays ?? (suspendCustom.trim() ? Number(suspendCustom) : NaN);
+  const suspendDaysValid = Number.isInteger(chosenSuspendDays) && chosenSuspendDays >= 1 && chosenSuspendDays <= SUSPENSION_MAX_DAYS;
+
+  const submitSuspend = async () => {
+    const user = suspendTarget;
+    const reason = suspendReason.trim();
+    if (!user) return;
+    if (!suspendDaysValid) {
+      notify('Duration required', `Choose how long the suspension lasts (1 to ${SUSPENSION_MAX_DAYS} days).`);
+      return;
+    }
+    if (reason.length < 5) {
+      notify('Reason required', 'Give the reason for the suspension. The user sees it when they try to sign in.');
+      return;
+    }
+    const days = chosenSuspendDays;
+    setSuspendTarget(null);
+    await new Promise((r) => setTimeout(r, 300));
+    const ok = await confirm(
+      'Suspend account?',
+      `${user.name} will be signed out and cannot use the app for ${dayLabel(days)}. When they try to sign in they see the duration and this reason:\n\n"${reason}"`,
+      { confirmText: 'Suspend', destructive: true }
+    );
+    if (!ok) return;
+
+    setWorking(true);
+    try {
+      const updated = await adminService.suspendUser(user.id, days, reason);
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, ...updated } : u)));
+      void ActivityLogService.logActivity({
+        user_id: currentUser?.id,
+        action_type: 'user_action',
+        entity_type: 'user',
+        entity_id: user.id,
+        description: `Admin suspended ${user.name} for ${dayLabel(days)}. Reason: ${reason}`,
+        severity: 'warning',
+      });
+      notify('Account suspended', `${user.name}'s account is suspended for ${dayLabel(days)}.`);
+      void load(); // 091: a suspension is the penalty, so the account's flag closes.
+    } catch (e: any) {
+      notify('Suspension failed', e?.message || 'Could not suspend the account.');
     } finally {
       setWorking(false);
     }
@@ -548,6 +609,19 @@ export const UserManagementScreen = () => {
                   );
                 })()}
 
+                {selected.status === 'suspended' && (() => {
+                  const { period, remaining } = describeSuspension(selected);
+                  return (
+                    <View style={styles.deactivatedBox}>
+                      <Text style={styles.deactivatedTitle}>Suspended{remaining ? ` · ${remaining}` : ''}</Text>
+                      <Text style={styles.deactivatedNote}>{period}</Text>
+                      {!!selected.suspension_reason && (
+                        <Text style={styles.deactivatedReason}>{selected.suspension_reason}</Text>
+                      )}
+                    </View>
+                  );
+                })()}
+
                 {selected.status === 'deactivated' && (
                   <View style={styles.deactivatedBox}>
                     <Text style={styles.deactivatedTitle}>
@@ -600,12 +674,12 @@ export const UserManagementScreen = () => {
                   </TouchableOpacity>
                 )}
                 {selected.status === 'deactivated' ? null : selected.status !== 'suspended' ? (
-                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyStatus(selected, 'suspended')}>
+                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => openSuspend(selected)}>
                     <MaterialCommunityIcons name="account-cancel-outline" size={20} color={colors.error} />
                     <Text style={[styles.actionLabel, { color: colors.error }]}>Suspend Account</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => applyStatus(selected, 'active')}>
+                  <TouchableOpacity style={styles.actionRow} disabled={working} onPress={() => reactivate(selected)}>
                     <MaterialCommunityIcons name="account-check-outline" size={20} color={colors.success} />
                     <Text style={[styles.actionLabel, { color: colors.success }]}>Reactivate Account</Text>
                   </TouchableOpacity>
@@ -630,6 +704,79 @@ export const UserManagementScreen = () => {
                 </TouchableOpacity>
               </>
             )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Suspension form: duration + reason (092) */}
+      <Modal visible={!!suspendTarget} transparent animationType="slide" onRequestClose={() => setSuspendTarget(null)}>
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setSuspendTarget(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.inviteHeader}>
+              <View style={[styles.inviteIcon, { backgroundColor: colors.errorLight }]}>
+                <MaterialCommunityIcons name="account-cancel" size={22} color={colors.error} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetName}>Suspend Account</Text>
+                <Text style={styles.sheetEmail} numberOfLines={1}>{suspendTarget?.name}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.inviteLabel}>DURATION (REQUIRED)</Text>
+            <View style={styles.durationRow}>
+              {SUSPENSION_PRESET_DAYS.map((days) => {
+                const active = suspendDays === days;
+                return (
+                  <TouchableOpacity
+                    key={days}
+                    style={[styles.chip, styles.durationChip, active && styles.chipActive]}
+                    onPress={() => { setSuspendDays(days); setSuspendCustom(''); }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
+                  >
+                    <Text style={[styles.chipText, active && styles.chipTextActive]}>{dayLabel(days)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <RNTextInput
+              style={styles.inviteInput}
+              placeholder={`Or type the number of days (1–${SUSPENSION_MAX_DAYS})`}
+              placeholderTextColor={colors.textMuted}
+              value={suspendCustom}
+              onChangeText={(text) => { setSuspendCustom(text.replace(/[^0-9]/g, '')); setSuspendDays(null); }}
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+
+            <Text style={styles.inviteLabel}>REASON (REQUIRED)</Text>
+            <RNTextInput
+              style={[styles.inviteInput, styles.reasonInput]}
+              placeholder="e.g. Overcharging passengers on May 2 and May 4"
+              placeholderTextColor={colors.textMuted}
+              value={suspendReason}
+              onChangeText={setSuspendReason}
+              multiline
+              maxLength={500}
+            />
+
+            <Text style={styles.inviteHint}>
+              The user is signed out and cannot sign in until the suspension ends. When they try, they see the duration and this reason. The account is reactivated automatically when the duration is over.
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.inviteSubmit, { backgroundColor: colors.error }, (!suspendDaysValid || suspendReason.trim().length < 5) && { opacity: 0.5 }]}
+              onPress={submitSuspend}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.inviteSubmitText}>
+                {suspendDaysValid ? `Suspend for ${dayLabel(chosenSuspendDays)}` : 'Continue'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setSuspendTarget(null)}>
+              <Text style={styles.closeText}>Cancel</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -817,6 +964,8 @@ const styles = StyleSheet.create({
   flagChipText: { ...typography.labelSmall, fontSize: 10, color: colors.error },
   flagBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.errorLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   flagBannerText: { ...typography.bodySmall, flex: 1, fontSize: 13, color: colors.error, lineHeight: 19 },
+  durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  durationChip: { minHeight: 40, height: undefined },
   deactivatedBox: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, gap: 4 },
   deactivatedTitle: { ...typography.label, fontSize: 14, color: colors.error },
   deactivatedReason: { ...typography.body, fontSize: 13, color: colors.text },
