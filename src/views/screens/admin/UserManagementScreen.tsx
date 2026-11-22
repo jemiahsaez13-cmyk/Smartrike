@@ -144,6 +144,8 @@ export const UserManagementScreen = () => {
       const updated = await adminService.updateUserStatus(user.id, status);
       setUsers((prev) => prev.map((u) => (u.id === user.id ? updated : u)));
       setSelected(updated);
+      // 091: a suspension is the penalty, so the account's flag closes.
+      if (status === 'suspended') void load();
       void ActivityLogService.logActivity({
         action_type: 'user_action',
         entity_type: 'user',
@@ -250,10 +252,18 @@ export const UserManagementScreen = () => {
         description: `Admin issued a warning to ${user.user_type} ${user.name}.`,
         severity: 'warning',
       });
-      notify('Warning sent', `${user.name} has been notified.`);
     } catch (e: any) {
       notify('Could not send warning', e?.message || 'Please try again.');
+      return;
     }
+    // 091: the warning is the penalty, so the account's flag closes.
+    try {
+      await adminService.recordConductWarning(user.id);
+      notify('Warning sent', `${user.name} has been notified.`);
+    } catch (e: any) {
+      notify('Warning sent', `${user.name} has been notified, but the flag stays on: ${e?.message || 'the warning could not be recorded.'}`);
+    }
+    void load();
   };
 
   const openDeactivate = async (user: User) => {
@@ -294,6 +304,7 @@ export const UserManagementScreen = () => {
         severity: 'error',
       });
       notify('Account deactivated', `${user.name}'s account has been permanently deactivated.`);
+      void load(); // 091: the deactivation closes the account's flag.
     } catch (e: any) {
       notify('Deactivation failed', e?.message || 'Could not deactivate the account.');
     } finally {

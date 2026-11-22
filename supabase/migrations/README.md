@@ -425,3 +425,19 @@ the payment.
   still be verified or rejected with `review_mtop_payment` (055).
 - The driver is notified when a billing statement is sent and when the payment
   is recorded.
+
+## A penalty closes the conduct flag (091)
+
+Apply `091_penalty_closes_conduct_flag.sql` after 079. Once the admin acts on a
+flagged account, the flag and its admin alert stop.
+
+- `users.conduct_action` (`warning` / `suspended` / `deactivated`) and
+  `users.conduct_action_at` record the latest penalty. Suspension and
+  deactivation are stamped by a trigger when the status changes;
+  `admin_record_conduct_warning(uuid)` (admin only) stamps an official
+  warning. Direct API writes cannot change these columns.
+- The count starts again after the penalty: only violations recorded
+  (`created_at`) and invalid cancellations made after `conduct_action_at`
+  count, so three new ones flag the account again.
+- Suspended and deactivated accounts are never flagged and raise no alert.
+  Existing suspended / deactivated accounts are backfilled.

@@ -14,6 +14,10 @@ export interface User {
   deactivated_at?: string | null;
   deactivated_by?: string | null;
   deactivation_reason?: string | null;
+  // Latest penalty on a flagged account (migration 091); the conduct flag
+  // counts only what comes after conduct_action_at.
+  conduct_action?: 'warning' | 'suspended' | 'deactivated' | null;
+  conduct_action_at?: string | null;
   rating: number;
   total_trips: number;
   // Primary address captured during profile setup.

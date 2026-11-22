@@ -277,7 +277,10 @@ class QueryBuilder implements PromiseLike<Result> {
             }
           }
         }
+        // Migration 091: a suspension stamps the account's penalty.
+        const suspending = this.table === 'users' && this.payload.status === 'suspended' && row.status !== 'suspended';
         Object.assign(row, this.payload);
+        if (suspending) Object.assign(row, { conduct_action: 'suspended', conduct_action_at: new Date().toISOString() });
         if (this.table === 'franchise_applications') verifyDriverForMtop(row);
       });
       data = rows;
@@ -510,7 +513,18 @@ export const mockSupabase: any = {
         deactivated_by: me.id,
         deactivation_reason: String(params.p_reason).trim(),
         current_status: 'offline',
+        conduct_action: 'deactivated',
+        conduct_action_at: new Date().toISOString(),
       });
+      return { data: clone(target), error: null };
+    }
+    if (fn === 'admin_record_conduct_warning') {
+      // Migration 091: the warning closes the account's conduct flag.
+      const me = currentProfile();
+      if (me?.user_type !== 'admin') return { data: null, error: { message: 'Only administrators can record a warning.' } };
+      const target = db.users.find((u) => u.id === params?.p_user_id && u.user_type !== 'admin' && u.status !== 'deactivated');
+      if (!target) return { data: null, error: { message: 'Only an active or suspended driver or passenger account can receive a warning.' } };
+      Object.assign(target, { conduct_action: 'warning', conduct_action_at: new Date().toISOString() });
       return { data: clone(target), error: null };
     }
     if (fn === 'resubmit_mtop_document') {

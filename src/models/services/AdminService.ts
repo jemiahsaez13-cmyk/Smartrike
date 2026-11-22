@@ -174,6 +174,19 @@ export class AdminService {
     return (Array.isArray(data) ? data[0] : data) as User;
   }
 
+  /** Records an official warning as the account's penalty, closing its conduct flag (091). */
+  async recordConductWarning(id: string): Promise<User> {
+    const { data, error } = await supabase.rpc('admin_record_conduct_warning', { p_user_id: id });
+    if (error) {
+      const message = String(error.message || '');
+      if (/function .*admin_record_conduct_warning|could not find the function/i.test(message)) {
+        throw new Error('Closing the flag after a warning needs database migration 091. Apply it in the Supabase SQL editor.');
+      }
+      throw new Error(message || 'The warning could not be recorded.');
+    }
+    return (Array.isArray(data) ? data[0] : data) as User;
+  }
+
   async deleteUser(id: string): Promise<void> {
     const { error } = await supabase.rpc('admin_delete_user', { p_user_id: id });
     if (error) {
