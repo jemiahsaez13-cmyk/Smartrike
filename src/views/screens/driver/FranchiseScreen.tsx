@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Image, Platform, StyleSheet, ScrollView, TextInput, TouchableOpacity, View, Modal } from 'react-native';
 import { Text, Surface } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -254,9 +255,11 @@ export const FranchiseScreen = () => {
       .finally(() => setLoadingLiveMethods(false));
   }, [myApplication?.status, myApplication?.selected_payment_methods]);
 
-  useEffect(() => {
+  // Every time the tab opens, so an admin change (e.g. a new TODA, 094) shows
+  // even when realtime is off. The loader only shows on the first load.
+  useFocusEffect(useCallback(() => {
     if (user?.id) dispatch(fetchMyApplication(user.id));
-  }, [user?.id]);
+  }, [user?.id, dispatch]));
 
   // Live sync: the moment the admin approves/rejects a document or advances
   // the application, this screen updates — no refresh needed.

@@ -498,3 +498,15 @@ Apply `094_mtop_follows_toda_change.sql` after 093.
   the new TODA ("Body number … is already used in …"). Removing a driver's
   TODA leaves the MTOP unchanged.
 - Renaming a TODA renames it on every MTOP record and driver.
+
+## Existing MTOPs follow the driver's TODA (095)
+
+Apply `095_backfill_mtop_toda.sql` after 094. 094 only moves an MTOP when the
+TODA changes after it is applied; 095 moves the MTOPs of drivers whose TODA was
+changed before that, with the same rules. Records whose body number is already
+used in the driver's TODA are skipped and listed as a NOTICE. It switches
+`enforce_mtop_workflow_trigger` off for its one update and back on.
+
+The driver's MTOP tab now loads its record through
+`franchise_applications_overview()` (090) without the scans, and reloads each
+time the tab opens.

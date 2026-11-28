@@ -28,7 +28,8 @@ export const fetchMyApplication = createAsyncThunk(
   'franchise/fetchMine',
   async (driverId: string, { rejectWithValue }) => {
     try {
-      return await service.getByDriver(driverId);
+      // Light row: the scans made the driver's MTOP tab slow to open.
+      return await service.getMine(driverId);
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

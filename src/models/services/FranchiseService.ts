@@ -112,6 +112,26 @@ export class FranchiseService {
   }
 
   /**
+   * The driver's latest application for their own MTOP screen, without the
+   * document scans (the screen never shows them). Uses the light RPC from
+   * migration 090, which runs under the driver's RLS so it returns only their
+   * own rows, newest first. Falls back to the full row before 090.
+   */
+  async getMine(driverId: string): Promise<FranchiseApplication | null> {
+    const light = await supabase.rpc('franchise_applications_overview');
+    if (!light.error) {
+      const row = ((light.data ?? []) as FranchiseApplication[]).find((a) => a.driver_id === driverId);
+      return row ? this.withDerivedRecordStatus(row) : null;
+    }
+    if (!/franchise_applications_overview|could not find the function|PGRST202/i.test(
+      `${light.error.code ?? ''} ${light.error.message ?? ''}`
+    )) {
+      throw light.error;
+    }
+    return this.getByDriver(driverId);
+  }
+
+  /**
    * Every application for the admin screens, without the document scans
    * (migration 090): rows carry files_omitted and are completed with getById
    * when the admin opens the documents. Falls back to the full rows before 090.
