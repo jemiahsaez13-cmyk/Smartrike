@@ -7,6 +7,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { MARINDUQUE_TOWNS, barangayLocation } from '@/config/marinduque';
 import { Location, SavedAddress } from '@/models/types';
 import { PopularPlace } from '@/config/constants';
+import { findBoacBarangay } from '@/utils/todaRoute';
 import { colors, layout, radius, shadows, spacing, typography } from '@/views/styles/theme';
 
 interface Props {
@@ -23,7 +24,8 @@ interface Props {
 }
 
 // `barangay` is set only when the place was picked from the barangay list.
-interface Pending { loc: Location; label: string; icon: string; barangay?: string; }
+// `hint` is extra text (a popular place's address) used to find its barangay.
+interface Pending { loc: Location; label: string; icon: string; barangay?: string; hint?: string; }
 
 export const LocationChooser: React.FC<Props> = ({
   visible, target, currentLocation, savedAddresses, popularPlaces,
@@ -53,9 +55,12 @@ export const LocationChooser: React.FC<Props> = ({
     if (!pending || !spotReady) return;
     // The purok leads the address so it stays visible where the driver's
     // screens truncate long addresses to one line.
-    const loc: Location = needsSpot
+    const picked: Location = needsSpot
       ? { ...pending.loc, details: spot.trim(), address: `${spot.trim()}, ${pending.loc.address}` }
       : pending.loc;
+    // The barangay decides which TODA's drivers may accept the ride.
+    const barangay = pending.barangay ?? findBoacBarangay(pending.loc.address, pending.hint);
+    const loc: Location = barangay ? { ...picked, barangay } : picked;
     reset();
     onConfirm(loc);
   };
@@ -82,7 +87,7 @@ export const LocationChooser: React.FC<Props> = ({
     setResolving(true);
     try {
       const loc = await resolveSaved(addr);
-      if (loc) setPending({ loc, label: addr.label, icon: 'star' });
+      if (loc) setPending({ loc, label: addr.label, icon: 'star', hint: addr.full_address });
     } finally {
       setResolving(false);
     }
@@ -190,7 +195,7 @@ export const LocationChooser: React.FC<Props> = ({
                   <TouchableOpacity
                     key={p.id}
                     style={[styles.row, isSelected(p.name) && styles.rowActive]}
-                    onPress={() => setPending({ loc: { latitude: p.lat, longitude: p.lng, address: p.name }, label: p.name, icon: (p.icon as any) || 'map-marker' })}
+                    onPress={() => setPending({ loc: { latitude: p.lat, longitude: p.lng, address: p.name }, label: p.name, icon: (p.icon as any) || 'map-marker', hint: p.address })}
                     activeOpacity={0.7}
                   >
                     <View style={styles.rowIcon}>

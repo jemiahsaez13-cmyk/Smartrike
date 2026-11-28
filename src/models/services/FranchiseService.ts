@@ -73,14 +73,14 @@ const BILLING_COLUMNS_086 = [
 ];
 
 export interface RecordFranchiseEventInput {
-  eventType: FranchiseEventType;
+  /** Third-party transfer was removed; legacy rows of that type stay readable. */
+  eventType: Exclude<FranchiseEventType, 'third_party_transfer'>;
   effectiveDate?: string;
   toHolder?: string;
   /** Successor's app account; required for succession_transfer. */
   toUserId?: string;
-  relationship?: SuccessorRelationship | 'third_party';
+  relationship?: SuccessorRelationship;
   reason?: string;
-  qualifiedRecipient?: boolean;
   newExpiryDate?: string;
   agreementNumber?: string;
   agreementText?: string;
@@ -192,7 +192,7 @@ export class FranchiseService {
   }
 
   /**
-   * Records renewals, succession, third-party transfers, and terminations.
+   * Records renewals, succession, change of unit, and terminations.
    * Eligibility is enforced here for immediate feedback and again by the
    * database constraints/policies in migration 035.
    */
@@ -237,11 +237,6 @@ export class FranchiseService {
       patch.current_holder_name = successor.name;
       patch.current_holder_id = successor.id;
       patch.franchise_status = 'active';
-    } else if (input.eventType === 'third_party_transfer') {
-      if (!input.toHolder?.trim()) throw new Error('Enter the qualified buyer or transferee.');
-      if (!input.qualifiedRecipient) throw new Error('Confirm that the third party meets TODA/LGU qualifications.');
-      patch.current_holder_name = input.toHolder.trim();
-      patch.franchise_status = 'transferred';
     } else if (input.eventType === 'termination') {
       if (!input.reason?.trim()) throw new Error('A termination reason is required.');
       patch.franchise_status = 'terminated';

@@ -97,6 +97,18 @@ export class TodaService {
     return (data ?? []) as TodaRoute[];
   }
 
+  /**
+   * Routes of the TODA a driver belongs to (users.toda_membership). Empty when
+   * the driver has no TODA or the TODA is not registered — such a driver cannot
+   * accept rides (migration 093).
+   */
+  async listRoutesForMembership(membership?: string | null): Promise<TodaRoute[]> {
+    const key = nameKey(membership);
+    if (!key) return [];
+    const toda = (await this.listAll()).find((t) => nameKey(t.name) === key);
+    return toda ? this.listRoutes(toda.id) : [];
+  }
+
   async saveRoute(input: SaveRouteInput): Promise<TodaRoute> {
     const from = input.from_barangay.trim();
     const to = input.to_barangay.trim();

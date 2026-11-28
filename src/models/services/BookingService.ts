@@ -2,6 +2,8 @@ import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { UserRepository } from '@/models/repositories/UserRepository';
 import { FareCalculationService, MAX_TRICYCLE_PASSENGERS } from './FareCalculationService';
 import { NotificationService } from './NotificationService';
+import { TodaService } from './TodaService';
+import { routeCoversTrip } from '@/utils/todaRoute';
 import { Booking, Location, Rating } from '@/models/types';
 import { supabase } from '@/config/supabase';
 import {
@@ -181,6 +183,7 @@ export class BookingService {
   async acceptBooking(bookingId: string, driverId: string): Promise<Booking> {
     const ongoing = await this.bookingRepo.findActiveByDriver(driverId);
     if (ongoing) throw new Error('Finish your current trip before accepting another ride.');
+    await this.assertOnDriverTodaRoute(bookingId, driverId);
     const booking = await this.bookingRepo.assignDriver(bookingId, driverId);
     await this.userRepo.updateDriverStatus(driverId, 'on-trip');
     // Best-effort: notifying the passenger must never roll back the accept.
@@ -194,6 +197,27 @@ export class BookingService {
       console.warn('passenger accept notification skipped:', e);
     }
     return booking;
+  }
+
+  /**
+   * A driver may accept only a ride whose pickup and drop-off barangays are a
+   * route of their TODA (either direction). The server checks the same rule
+   * (migration 093); this gives the driver the reason before the write.
+   */
+  private async assertOnDriverTodaRoute(bookingId: string, driverId: string): Promise<void> {
+    const [booking, driver] = await Promise.all([
+      this.bookingRepo.findById(bookingId),
+      this.userRepo.findById(driverId),
+    ]);
+    if (!booking) return; // assignDriver reports a ride that is gone
+    const membership = (driver as any)?.toda_membership as string | null | undefined;
+    if (!membership?.trim()) {
+      throw new Error('You are not assigned to a TODA yet. Ask the admin to assign you before accepting rides.');
+    }
+    const routes = await new TodaService().listRoutesForMembership(membership);
+    if (!routeCoversTrip(routes, booking.pickup_location, booking.dropoff_location)) {
+      throw new Error(`This ride is not on a ${membership} route. You can only accept rides between barangays your TODA serves.`);
+    }
   }
 
   async startTrip(bookingId: string): Promise<Booking> {

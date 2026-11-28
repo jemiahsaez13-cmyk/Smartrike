@@ -14,6 +14,8 @@ import { UserRepository } from '@/models/repositories/UserRepository';
 import { Driver } from '@/models/types';
 import { BookingRepository } from '@/models/repositories/BookingRepository';
 import { RealtimeService } from '@/models/services/RealtimeService';
+import { TodaService } from '@/models/services/TodaService';
+import { RoutePair, routeCoversTrip } from '@/utils/todaRoute';
 import { Button } from '@/views/components/common/Button';
 import { Loading } from '@/views/components/common/Loading';
 import { Card } from '@/views/components/common/Card';
@@ -76,16 +78,25 @@ export const DriverDashboard = () => {
   // exactly the still-open, FRESH requests — taken/cancelled/stale ones drop
   // off. A request older than REQUEST_FRESHNESS_MINUTES is treated as abandoned
   // and hidden. Going on-trip clears the queue (cleanup runs on status change).
+  // Only rides on the driver's TODA routes are shown (migration 093).
+  const todaMembership = (user as any)?.toda_membership as string | null | undefined;
   useEffect(() => {
     if (currentStatus !== 'online' || !user?.id) return;
     let cancelled = false;
     const realtime = realtimeRef.current!;
     const repo = new BookingRepository();
+    // null until loaded: nothing is shown before the routes are known.
+    let routes: RoutePair[] | null = null;
+    const onMyRoute = (b: any) => !!routes && routeCoversTrip(routes, b?.pickup_location, b?.dropoff_location);
+    const loadRoutes = () =>
+      new TodaService()
+        .listRoutesForMembership(todaMembership)
+        .then((list) => { routes = list; })
+        .catch(() => undefined);
 
     const sync = () =>
-      repo
-        .findActiveBookings()
-        .then((bookings) => {
+      Promise.all([repo.findActiveBookings(), routes ? null : loadRoutes()])
+        .then(([bookings]) => {
           if (cancelled) return;
           const freshAfter = Date.now() - REQUEST_FRESHNESS_MINUTES * 60 * 1000;
           // Parse defensively: if a timestamp ever arrives without a timezone,
@@ -96,27 +107,30 @@ export const DriverDashboard = () => {
             return new Date(iso).getTime();
           };
           const open = bookings.filter(
-            (b) => b.status === 'pending' && !b.driver_id && toMs(b.created_at) >= freshAfter
+            (b) => b.status === 'pending' && !b.driver_id && toMs(b.created_at) >= freshAfter && onMyRoute(b)
           );
           dispatch(syncIncomingRequests(open));
         })
         .catch(() => undefined);
 
-    sync();
+    // Routes reload every minute so an admin's route change shows up.
+    void loadRoutes().then(sync);
     const poll = setInterval(sync, 10000);
+    const routePoll = setInterval(loadRoutes, 60000);
 
     // New bookings appear instantly (they're fresh by definition).
     const bookingsKey = realtime.subscribeToNewBookings((payload) => {
-      if (payload?.new) dispatch(addIncomingRequest(payload.new));
+      if (payload?.new && onMyRoute(payload.new)) dispatch(addIncomingRequest(payload.new));
     });
 
     return () => {
       cancelled = true;
       clearInterval(poll);
+      clearInterval(routePoll);
       realtime.unsubscribe(bookingsKey);
       dispatch(syncIncomingRequests([])); // clear queue when no longer available
     };
-  }, [dispatch, currentStatus, user?.id]);
+  }, [dispatch, currentStatus, user?.id, todaMembership]);
 
   // Stream GPS whenever the driver is online OR on a trip, so passengers see a
   // live, moving driver during pickup and the ride itself.

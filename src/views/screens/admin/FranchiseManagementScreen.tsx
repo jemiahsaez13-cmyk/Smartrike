@@ -199,8 +199,8 @@ export const FranchiseManagementScreen = () => {
   const { applications, loading } = useAppSelector((state) => state.franchise);
   const currentUser = useAppSelector((state) => state.auth.user);
   // B13: one place for every request type. Change of Unit and Succession
-  // filters show only those requests (third-party transfers and terminations
-  // are recorded directly by the admin in the Registry, not requested).
+  // filters show only those requests (terminations are recorded directly by
+  // the admin in the Registry, not requested).
   const [filter, setFilter] = useState<'all' | 'pending' | 'renewals' | 'cou' | 'succession' | 'issued' | 'income'>('all');
   const [successionRequests, setSuccessionRequests] = useState<SuccessionRequest[]>([]);
   // Derive the document-review modal target from the store so it auto-updates.

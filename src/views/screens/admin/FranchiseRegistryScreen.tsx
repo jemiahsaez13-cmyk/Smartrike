@@ -41,7 +41,6 @@ type RegistryAction =
   | 'details'
   | 'renewal'
   | 'succession_transfer'
-  | 'third_party_transfer'
   | 'termination'
   | 'change_of_unit'
   | 'violation'
@@ -95,13 +94,11 @@ export const FranchiseRegistryScreen = () => {
   const [recordStatus, setRecordStatus] = useState<FranchiseRecordStatus>('active');
   const [expiryDate, setExpiryDate] = useState(nextYear());
   const [effectiveDate, setEffectiveDate] = useState(today());
-  const [recipientName, setRecipientName] = useState('');
   const [relationship, setRelationship] = useState<SuccessorRelationship>('spouse');
   const [successorOptions, setSuccessorOptions] = useState<SuccessorAccount[]>([]);
   const [successor, setSuccessor] = useState<SuccessorAccount | null>(null);
   const [successorOpen, setSuccessorOpen] = useState(false);
   const [loadingSuccessors, setLoadingSuccessors] = useState(false);
-  const [qualified, setQualified] = useState(false);
   const [reason, setReason] = useState('');
   const [violationType, setViolationType] = useState('');
   const [description, setDescription] = useState('');
@@ -150,13 +147,11 @@ export const FranchiseRegistryScreen = () => {
     // 092: a renewal adds 3 years to the current expiry.
     setExpiryDate(nextAction === 'renewal' ? renewedExpiryDate(record.expiry_date) : record.expiry_date || nextYear());
     setEffectiveDate(today());
-    setRecipientName('');
     setRelationship('spouse');
     setSuccessor(null);
     setSuccessorOpen(false);
     setSuccessorOptions([]);
     if (nextAction === 'succession_transfer') loadSuccessors();
-    setQualified(false);
     setReason('');
     setViolationType('');
     setDescription('');
@@ -258,11 +253,8 @@ export const FranchiseRegistryScreen = () => {
         if (action === 'succession_transfer' && !successor) {
           throw new Error('Select the successor’s driver account.');
         }
-        const toHolder = action === 'succession_transfer'
-          ? successor?.name
-          : recipientName || undefined;
+        const toHolder = action === 'succession_transfer' ? successor?.name : undefined;
         const isAgreementAction = action === 'succession_transfer'
-          || action === 'third_party_transfer'
           || action === 'termination';
         const agreementNumber = isAgreementAction
           ? FranchiseAgreementService.agreementNumber(selected.id)
@@ -275,7 +267,7 @@ export const FranchiseRegistryScreen = () => {
               toHolder,
               relationship: action === 'succession_transfer'
                 ? SUCCESSOR_RELATIONSHIP_LABEL[relationship]
-                : action === 'third_party_transfer' ? 'third party' : undefined,
+                : undefined,
               reason: reason || undefined,
             }, agreementNumber!)
           : undefined;
@@ -286,8 +278,7 @@ export const FranchiseRegistryScreen = () => {
           newExpiryDate: action === 'renewal' ? expiryDate : undefined,
           toHolder,
           toUserId: action === 'succession_transfer' ? successor?.id : undefined,
-          relationship: action === 'succession_transfer' ? relationship : action === 'third_party_transfer' ? 'third_party' : undefined,
-          qualifiedRecipient: qualified,
+          relationship: action === 'succession_transfer' ? relationship : undefined,
           reason: reason || undefined,
           agreementNumber,
           agreementText,
@@ -551,7 +542,6 @@ export const FranchiseRegistryScreen = () => {
                 <ActionChip label="Renew" icon="calendar-refresh" onPress={() => openAction(record, 'renewal')} />
                 <ActionChip label="Change Unit" icon="swap-horizontal" onPress={() => openAction(record, 'change_of_unit')} />
                 <ActionChip label="Succession" icon="account-switch-outline" onPress={() => openAction(record, 'succession_transfer')} />
-                <ActionChip label="Third party" icon="handshake-outline" onPress={() => openAction(record, 'third_party_transfer')} />
                 <ActionChip label="Violation" icon="alert-outline" onPress={() => openAction(record, 'violation')} />
                 {isInactiveBodyNumber(record) ? (
                   <ActionChip label="Release body no." icon="numeric-off" onPress={() => openAction(record, 'release_body')} />
@@ -689,17 +679,6 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
-              {action === 'third_party_transfer' ? (
-                <>
-                  <Field label="Qualified transferee / buyer" value={recipientName} onChangeText={setRecipientName} />
-                  <Field label="Effective date (YYYY-MM-DD)" value={effectiveDate} onChangeText={setEffectiveDate} />
-                  <TouchableOpacity style={styles.checkRow} onPress={() => setQualified((value) => !value)} activeOpacity={0.76}>
-                    <MaterialCommunityIcons name={qualified ? 'checkbox-marked' : 'checkbox-blank-outline'} size={24} color={qualified ? colors.primary : colors.textMuted} />
-                    <Text style={styles.checkText}>TODA/LGU qualifications have been verified</Text>
-                  </TouchableOpacity>
-                </>
-              ) : null}
-
               {action === 'termination' ? (
                 <>
                   <Field label="Termination date (YYYY-MM-DD)" value={effectiveDate} onChangeText={setEffectiveDate} />
@@ -779,7 +758,7 @@ export const FranchiseRegistryScreen = () => {
                 </>
               ) : null}
 
-              {(action === 'succession_transfer' || action === 'third_party_transfer' || action === 'termination') ? (
+              {(action === 'succession_transfer' || action === 'termination') ? (
                 <View style={styles.agreementNote}>
                   <MaterialCommunityIcons name="file-sign" size={20} color={colors.primary} />
                   <Text style={styles.agreementText}>A printable Kasunduan/Agreement will be generated and attached to this lifecycle record.</Text>
@@ -810,7 +789,6 @@ const actionTitle = (action: RegistryAction): string => ({
   details: 'Franchise details',
   renewal: 'Record renewal',
   succession_transfer: 'Franchise succession',
-  third_party_transfer: 'Third-party transfer',
   termination: 'Terminate franchise',
   change_of_unit: 'Change of Unit',
   violation: 'Record driver violation',
@@ -904,8 +882,6 @@ const styles = StyleSheet.create({
   dropdown: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
   dropdownText: { ...typography.body, color: colors.text, flex: 1 },
   dropdownList: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, marginTop: -spacing.sm, marginBottom: spacing.md, backgroundColor: colors.surface },
-  checkRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  checkText: { ...typography.body, color: colors.text, flex: 1 },
   agreementNote: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   agreementText: { ...typography.bodySmall, color: colors.primaryDark, flex: 1 },
   changeUnitBanner: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.warningLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },

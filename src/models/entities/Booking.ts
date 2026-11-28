@@ -55,6 +55,8 @@ export interface Location {
   place_id?: string;
   /** Purok / sitio / landmark typed after picking a barangay; also leads `address`. */
   details?: string;
+  /** Boac barangay of the place; a driver accepts only rides on their TODA's routes (093). */
+  barangay?: string;
 }
 
 export interface Rating {

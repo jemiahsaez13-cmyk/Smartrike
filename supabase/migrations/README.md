@@ -465,3 +465,22 @@ Apply `092_license_renewal_suspension.sql` after 091.
   `lift-expired-suspensions` reactivates ended suspensions every 10 minutes, and
   `lift_my_expired_suspension()` lifts one at sign-in. The sign-in screen shows
   the suspended user the period and reason.
+
+## A driver accepts only rides on their TODA's routes (093)
+
+Apply `093_driver_accepts_toda_routes_only.sql` after 092.
+
+- A driver can accept a booking only when their TODA (`users.toda_membership`)
+  has a `toda_routes` row between the pickup and drop-off barangays, either
+  direction. A driver without a TODA, or whose TODA has no routes, cannot
+  accept rides. Admins are not limited.
+- The barangay comes from `pickup_location->>'barangay'` /
+  `dropoff_location->>'barangay'`, which the app now saves; without it, the
+  barangay named in the address is used. Names compare without case,
+  punctuation and "Poblacion".
+- Helpers: `barangay_key(text)`, `place_in_barangay(jsonb, text)`,
+  `driver_toda_covers_booking(driver, pickup, dropoff)`. Trigger
+  `enforce_driver_toda_route_trigger` on `bookings`.
+- The third-party franchise transfer is removed from the admin app. Existing
+  `third_party_transfer` events stay in the history; nothing in the schema
+  changes for it.

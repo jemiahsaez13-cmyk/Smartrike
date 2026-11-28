@@ -16,12 +16,12 @@ const iso = (msAgo: number) => new Date(NOW - msAgo).toISOString();
 
 // Boac, Marinduque area coordinates
 const LOC = {
-  market: { latitude: 13.4452, longitude: 121.8401, address: 'Boac Public Market' },
-  college: { latitude: 13.4101, longitude: 121.8456, address: 'Marinduque State College, Tanza' },
+  market: { latitude: 13.4452, longitude: 121.8401, address: 'Boac Public Market', barangay: 'Mercado (Poblacion)' },
+  college: { latitude: 13.4101, longitude: 121.8456, address: 'Marinduque State College, Tanza', barangay: 'Tanza' },
   cathedral: { latitude: 13.4477, longitude: 121.8389, address: 'Boac Cathedral' },
   hospital: { latitude: 13.4419, longitude: 121.8442, address: 'Marinduque Provincial Hospital' },
-  plaza: { latitude: 13.4463, longitude: 121.8408, address: 'Boac Plaza' },
-  port: { latitude: 13.5247, longitude: 121.8665, address: 'Cawit Port' },
+  plaza: { latitude: 13.4463, longitude: 121.8408, address: 'Boac Plaza', barangay: 'Mercado (Poblacion)' },
+  port: { latitude: 13.5247, longitude: 121.8665, address: 'Cawit Port', barangay: 'Cawit' },
 };
 
 export const seedUsers = () => [
@@ -587,6 +587,24 @@ export const seedTodaAssociations = () => [
   },
 ];
 
+/** Demo routes so the seeded pending requests are on FEDTODAB's routes (093). */
+export const seedTodaRoutes = () => [
+  ['Mercado (Poblacion)', 'Cawit', 40],
+  ['Tanza', 'Mercado (Poblacion)', 25],
+].map(([from, to, fare], i) => ({
+  id: `route-fedtodab-${i + 1}`,
+  toda_id: 'toda-fedtodab',
+  from_barangay: from,
+  to_barangay: to,
+  fare,
+  notes: null,
+  senior_discount: 20,
+  pwd_discount: 20,
+  student_discount: 0,
+  created_at: iso(30 * DAY),
+  updated_at: iso(30 * DAY),
+}));
+
 /** Builds a fresh in-memory database snapshot. */
 export const buildSeedDatabase = (): Record<string, any[]> => ({
   users: seedUsers(),
@@ -598,6 +616,7 @@ export const buildSeedDatabase = (): Record<string, any[]> => ({
   franchise_applications: seedFranchiseApplications(),
   franchise_events: seedFranchiseEvents(),
   toda_associations: seedTodaAssociations(),
+  toda_routes: seedTodaRoutes(),
   association_inventory: seedAssociationInventory(),
   driver_violations: seedDriverViolations(),
 });

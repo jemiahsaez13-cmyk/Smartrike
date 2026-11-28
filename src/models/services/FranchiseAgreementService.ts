@@ -4,7 +4,7 @@ import * as Sharing from 'expo-sharing';
 import { FranchiseApplication, FranchiseEventType } from '@/models/entities/Franchise';
 
 export interface AgreementInput {
-  eventType: Extract<FranchiseEventType, 'succession_transfer' | 'third_party_transfer' | 'termination'>;
+  eventType: Extract<FranchiseEventType, 'succession_transfer' | 'termination'>;
   effectiveDate: string;
   fromHolder: string;
   toHolder?: string;
@@ -27,9 +27,7 @@ export class FranchiseAgreementService {
   static buildText(franchise: FranchiseApplication, input: AgreementInput, number: string): string {
     const action = input.eventType === 'termination'
       ? 'PAGWAWAKAS NG PRANGKISA'
-      : input.eventType === 'succession_transfer'
-      ? 'PAGLILIPAT NG PRANGKISA SA TAGAPAGMANA'
-      : 'PAGLILIPAT / PAGBEBENTA NG PRANGKISA';
+      : 'PAGLILIPAT NG PRANGKISA SA TAGAPAGMANA';
     const recipient = input.toHolder
       ? `Ang bagong may hawak ay si ${input.toHolder}${input.relationship ? ` (${input.relationship.replace(/_/g, ' ')})` : ''}.`
       : '';
