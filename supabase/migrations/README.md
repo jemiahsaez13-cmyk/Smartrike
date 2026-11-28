@@ -484,3 +484,17 @@ Apply `093_driver_accepts_toda_routes_only.sql` after 092.
 - The third-party franchise transfer is removed from the admin app. Existing
   `third_party_transfer` events stay in the history; nothing in the schema
   changes for it.
+
+## The MTOP follows the driver's TODA (094)
+
+Apply `094_mtop_follows_toda_change.sql` after 093.
+
+- Assigning a driver to another TODA (`users.toda_membership`) moves the
+  driver's current MTOP records (`franchise_applications.toda`) to that TODA.
+  Terminated, transferred, superseded, rejected and released records keep
+  their TODA as history. A `route_id` that is not a route of the new TODA is
+  cleared.
+- The assignment is refused when the unit's body number is already held in
+  the new TODA ("Body number … is already used in …"). Removing a driver's
+  TODA leaves the MTOP unchanged.
+- Renaming a TODA renames it on every MTOP record and driver.
